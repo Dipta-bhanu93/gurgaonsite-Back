@@ -1,0 +1,274 @@
+package com.dipta.project.utility;
+
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.PrintStream;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+
+import org.springframework.web.multipart.MultipartFile;
+
+import com.lei.utility.constants.ApplicationConstants;
+import com.lei.utility.constants.CommonConstants;
+
+public class FileReaderUtil {
+	private BufferedReader reader;
+	private String delimiter;
+	private int rownum = 1;/* By default read first line */
+	
+	public FileReaderUtil() {
+	}
+
+	public FileReaderUtil(InputStream inputStream, String delimiter){
+		reader = new BufferedReader(new InputStreamReader(inputStream));
+		this.delimiter = delimiter;
+	}
+
+	public FileReaderUtil(InputStream inputStream, String delimiter, int rownum){
+		reader = new BufferedReader(new InputStreamReader(inputStream));
+		this.delimiter = delimiter;
+		this.rownum = rownum;
+	}
+	
+	public static String getText(String fileName) throws IOException{
+		ClassLoader loader = FileReaderUtil.class.getClassLoader();
+		InputStream in = loader.getResourceAsStream(File.separator+fileName);
+		BufferedReader fileReader = new BufferedReader(new InputStreamReader(in));
+		String fileLine;
+		String text="";
+		while ((fileLine = fileReader.readLine()) != null) {
+			text=text+" "+fileLine;
+		}
+		return text;
+	}
+	
+	public static File multipartToFile(MultipartFile multipart) throws IllegalStateException, IOException 
+	{
+	    File convFile = new File( multipart.getOriginalFilename());
+	    multipart.transferTo(convFile);
+	    return convFile;
+	}
+	
+	public List<String> getValuesFromFile() throws IOException  {
+		String dataLine = "";
+		try{
+			for (int i = 1; i <= rownum; i++) {
+				dataLine = reader.readLine();
+			}
+			if (dataLine == null){
+				return null;
+			}
+			
+			return getLineValues(dataLine, delimiter);
+		}catch(Exception e){
+			throw new IOException("Error while reading file. "+e.getMessage());
+		}
+	}
+	
+	public static int getRecordCount(String file)throws Exception{
+		InputStream fis=null;
+		BufferedReader br=null;
+		int recordCount=0;
+		try{
+			fis = new FileInputStream(file);
+			if (fis != null) {
+				br = new BufferedReader(new InputStreamReader(fis));
+				String row=null;
+				while (true) {
+					row = br.readLine();
+					if (row != null) {
+						recordCount++;
+					} else {
+						break;
+					}
+				}
+
+			}
+		}catch(Exception e){
+			throw new IOException("Error while reading file. "+e.getMessage());
+		}
+		finally{
+			if(br!=null){br.close();}
+			if (fis != null)
+				fis.close();
+		}
+		return recordCount;
+	}
+	
+	public static void generateCTLFile(Long clientId, long fileId, String prestageTableName, String delimiter,final List<String> columnList,int skipTopRows, int skipBottomRows, String ctlFile, String dataFile, String badFile) throws IOException{
+		FileOutputStream foutsql=null;
+		PrintStream pStreamsql =null;
+		try {
+			int loadRecords = 0;
+			int totalRecordCount = getRecordCount(dataFile);
+			loadRecords =  totalRecordCount - skipBottomRows - skipTopRows;
+			if (loadRecords < 0) {
+				throw new IOException( "No Reocrds to load for feed.");
+			}
+			foutsql = new FileOutputStream(ctlFile);
+			pStreamsql = new PrintStream(foutsql);
+			pStreamsql.println("OPTIONS (DIRECT=TRUE,SKIP="+skipTopRows+", LOAD="+loadRecords+")");
+			pStreamsql.println("LOAD DATA");
+			pStreamsql.println("CHARACTERSET utf8");
+			pStreamsql.println("BYTEORDER little");
+			pStreamsql.println("INFILE "+"\'" + dataFile + "\'");
+			pStreamsql.println("BADFILE "+"\'" + badFile + "\'");
+			pStreamsql.println("APPEND");
+			pStreamsql.println("INTO TABLE " + prestageTableName);
+			if (delimiter.equals("'~'")) {
+				pStreamsql.println("FIELDS TERMINATED BY " + '"' + delimiter + '"');
+			}
+			if ((!delimiter.equals("\t")) &&( !delimiter.equals("'~'"))) {
+				pStreamsql.println("FIELDS TERMINATED BY " + "\'" + delimiter + "\'");
+			}
+			pStreamsql.println("OPTIONALLY ENCLOSED BY \'\"\'");
+			pStreamsql.println("TRAILING NULLCOLS");
+			
+			final List<String> columns = new ArrayList<String>();
+			for (final String column : columnList) {
+				columns.add(column+" CHAR(1024)");
+			}
+			columns.add("CLIENTID constant '" + clientId + "'");
+			columns.add("FILEID constant '" + fileId + "'");
+			
+			StringBuilder columnsQry = new StringBuilder("(");
+			for (int i = 0; i < columns.size(); i++) {
+				if (i != 0) {
+					columnsQry.append(",").append(columns.get(i));
+				} else {
+					columnsQry.append(columns.get(i));
+				}
+			}
+			columnsQry.append(")");
+			pStreamsql.println(columnsQry.toString());
+		}catch(Exception e){
+			throw new IOException("Error while creating CTL file. "+e.getMessage());
+		} finally{
+			pStreamsql.close();
+			foutsql.close();
+		}
+	}
+	
+	
+	public static void generateCTLFileGeneric(Long clientId, long fileId, String prestageTableName, String delimiter,final List<String> columnList,int skipTopRows, int skipBottomRows, String ctlFile, String dataFile, String badFile,Map<String,String> additionalData) throws IOException{
+		FileOutputStream foutsql=null;
+		PrintStream pStreamsql =null;
+		try {
+			int loadRecords = 0;
+			int totalRecordCount = getRecordCount(dataFile);
+			loadRecords =  totalRecordCount - skipBottomRows - skipTopRows;
+			if (loadRecords < 0) {
+				throw new IOException( "No Reocrds to load for feed.");
+			}
+			foutsql = new FileOutputStream(ctlFile);
+			pStreamsql = new PrintStream(foutsql);
+			pStreamsql.println("OPTIONS (DIRECT=TRUE,SKIP="+skipTopRows+", LOAD="+loadRecords+")");
+			pStreamsql.println("LOAD DATA");
+			pStreamsql.println("CHARACTERSET utf8");
+			pStreamsql.println("BYTEORDER little");
+			pStreamsql.println("INFILE "+"\'" + dataFile + "\'");
+			pStreamsql.println("BADFILE "+"\'" + badFile + "\'");
+			pStreamsql.println("APPEND");
+			pStreamsql.println("INTO TABLE " + prestageTableName);
+			if (delimiter.equals("'~'")) {
+				pStreamsql.println("FIELDS TERMINATED BY " + '"' + delimiter + '"');
+			}
+			if ((!delimiter.equals("\t")) &&( !delimiter.equals("'~'"))) {
+				pStreamsql.println("FIELDS TERMINATED BY " + "\'" + delimiter + "\'");
+			}
+		//	pStreamsql.println("OPTIONALLY ENCLOSED BY \'\"\'");
+			pStreamsql.println("TRAILING NULLCOLS");
+			
+			final List<String> columns = new ArrayList<String>();
+			for (final String column : columnList) {
+				columns.add(column+" CHAR(1024)"+" \"TRIM(:"+column+")\"");
+			}
+			
+			for(String key:additionalData.keySet()){
+				if(! (key.equals(CommonConstants.CD_ID) || key.equals(CommonConstants.CD_DATECREATED))){
+					columns.add(key+" constant '" + additionalData.get(key) + "'");
+				}else{
+				    columns.add(key+" \"" + additionalData.get(key) + "\"");
+				}
+			}
+			
+			StringBuilder columnsQry = new StringBuilder("(");
+			for (int i = 0; i < columns.size(); i++) {
+				if (i != 0) {
+					columnsQry.append(",").append(columns.get(i));
+				} else {
+					columnsQry.append(columns.get(i));
+				}
+			}
+			columnsQry.append(")");
+			pStreamsql.println(columnsQry.toString());
+		}catch(Exception e){
+			throw new IOException("Error while creating CTL file. "+e.getMessage());
+		} finally{
+			pStreamsql.close();
+			foutsql.close();
+		}
+	}
+	
+	
+	public static void generateBatchFileToExecCTL(Long clientId, String batchFile, String ctlFile, String logFile) throws IOException{
+		FileOutputStream foutsql=null;
+		PrintStream pStreamsql =null;
+		String dbTNS = PropertyUtility.getValueString(ApplicationConstants.CONFIGURATIONSBUNDLE.getValue(), ApplicationConstants.DBTNS.getValue(),"");
+		String userinfo = "ONDEMAND_"+clientId+"/ondemand_"+clientId+"@"+dbTNS;
+		try {
+			foutsql = new FileOutputStream(batchFile);
+			pStreamsql = new PrintStream(foutsql);
+			pStreamsql.println("sqlldr userid="+userinfo+", control="+ctlFile+", log="+logFile);
+			pStreamsql.println("EXIT;");
+		}catch(Exception e){
+			throw new IOException("Error while creating batch file. "+e.getMessage());
+		}finally{
+			if(pStreamsql!=null && foutsql!=null) {
+				pStreamsql.close();
+				foutsql.close();
+			}
+		}
+	}
+	
+	public static void generateSHFileToExecCTL(Long clientId, String exeFile, String ctlFile, String logFile) throws IOException{
+		FileOutputStream foutsql=null;
+		PrintStream pStreamsql =null;
+		String dbTNS = PropertyUtility.getValueString(ApplicationConstants.CONFIGURATIONSBUNDLE.getValue(), ApplicationConstants.DBTNS.getValue(),"");
+		String userinfo = "ONDEMAND_"+clientId+"/ondemand_"+clientId+"@"+dbTNS;
+		try {
+			foutsql = new FileOutputStream(exeFile);
+			pStreamsql = new PrintStream(foutsql);
+			pStreamsql.println("sqlldr userid="+userinfo+", control="+ctlFile+", log="+logFile);
+			pStreamsql.println("exit 0;");
+		}catch(Exception e){
+			throw new IOException("Error while creating batch file. "+e.getMessage());
+		}finally{
+			if(pStreamsql!=null && foutsql!=null) {
+				pStreamsql.close();
+				foutsql.close();
+			}
+			}
+	}
+	
+	
+	private List<String> getLineValues(String dataLine, String delimiter) throws IOException{
+		List<String> dataList = null;
+		if(dataLine.indexOf(delimiter) == -1){
+			throw new IOException("Delimiter not present. Please load valid file");
+		}
+		String[] tokens = dataLine.split("\\"+delimiter);
+		if(null != tokens && tokens.length >0){
+			dataList = new ArrayList<>(Arrays.asList(tokens));
+		}
+		
+		return dataList;
+	}
+}

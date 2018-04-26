@@ -1,0 +1,47 @@
+package com.dipta.project.domain.company;
+
+import javax.persistence.Column;
+import javax.persistence.Entity;
+import javax.persistence.FetchType;
+import javax.persistence.Id;
+import javax.persistence.JoinColumn;
+import javax.persistence.OneToOne;
+import javax.persistence.Table;
+
+import lombok.Getter;
+import lombok.Setter;
+
+import org.hibernate.annotations.Cascade;
+import org.hibernate.annotations.Type;
+
+import com.lei.domain.acl.ModuleMasterDomain;
+
+@Entity
+@Table(name = "CONFIGURATION_SETTINGS")
+public class ConfigurationSettingsDomain {
+	
+	@Getter
+	@Setter
+	@Id
+	@Column(name = "ID")
+	private Long id;
+	
+	@Getter
+	@Setter
+	@Column(name = "CONFIG_KEY")
+	private String configKey;
+	
+	
+	@Getter
+	@Setter
+	@Column(name = "VALUE")
+	private String value;
+	
+	@Getter
+	@Setter
+	@OneToOne(fetch = FetchType.EAGER)
+    @Cascade(value=org.hibernate.annotations.CascadeType.ALL)
+    @JoinColumn(name = "MODULE_ID")
+	private ModuleMasterDomain moduleMaster;
+
+}

@@ -1,0 +1,80 @@
+package com.lei.security.configuration;
+
+import java.util.HashMap;
+import java.util.Map;
+
+import com.lei.report.ReportDefaultsEnum.XlsxReportTemplate;
+
+
+/**
+ * 
+ * @author Vinay.Kumar1
+ *
+ */
+public enum RolesEnum {
+	/*USER("USER"),
+	DBA("DBA"),
+	ADMIN("ADMIN");
+	*/
+	
+	INSUPER(10001L,"INSUPER","Internal - CoD Super User", false),
+	EXSUPER(10002L,"EXSUPER","External - Client Super User",  false),
+	GUEST(10003L, "GUEST","Registered Free Guest", false),
+	DATAANALYST(20002L,"DATAANALYST","Data Analyst", true),
+	ADMIN(20001L,"ADMIN","Admin User", true),
+	QAANALYST(20003L,"QAANALYST","QA Analyst", true);
+	
+	String roleTypeString;
+	Long roleId;
+	String roleDescription;
+	boolean workflowRole;
+	
+	
+	private static Map<Long, RolesEnum> lookupRoleType = new HashMap<Long, RolesEnum>();
+	static {
+		
+		// Populate out lookup when enum is created
+		
+		for (RolesEnum e : RolesEnum.values()) {
+			lookupRoleType.put(e.getRoleId(), e);
+		}
+	}
+
+	// Provide a method to lookup up enum with matching label
+	
+	public static RolesEnum getRoleEnumById(Long id) {
+		return lookupRoleType.get(id);
+	}
+	
+	
+	
+	
+	private RolesEnum(Long roleId,String roleTypeString,String roleDescription, boolean workflowRole) {
+		this.roleTypeString = roleTypeString;
+		this.roleId = roleId;
+		this.workflowRole = workflowRole;
+		this.roleDescription = roleDescription;
+	}
+
+	public String getRoleTypeString(){
+		return roleTypeString;
+	}
+
+	public Long getRoleId() {
+		return roleId;
+	}
+	
+	
+	
+	public String getRoleDescription() {
+		return roleDescription;
+	}
+
+
+
+
+	public boolean isWorkflowRole() {
+		return workflowRole;
+	}
+	
+}

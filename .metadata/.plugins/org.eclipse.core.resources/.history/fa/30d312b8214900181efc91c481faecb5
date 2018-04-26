@@ -1,0 +1,140 @@
+package com.dipta.project.dto.project.config;
+
+import java.io.Serializable;
+import java.util.Objects;
+
+import javax.xml.bind.annotation.XmlAccessType;
+import javax.xml.bind.annotation.XmlAccessorType;
+import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlRootElement;
+
+import lombok.Getter;
+import lombok.Setter;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonRootName;
+import com.lei.domain.project.ProjectConfigDomain;
+
+
+/**
+ * @author Ashish.Patel
+ *
+ */
+@XmlRootElement(name = "ProjectConfigXrefInfo")
+@JsonRootName(value = "ProjectConfigXrefInfo")
+@XmlAccessorType(XmlAccessType.NONE)
+public class ProjectConfigXrefDto implements Serializable {
+	
+	/**
+	 * 
+	 */
+	private static final long serialVersionUID = 1L;
+
+	@Getter
+	@Setter
+	@XmlElement(name = "Id")
+	@JsonProperty(value = "Id")
+	private long id;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "ProjectId")
+	@JsonProperty(value = "ProjectId")
+	private long projectId;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "FeedId")
+	@JsonProperty(value = "FeedId")
+	private long feedId;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "AttributeName")
+	@JsonProperty(value = "AttributeName")
+	private String attributeName;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "Type")
+	@JsonProperty(value = "Type")
+	private String type;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "Value")
+	@JsonProperty(value = "Value")
+	private Boolean value = false; 
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "DisplayName")
+	@JsonProperty(value = "DisplayName")
+	private String displayName;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "FeedStatus")
+	@JsonProperty(value = "FeedStatus")
+	private String feedStatus;
+	
+
+/*	@Override
+	public int hashCode() {
+		final int prime = 31;
+		int result = 1;
+		result = prime * result
+				+ ((attributeName == null) ? 0 : attributeName.hashCode());
+		result = prime * result + (int) (feedId ^ (feedId >>> 32));
+		return result;
+	}
+
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj)
+			return true;
+		if (obj == null)
+			return false;
+		if (getClass() != obj.getClass())
+			return false;
+		ProjectConfigXrefDto other = (ProjectConfigXrefDto) obj;
+		if (attributeName == null) {
+			if (other.attributeName != null)
+				return false;
+		} else if (!attributeName.equals(other.attributeName))
+			return false;
+		if (feedId != other.feedId)
+			return false;
+		return true;*/
+	
+	
+	
+	 @Override
+	    public boolean equals(Object o) {
+
+	        if (o == this) return true;
+	        if (!(o instanceof ProjectConfigXrefDto)) {
+	            return false;
+	        }
+	        ProjectConfigXrefDto configObj = (ProjectConfigXrefDto) o;
+	        return 
+	        		projectId == configObj.projectId &&
+	                Objects.equals(type, configObj.type) &&
+	                Objects.equals(attributeName, configObj.attributeName) &&
+	                Objects.equals(feedId, configObj.feedId);
+	    }
+
+	    @Override
+	    public int hashCode() {
+	        return Objects.hash(projectId, type, attributeName,feedId);
+	    }
+	
+	
+
+	
+	
+	
+	
+	
+
+}

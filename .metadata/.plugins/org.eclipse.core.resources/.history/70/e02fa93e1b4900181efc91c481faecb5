@@ -1,0 +1,607 @@
+package com.lei.report;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
+
+import org.apache.commons.io.FileUtils;
+
+import com.lei.dao.base.DaoManager;
+import com.lei.dao.project.IProjectDao;
+import com.lei.dto.common.FileReportDto;
+import com.lei.dto.common.RowDto;
+import com.lei.dto.workflow.ProjectDTO;
+import com.lei.exception.common.ObjectNotSupportedException;
+import com.lei.exception.common.ProcessFailedException;
+import com.lei.exception.project.ProjectConfigNotFoundException;
+import com.lei.exception.project.ProjectDoesNotExistsException;
+import com.lei.exception.user.LoginIDFormatException;
+import com.lei.maintenence.report.IReportsMaintenence;
+import com.lei.maintenence.report.ReportsMaintenenceImpl;
+import com.lei.report.ReportDefaultsEnum.XlsxReportTemplate;
+import com.lei.utility.CommonUtils;
+import com.lei.utility.constants.CommonConstants;
+import com.lei.utility.constants.ProjectConfigEnum;
+
+
+public abstract class DelimitedFileAbstractReportGenerator implements IReportGenerator{
+	
+	
+	private static final String NEW_LINE = "\n";
+	private static final String HIERARCHY_LEGAL = "Legal Hierarchy";
+	private static final String HIERARCHY_BUSINESS = "Business Hierarchy";
+	private static final String MANUAL_REVIEW = "Manual Review";
+	private static final String NOT_ENRICH = "Not Enriched";
+	
+	/**
+	 * 
+	 */
+	public abstract Long generateReport(ReportDataTable reportDataTable) throws ProcessFailedException, ObjectNotSupportedException, ProjectDoesNotExistsException, ProjectConfigNotFoundException, IOException,LoginIDFormatException;
+	
+	
+	public byte[] createReportFileFromData(ReportDataTable reportDataTable, String fileDelimiter, String fileExtn) throws IOException, ObjectNotSupportedException, ProjectDoesNotExistsException{
+		
+			if(CommonConstants.ENRICH == reportDataTable.getTemplateID() || CommonConstants.BUILD == reportDataTable.getTemplateID()){
+			
+				return writeHierarchyReports(reportDataTable,fileDelimiter,fileExtn);
+			
+			}else{
+			
+			 String perfectMatch = XlsxReportTemplate.SHEET_PERFECTMATCH.getSheet();// "Perfect Match";
+			 String potenMatch = XlsxReportTemplate.SHEET_POTENMATCH.getSheet();// "Potential Match";
+			 String noMatch = XlsxReportTemplate.SHEET_NOMATCH.getSheet();//"No Match";
+			 String exception =XlsxReportTemplate.SHEET_EXCEPN.getSheet();// "Exceptions";
+			 String error = "Error";
+			 
+			 long projectId = Long.valueOf(reportDataTable.getProjectId());
+			 File directory = new File(File.separator+"cdiondemand"+File.separator+"temp");
+			 if (!directory.exists()) {
+				    	directory.mkdir();
+				}
+			 String filePerfectMatch = directory+File.separator+perfectMatch+fileExtn;
+			 String filePotenMatch = directory+File.separator+potenMatch+fileExtn;
+			 String fileNoMatch = directory+File.separator+noMatch+fileExtn;
+			 String fileExcepn = directory+File.separator+exception+fileExtn;
+			 
+			 //String fileError = directory+File.separator+error+fileExtn;
+			 
+					 
+			 
+			 
+			// FileWriter writerError = new FileWriter(fileError);
+			// writerError.append("Nothing to show. Kindly see if all records categories are being included in Output Configuration!");
+			
+			 
+			 FileWriter writerPerfMatch = new FileWriter(filePerfectMatch);
+			 FileWriter writerPotenMatch = new FileWriter(filePotenMatch);
+			 FileWriter writerNoMatch = new FileWriter(fileNoMatch);
+			 FileWriter writerExcepn = new FileWriter(fileExcepn);
+			 
+			 String perfectMatchString = "";
+			 String potenMatchString = "";
+			 String noMatchString = "";
+			 String exceptionString = "";
+			 
+			 List<String> headers=getResultHeader(reportDataTable);
+			 
+			 setHeader(headers, reportDataTable, perfectMatch, perfectMatchString, writerPerfMatch, fileDelimiter, reportDataTable.getTemplateID());
+			 setHeader(headers, reportDataTable, potenMatch, potenMatchString, writerPotenMatch, fileDelimiter, reportDataTable.getTemplateID());
+			 setHeader(headers, reportDataTable, noMatch, noMatchString, writerNoMatch, fileDelimiter, reportDataTable.getTemplateID());
+			 setHeader(headers, reportDataTable, exception, exceptionString, writerExcepn, fileDelimiter, reportDataTable.getTemplateID());
+			 
+			 for (Map<String, Object> map : reportDataTable.getDataMapList()) {
+				 perfectMatchString = "";
+				  potenMatchString = "";
+				  noMatchString = "";
+				  exceptionString = "";
+				 String matchStatus = map.get(ReportDefaultsEnum.COLUMN_MATCH_STATUS.getKey())!=null ? map.get(ReportDefaultsEnum.COLUMN_MATCH_STATUS.getKey()).toString():"";
+				 Set<String> reportHeadersSet = null;
+				 if(matchStatus.equals(ProjectConfigEnum.ConfigProperties.IN_PERFECT_MATCH_ONLY.getAttributeDbValue())){
+						
+					 reportHeadersSet = includeHeaders(perfectMatch, headers, reportDataTable.getTemplateID());
+					}
+					
+					if(matchStatus.equals(ProjectConfigEnum.ConfigProperties.IN_POTEN_MATCH.getAttributeDbValue())){
+						
+						reportHeadersSet = includeHeaders(potenMatch, headers, reportDataTable.getTemplateID());
+					}
+					
+					if(matchStatus.equals(ProjectConfigEnum.ConfigProperties.IN_NO_MATCH.getAttributeDbValue())){
+						
+						reportHeadersSet = includeHeaders(noMatch, headers, reportDataTable.getTemplateID());
+					}
+					
+					if(matchStatus.equals(ProjectConfigEnum.ConfigProperties.IN_EXCEPTION_REPORT.getAttributeDbValue())){
+						
+						reportHeadersSet = includeHeaders(exception, headers, reportDataTable.getTemplateID());
+					}
+				 
+				 
+				for (Entry dataRow : map.entrySet()) {
+					
+				
+					String data = dataRow.getValue()!=null?dataRow.getValue().toString():"";
+					
+					data = "\"" + data + "\"";
+					  
+					
+					if(matchStatus.equals(ProjectConfigEnum.ConfigProperties.IN_PERFECT_MATCH_ONLY.getAttributeDbValue())){
+						if(reportHeadersSet.contains(dataRow.getKey().toString()))	{
+							perfectMatchString = perfectMatchString + data;
+				    		perfectMatchString = perfectMatchString + fileDelimiter;
+						}
+					}
+					
+					
+					if(matchStatus.equals(ProjectConfigEnum.ConfigProperties.IN_POTEN_MATCH.getAttributeDbValue())){
+						if(reportHeadersSet.contains(dataRow.getKey().toString()))	{
+							potenMatchString = potenMatchString + data;
+							potenMatchString = potenMatchString + fileDelimiter;
+						}
+					}
+					
+					
+					if(matchStatus.equals(ProjectConfigEnum.ConfigProperties.IN_NO_MATCH.getAttributeDbValue())){
+						if(reportHeadersSet.contains(dataRow.getKey().toString()))	{
+							noMatchString = noMatchString + data;
+							noMatchString = noMatchString + fileDelimiter;
+						}
+					}
+					
+					
+					if(matchStatus.equals(ProjectConfigEnum.ConfigProperties.IN_EXCEPTION_REPORT.getAttributeDbValue())){
+						if(reportHeadersSet.contains(dataRow.getKey().toString()))	{
+							exceptionString = exceptionString + data;
+							exceptionString = exceptionString + fileDelimiter;
+						}
+					}
+					
+				}
+				//writer.append('\n');
+				if(matchStatus.equals(ProjectConfigEnum.ConfigProperties.IN_PERFECT_MATCH_ONLY.getAttributeDbValue())){
+					 if (perfectMatchString.endsWith(fileDelimiter)) {
+						 perfectMatchString = perfectMatchString.substring(0, perfectMatchString.length() - 1);
+						}
+					 writerPerfMatch.append(perfectMatchString);
+					writerPerfMatch.append(NEW_LINE);
+				}
+				
+				if(matchStatus.equals(ProjectConfigEnum.ConfigProperties.IN_POTEN_MATCH.getAttributeDbValue())){
+					 if (potenMatchString.endsWith(fileDelimiter)) {
+						 potenMatchString = potenMatchString.substring(0, potenMatchString.length() - 1);
+						}
+					 writerPotenMatch.append(potenMatchString);
+					writerPotenMatch.append(NEW_LINE);
+				}
+				
+				if(matchStatus.equals(ProjectConfigEnum.ConfigProperties.IN_NO_MATCH.getAttributeDbValue())){
+					 if (noMatchString.endsWith(fileDelimiter)) {
+						 noMatchString = noMatchString.substring(0, noMatchString.length() - 1);
+						}
+					 writerNoMatch.append(noMatchString);
+					writerNoMatch.append(NEW_LINE);
+				}
+				
+				if(matchStatus.equals(ProjectConfigEnum.ConfigProperties.IN_EXCEPTION_REPORT.getAttributeDbValue())){
+					 if (exceptionString.endsWith(fileDelimiter)) {
+						 exceptionString = exceptionString.substring(0, exceptionString.length() - 1);
+						}
+					 writerExcepn.append(exceptionString);
+					 writerExcepn.append(NEW_LINE);
+				}
+				 
+			 }
+			 
+			 
+			 
+			 writerPerfMatch.flush();
+			 writerPotenMatch.flush();
+			 writerNoMatch.flush();
+			 writerExcepn.flush();
+			 
+			 writerPerfMatch.close();
+			 writerPotenMatch.close();
+			 writerNoMatch.close();
+			 writerExcepn.close();
+			 
+			 
+		//	 writerError.flush();
+		//	 writerError.close();
+			 
+			 IProjectDao projectDao = DaoManager.PROJECTDAO.getDao(reportDataTable.getTenentEmail(),IProjectDao.class);
+			 ProjectDTO projectDetail = projectDao.getProjectDetailsById(projectId);
+			 Timestamp reportGenOn = new Timestamp(new java.util.Date().getTime());
+			 String zipFileName = getFileName(projectDetail.getProjectName(), projectDetail.getTemplateID(), reportGenOn);
+			 
+			 FileOutputStream fos = new FileOutputStream(directory+File.separator+zipFileName);
+			 
+			 
+			 
+			 
+			 
+			 ZipOutputStream zos = new ZipOutputStream(fos);
+
+			/* if(reportDataTable==null || reportDataTable.getDataMapList()==null || reportDataTable.getDataMapList().size()==0){
+				 addToZipFile(fileError, zos, error+fileExtn);
+			 }else{*/
+				 
+				String[] includeInOutput = reportDataTable.getIncludeInOutput();
+				if(includeInOutput != null ){
+					
+					for (int i = 0; i < includeInOutput.length; i++) {
+						
+						if(includeInOutput[i].equals(ReportDefaultsEnum.MatchStatus.PERFECT_MATCH_ONLY.getAttributeDbValue())){
+							System.out.println("Writing zip for :: "+fileExtn);
+							 addToZipFile(filePerfectMatch, zos, perfectMatch+fileExtn);
+						}
+						if(includeInOutput[i].equals(ReportDefaultsEnum.MatchStatus.POTEN_MATCH.getAttributeDbValue())){
+							System.out.println("Writing zip for :: "+fileExtn);
+							addToZipFile(filePotenMatch, zos, potenMatch+fileExtn);				
+						}
+						if(includeInOutput[i].equals(ReportDefaultsEnum.MatchStatus.NO_MATCH.getAttributeDbValue())){
+							System.out.println("Writing zip for :: "+fileExtn); 
+							addToZipFile(fileNoMatch, zos, noMatch+fileExtn);	
+						}
+						if(includeInOutput[i].equals(ReportDefaultsEnum.MatchStatus.EXCEPTION_REPORT.getAttributeDbValue())){
+							 addToZipFile(fileExcepn, zos, exception+fileExtn);
+						}
+						//wb.createSheet(XlsxReportTemplate.getByMatchStatus(includeInOutput[i]).getSheet());
+						//return wb;
+					}
+					
+				 }
+				
+				 
+				
+				
+			 
+
+				
+				zos.close();
+				fos.close();
+				
+				File zippedFile = new File(directory+File.separator+zipFileName) ;
+				
+				byte[] readFileToByteArray = FileUtils.readFileToByteArray(zippedFile);
+				
+			//	FileUtils.cleanDirectory(directory); 
+				try {
+					for(File file: directory.listFiles()){
+						if (file.isFile()&&file.getName().endsWith(fileExtn)){ 
+					    	file.delete();
+					    }
+					    
+					}	
+				}catch(NullPointerException e) {
+					
+				}
+				
+				        
+
+				
+				
+				return readFileToByteArray	;
+				
+			 
+			// writer.flush();
+			// writer.close();
+			
+		}
+		
+		 
+		
+		
+	
+	}
+	
+	/**
+	 * This method is used for hierarchy template and generating reports
+	 * @param reportDataTable This is the first parameter to writeHierarchyReports method
+	 * @param fileDelimiter This is the second parameter to writeHierarchyReports method
+	 * @param fileExtn This is the third parameter to writeHierarchyReports method 
+	 */
+	private byte[] writeHierarchyReports(ReportDataTable reportDataTable, String fileDelimiter, String fileExtn) throws IOException, NumberFormatException, ObjectNotSupportedException, ProjectDoesNotExistsException{
+		 File directory = new File(File.separator+"cdiondemand"+File.separator+"temp");
+		 if (!directory.exists()) {
+			    	directory.mkdir();
+			}
+		 
+		 List<FileReportDto> fileReportsDtolst = null;
+		 
+		 String fileLegal = directory+File.separator+HIERARCHY_LEGAL+fileExtn;
+		 String fileBusiness = directory+File.separator+HIERARCHY_BUSINESS+fileExtn;
+		 
+		 String fileNoMatch = directory+File.separator+NOT_ENRICH+fileExtn;
+		 String filePotentialMatch = directory+File.separator+MANUAL_REVIEW+fileExtn;
+		 
+		 
+		 FileWriter writerLegal = new FileWriter(fileLegal);
+		 FileWriter writerBusiness = new FileWriter(fileBusiness);
+		 
+		 FileWriter writerNoMatch = new FileWriter(fileNoMatch);
+		 FileWriter writerPotentialMatch = new FileWriter(filePotentialMatch);
+		 
+		 String legalString = "";
+		 String businessString = "";
+		 
+		 String noMatchString = "";
+		 String potenMatchString = "";
+		 
+		 Map<String, List<FileReportDto>> hierarchyReportMap = reportDataTable.getHierarchyReportingData();
+		 
+		 if(hierarchyReportMap.containsKey(CommonConstants.LEGAL_REFTYPE)){
+			 fileReportsDtolst  = hierarchyReportMap.get(CommonConstants.LEGAL_REFTYPE);
+			 setHeaderForHierarchy(fileReportsDtolst.get(0),legalString,writerLegal,fileDelimiter);
+			 writeHierarchyFile(fileReportsDtolst,writerLegal,fileDelimiter);
+		 }
+		 
+		 if(hierarchyReportMap.containsKey(CommonConstants.BUSINESS_REFTYPE)){
+			 fileReportsDtolst  = hierarchyReportMap.get(CommonConstants.BUSINESS_REFTYPE);
+			 setHeaderForHierarchy(fileReportsDtolst.get(0),businessString,writerBusiness,fileDelimiter);
+			 writeHierarchyFile(fileReportsDtolst,writerBusiness,fileDelimiter);
+		 }
+		 
+		 if(hierarchyReportMap.containsKey(CommonConstants.NOMATCH_REFTYPE)){
+			 fileReportsDtolst  = hierarchyReportMap.get(CommonConstants.NOMATCH_REFTYPE);
+			 setHeaderForHierarchy(fileReportsDtolst.get(0),noMatchString,writerNoMatch,fileDelimiter);
+			 writeHierarchyFile(fileReportsDtolst,writerNoMatch,fileDelimiter);
+		 }
+		 
+		 if(hierarchyReportMap.containsKey(CommonConstants.POTEN_REFTYPE)){
+			 fileReportsDtolst  = hierarchyReportMap.get(CommonConstants.POTEN_REFTYPE);
+			 setHeaderForHierarchy(fileReportsDtolst.get(0),potenMatchString,writerPotentialMatch,fileDelimiter);
+			 writeHierarchyFile(fileReportsDtolst,writerPotentialMatch,fileDelimiter);
+		 }
+		 
+		 
+		 IProjectDao projectDao = DaoManager.PROJECTDAO.getDao(reportDataTable.getTenentEmail(),IProjectDao.class);
+		 ProjectDTO projectDetail = projectDao.getProjectDetailsById(Long.valueOf(reportDataTable.getProjectId()));
+		 Timestamp reportGenOn = new Timestamp(new java.util.Date().getTime());
+		 String zipFileName = getFileName(projectDetail.getProjectName(), projectDetail.getTemplateID(), reportGenOn);
+		 
+		 FileOutputStream fos = new FileOutputStream(directory+File.separator+zipFileName);
+		 
+		 ZipOutputStream zos = new ZipOutputStream(fos);
+
+		 if(hierarchyReportMap.containsKey(CommonConstants.LEGAL_REFTYPE)){
+			 addToZipFile(fileLegal, zos, HIERARCHY_LEGAL+fileExtn);
+		 }
+		 if(hierarchyReportMap.containsKey(CommonConstants.BUSINESS_REFTYPE)){
+			 addToZipFile(fileBusiness, zos, HIERARCHY_BUSINESS+fileExtn);
+		 }
+		 if(hierarchyReportMap.containsKey(CommonConstants.NOMATCH_REFTYPE)){
+			 addToZipFile(fileNoMatch, zos, NOT_ENRICH+fileExtn);
+		 }
+		 if(hierarchyReportMap.containsKey(CommonConstants.POTEN_REFTYPE)){
+			 addToZipFile(filePotentialMatch, zos, MANUAL_REVIEW+fileExtn);
+		 }
+
+			zos.close();
+			fos.close();
+			
+			File zippedFile = new File(directory+File.separator+zipFileName) ;
+			
+			byte[] readFileToByteArray = FileUtils.readFileToByteArray(zippedFile);
+			
+		//	FileUtils.cleanDirectory(directory); 
+			File[] fileArr=directory.listFiles();
+			if(fileArr!=null) {
+				for(File file: fileArr){
+					if (file.isFile()&&file.getName().endsWith(fileExtn)){ 
+				    	file.delete();
+				    }
+				    
+				}	
+			}
+			return readFileToByteArray	;
+	}
+
+
+	/**
+	 * This method sets headers for input file.
+	 * @param headers
+	 * @param reportDataTable
+	 * @param fileName
+	 * @param perfectMatchString
+	 * @param writerPerfMatch 
+	 * @param fileDelimiter
+	 * @param templateId 
+	 * @throws IOException
+	 */
+	public void setHeader(List<String> headers, ReportDataTable reportDataTable,
+			String fileName, String perfectMatchString, FileWriter writerPerfMatch, String fileDelimiter, long templateId) throws IOException{
+
+		IReportsMaintenence maintenence = new ReportsMaintenenceImpl();
+			Map<String, String> map1 = maintenence.getReportsHeaderDisplayNames(reportDataTable.getTenentEmail(),templateId);
+		 
+		 Set<String> reportHeaders = includeHeaders(fileName, headers, templateId);
+		 
+		 for(String header:reportHeaders){
+    	
+			
+    		//String headerName = map1.get(header)!=null?map1.get(header):header;
+			String headerName = null;
+			String attributeInfoHeader = ReportDefaultsEnum.getAttributeInfo(header);
+			if( map1.get(header) == null && attributeInfoHeader!=null){
+				headerName = attributeInfoHeader;
+			}else{
+				headerName = map1.get(header)!=null?map1.get(header):header;
+			}
+			
+    		headerName = "\"" + headerName + "\"";
+    		perfectMatchString = perfectMatchString + headerName;
+    		perfectMatchString = perfectMatchString + fileDelimiter;
+			}
+		 if (perfectMatchString.endsWith(fileDelimiter)) {
+			 perfectMatchString = perfectMatchString.substring(0, perfectMatchString.length() - 1);
+			}
+		 writerPerfMatch.append(perfectMatchString);
+		 writerPerfMatch.append(NEW_LINE);
+	
+	}
+	
+	private void setHeaderForHierarchy(FileReportDto fileReportDto,String hierarchyString, FileWriter writerHierarchy,String fileDelimiter) throws IOException {
+		
+		for(int i=0;i<fileReportDto.getHeader().columnsCount();i++){
+			String headerName = null;
+			headerName = CommonUtils.getHierarchyReportHeader(fileReportDto.getHeader().getColumn(i));
+    		headerName = "\"" + headerName + "\"";
+    		hierarchyString = hierarchyString + headerName;
+    		hierarchyString = hierarchyString + fileDelimiter;
+		}
+		 if (hierarchyString.endsWith(fileDelimiter)) {
+			 hierarchyString = hierarchyString.substring(0, hierarchyString.length() - 1);
+			}
+		 writerHierarchy.append(hierarchyString);
+		 writerHierarchy.append(NEW_LINE);
+	}
+	
+	private void writeHierarchyFile(List<FileReportDto> fileReportsDtolst, FileWriter writerLegal, String fileDelimiter) throws IOException{
+		 RowDto dataRow= new RowDto();
+		 String legalString = "";
+		 for (FileReportDto fileReportDto : fileReportsDtolst) {
+			 writerLegal.append(NEW_LINE);
+			 writerLegal.append(NEW_LINE);
+			 for(int rowIndex=0;rowIndex<fileReportDto.getDataRows().size();rowIndex++){
+				 legalString = "";
+				 dataRow = fileReportDto.getDataRows().get(rowIndex);
+				 
+					for(String columnData:dataRow.getColumns()){
+						String data = columnData!=null?columnData:"";
+						data = "\"" + data + "\"";
+						legalString = legalString + data;
+						legalString = legalString + fileDelimiter;
+					}
+					if (legalString.endsWith(fileDelimiter)) {
+						legalString = legalString.substring(0, legalString.length() - 1);
+						}
+					writerLegal.append(legalString);
+					writerLegal.append(NEW_LINE);
+			 }
+		}
+		 
+		 writerLegal.flush();
+		 writerLegal.close();
+	}
+	
+	/**
+	 * This method returns headers list for input file name.
+	 * @param fileName
+	 * @param headers
+	 * @return
+	 */
+	public  Set<String> includeHeaders(String fileName , List<String> headers, long templateId){
+
+		
+		  List<String> reportHeaders = new ArrayList<String>();
+		  
+		  reportHeaders.addAll(headers);
+		  
+		  Set<String> includeHeadersSet = ReportDefaultsEnum.XlsxReportTemplate.get(fileName).getIncludeFieldsSet();
+		  if(templateId == 2 && XlsxReportTemplate.SHEET_NOMATCH.getSheet().equalsIgnoreCase(fileName)){
+			  includeHeadersSet.add( ReportDefaultsEnum.COLUMN_ISIN.getValue());
+			  includeHeadersSet.add( ReportDefaultsEnum.COLUMN_CUSIP.getValue());
+			  includeHeadersSet.add( ReportDefaultsEnum.COLUMN_SEDOL.getValue());
+		  }
+		  
+		  Set<String> excludeHeadersSet = ReportDefaultsEnum.XlsxReportTemplate.get(fileName).getExcludeFieldsSet();
+		  
+		  for (String string : headers) {
+			  if(excludeHeadersSet.size()>0 && excludeHeadersSet.contains(string)){
+				  reportHeaders.remove(string);
+			  }
+		  }
+		  
+		  for (String string : headers) {
+			  if(includeHeadersSet.size()>0 && !includeHeadersSet.contains(string)){
+				  reportHeaders.remove(string);
+			  }
+		  }
+		
+		Set<String> headersSet = new LinkedHashSet<String>(reportHeaders);
+		  
+		return headersSet;
+		
+	
+	}
+	
+	/**
+	 * This method returns output zip file name.
+	 * @param projectName
+	 * @param reportGenOn
+	 * @return
+	 */
+	public abstract  String getFileName(String projectName,long templateId, Timestamp reportGenOn);
+	
+	
+	/**
+	  * This method creates zip file.
+	  * @param zipFileName
+	  * @param zos
+	 * @param fileName 
+	  * @throws FileNotFoundException
+	  * @throws IOException
+	  */
+	 public static void addToZipFile(String zipFileName, ZipOutputStream zos, String fileName) throws FileNotFoundException, IOException {
+
+
+			File file = new File(zipFileName);
+			FileInputStream fis = new FileInputStream(file);
+			ZipEntry zipEntry = new ZipEntry(fileName);
+			zos.putNextEntry(zipEntry);
+
+			byte[] bytes = new byte[1024];
+			int length;
+			while ((length = fis.read(bytes)) >= 0) {
+				zos.write(bytes, 0, length);
+			}
+
+			zos.closeEntry();
+			fis.close();
+		}
+	
+	 	/**
+		 * Get headers list on the basis of report data table
+		 * @param reportDataTable
+		 * @return
+		 */
+		public List<String> getResultHeader(ReportDataTable reportDataTable) {
+			List<String> headers = new ArrayList<String>();
+			Map<String, Object> map = null;
+			
+			if(reportDataTable.getDataMapList() !=null && reportDataTable.getDataMapList().size()>0){
+		//	if(reportDataTable.getDataMapList() !=null){
+				 map =reportDataTable.getDataMapList().get(0);
+				 for (Entry dataRow : map.entrySet()) {
+					 if(!dataRow.getKey().toString().equals(ReportDefaultsEnum.COLUMN_MATCH_STATUS.getValue())){
+						 
+						 headers.add((String) dataRow.getKey());
+					 }
+				 }
+				
+				
+			}	// Fix for LP - 886
+			else if( !(reportDataTable.getDataMapList().size() > 0)){
+				//return reportDataTable.getDefaultHeader();
+				headers.clear();
+				headers = Arrays.asList(CommonConstants.No_XREF_DATA);
+			}
+			
+			
+			return headers;
+		}
+	
+}

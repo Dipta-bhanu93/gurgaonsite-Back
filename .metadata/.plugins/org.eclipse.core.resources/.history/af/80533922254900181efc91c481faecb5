@@ -1,0 +1,1367 @@
+package com.lei.dao.report.orm;
+
+import java.math.BigDecimal;
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+
+import lombok.extern.slf4j.Slf4j;
+
+import org.apache.commons.lang3.text.WordUtils;
+import org.hibernate.Criteria;
+import org.hibernate.Query;
+import org.hibernate.criterion.Order;
+import org.hibernate.criterion.ProjectionList;
+import org.hibernate.criterion.Projections;
+import org.hibernate.criterion.Restrictions;
+import org.hibernate.transform.AliasToBeanResultTransformer;
+import org.springframework.util.StringUtils;
+
+import com.lei.dao.base.AliasToEntityOrderedMapResultTransformer;
+import com.lei.dao.base.DaoManager;
+import com.lei.dao.base.orm.AbstractBaseDao;
+import com.lei.dao.crossReference.ICrossRefDao;
+import com.lei.dao.project.IProjectDao;
+import com.lei.dao.report.IReportDao;
+import com.lei.dao.user.orm.UserDaoImpl;
+import com.lei.domain.company.CounterpartyGoldDomain;
+import com.lei.domain.company.GoldDataCoverageDomain;
+import com.lei.domain.file.FileDataDomain;
+import com.lei.domain.file.FileGenerationQueryDomain;
+import com.lei.domain.hierarchy.HierarchyQueryDomain;
+import com.lei.domain.platinum.PlatinumDataCoverageDomain;
+import com.lei.domain.project.GeneratedReportsDomain;
+import com.lei.domain.project.ProjectConfigDomain;
+import com.lei.domain.project.ProjectMatchStatsDomain;
+import com.lei.domain.project.UserProjectDomain;
+import com.lei.dto.common.FileReportDto;
+import com.lei.dto.common.RowDto;
+import com.lei.dto.crossReference.FeedMasterDto;
+import com.lei.dto.dashboard.DashboardDto;
+import com.lei.dto.dashboard.GoldDataCoverageDto;
+import com.lei.dto.dashboard.GoldDataCoverageDtoCollection;
+import com.lei.dto.dashboard.GoldDataTypeDto;
+import com.lei.dto.dashboard.GoldWidgetDto;
+import com.lei.dto.dashboard.PlatinumDataCoverageDto;
+import com.lei.dto.dashboard.PlatinumDataCoverageDtoCollection;
+import com.lei.dto.dashboard.PlatinumDataTypeDto;
+import com.lei.dto.file.FileDataDTO;
+import com.lei.dto.project.config.ProjectConfigXrefDto;
+import com.lei.dto.report.RecordCountsDto;
+import com.lei.dto.report.generate.GeneratedReportsDto;
+import com.lei.dto.workflow.ProjectDTO;
+import com.lei.exception.common.ObjectNotSupportedException;
+import com.lei.exception.common.ProcessFailedException;
+import com.lei.exception.project.ProjectConfigNotFoundException;
+import com.lei.exception.project.ProjectDoesNotExistsException;
+import com.lei.maintenance.crossReference.CrossRefMaintenanceImpl;
+import com.lei.report.ReportDataRow;
+import com.lei.report.ReportDataTable;
+import com.lei.report.ReportDefaultsEnum;
+import com.lei.report.ReportDefaultsEnum.MatchStatus;
+import com.lei.utility.CommonUtils;
+import com.lei.utility.constants.CommonConstants;
+import com.lei.utility.constants.FileConstants;
+import com.lei.utility.constants.ProjectConfigEnum;
+import com.lei.utility.queue.QueueManager;
+import com.lei.utility.queue.jobcategory.ReportDataChunkFetchingProcess;
+
+
+
+@Slf4j
+public class ReportsDaoImpl  extends AbstractBaseDao implements IReportDao{
+
+	public ReportsDaoImpl(String tenantEmail) {
+		super(tenantEmail);
+	}
+	
+	public ReportsDaoImpl(Long clientsID) {
+		super(clientsID);
+	}
+	
+	private static final  int NUMBER_OF_CHUNK = 5;
+	private static Map<Integer, Future<List<LinkedHashMap<String, Object>>>> FETCH_DATA_CHUNKS_MAP = new HashMap<Integer,Future<List<LinkedHashMap<String, Object>>>>();
+
+	public static Map<Integer, Future<List<LinkedHashMap<String, Object>>>> getFETCH_DATA_CHUNKS_MAP() {
+		return FETCH_DATA_CHUNKS_MAP;
+	}
+
+	public static void setFETCH_DATA_CHUNKS_MAP(Map<Integer, Future<List<LinkedHashMap<String, Object>>>> fETCH_DATA_CHUNKS_MAP) {
+		FETCH_DATA_CHUNKS_MAP = fETCH_DATA_CHUNKS_MAP;
+	}
+	
+	@Override
+	public List<UserProjectDomain> getProjectAndReports(String userEmail){
+
+
+		beginTransaction();
+		Criteria userReports = hibernatePersistenceManager.createCriteria(UserProjectDomain.class);
+
+		UserDaoImpl userDaoImpl = new UserDaoImpl(userEmail);
+		List<UserProjectDomain> result = null;
+
+		Long id = userDaoImpl.getUserID(userEmail);
+
+		userReports.add(Restrictions.eq("userCreated", id));
+		userReports.add(Restrictions.eq("statusId", 1L));
+		result = userReports.list();
+
+		endTransaction();
+		return result;
+
+
+	}
+
+
+	@Override	
+	public Map<Timestamp,List<GeneratedReportsDomain> > getAllReportsByProjectId(long projectId){
+
+
+		beginTransaction();
+		Criteria userReports = hibernatePersistenceManager.createCriteria(GeneratedReportsDomain.class);
+
+
+
+		userReports.add(Restrictions.eq("projectId", projectId));
+		userReports.addOrder(Order.desc("generatedDate"));
+		List<GeneratedReportsDomain> result = userReports.list();
+		endTransaction();
+
+		Map<Timestamp,List<GeneratedReportsDomain> > reportsByGeneratedDateMap=  new HashMap<Timestamp, List<GeneratedReportsDomain>>();
+		for (GeneratedReportsDomain generatedReportFile : result) {
+
+			if(reportsByGeneratedDateMap.containsKey(generatedReportFile.getGeneratedDate())){
+				reportsByGeneratedDateMap.get(generatedReportFile.getGeneratedDate()).add(generatedReportFile);
+			}else{
+				List<GeneratedReportsDomain> list= new ArrayList<GeneratedReportsDomain>();
+				list.add(generatedReportFile);
+				reportsByGeneratedDateMap.put(generatedReportFile.getGeneratedDate(), list);
+			}
+
+		}
+		return reportsByGeneratedDateMap;
+
+
+	}
+	
+	
+	
+	
+	@Override	
+	public List<GeneratedReportsDto> getAllReportsByExecutionId(Long projectId, Long executionId) throws ObjectNotSupportedException{
+
+
+	//	beginTransaction();
+		Criteria userReports = hibernatePersistenceManager.createCriteria(GeneratedReportsDomain.class);
+
+
+
+		userReports.add(Restrictions.eq("projectId", projectId));
+		//executionId
+		userReports.add(Restrictions.eq("executionId", executionId));
+		//userReports.addOrder(Order.desc("generatedDate"));
+		List<GeneratedReportsDomain> result = userReports.list();
+		//endTransaction();
+
+		List<GeneratedReportsDto> list= new ArrayList<GeneratedReportsDto>();
+		
+		//Map<Timestamp,List<GeneratedReportsDomain> > reportsByGeneratedDateMap=  new HashMap<Timestamp, List<GeneratedReportsDomain>>();
+		for (GeneratedReportsDomain generatedReportFile : result) {
+
+			GeneratedReportsDto dto = CommonUtils.convertObject(generatedReportFile, GeneratedReportsDto.class);
+			
+			list.add(dto);
+
+		}
+	//	endTransaction();
+		return list;
+
+		
+	}
+
+
+
+
+
+
+
+
+
+
+	private Map<String, String> getReportColumnsAndCriteria(List<ProjectConfigDomain> configDomains, long templateId){
+		Map<String, String> reportsColsNCriteriaMap = new HashMap<String, String>();
+
+
+		StringBuffer columns = new StringBuffer("*");
+		StringBuffer criteria = new StringBuffer("1=1");
+
+		StringBuffer reportFormats = new StringBuffer("");
+		String emailMe = new String("N");
+		
+		StringBuffer includeInOutput = new StringBuffer("");
+
+		if(configDomains != null){
+
+			for (ProjectConfigDomain projectConfigDomain : configDomains) {
+
+				if(projectConfigDomain.getAttributeValue() && projectConfigDomain.getMasterAttribId()>200){
+					if(projectConfigDomain.getType().equals(ReportDefaultsEnum.DB_ATTRIB_FORMAT.getKey())){
+						reportFormats.append(projectConfigDomain.getAttribute());
+						reportFormats.append(",");
+					}else{
+						emailMe = "Y";
+					}
+				}
+				if(projectConfigDomain.getAttributeValue() && projectConfigDomain.getMasterAttribId()<200){
+					if(columns.toString().equals("*")){
+
+						columns = new StringBuffer("");
+						columns.append(ReportDefaultsEnum.DEFAULT_REPORT_COLS.getValue());
+						columns.append(",");
+						if(templateId == 2){
+							columns.append(ReportDefaultsEnum.INSTRUMENT_EXTRA_DEF_REPORT_COLS.getValue());
+							columns.append(",");
+						}
+						columns.append(ReportDefaultsEnum.DEFAULT_ADDED_REPORT_COLS.getValue());
+						columns.append(",");
+					}
+					
+					columns.append(" a.");
+					columns.append(projectConfigDomain.getAttribute());
+					columns.append(",");
+				}
+
+				if(projectConfigDomain.getAttributeValue() && projectConfigDomain.getMasterAttribId()==200  ){
+
+					if(criteria.toString().equals("1=1")){      // important base where clause query
+
+						criteria = new StringBuffer("");
+						criteria.append(" ");
+						criteria.append(ReportDefaultsEnum.COLUMN_MATCH_STATUS.getValue());
+						criteria.append(" IN ");
+						criteria.append("(");
+
+					}
+					if(projectConfigDomain.getAttributeValue() && projectConfigDomain.getAttribute().equals(ProjectConfigEnum.ConfigProperties.IN_POTEN_MATCH.getAttribute())){
+						criteria.append("'"+ProjectConfigEnum.ConfigProperties.IN_POTEN_MATCH.getAttributeDbValue()+"'");
+						criteria.append(",");
+						
+						includeInOutput.append(ProjectConfigEnum.ConfigProperties.IN_POTEN_MATCH.getAttributeDbValue());
+						includeInOutput.append(",");
+					}
+					else if(projectConfigDomain.getAttributeValue() && projectConfigDomain.getAttribute().equals(ProjectConfigEnum.ConfigProperties.IN_NO_MATCH.getAttribute())){
+						criteria.append("'"+ProjectConfigEnum.ConfigProperties.IN_NO_MATCH.getAttributeDbValue()+"'");
+						criteria.append(",");
+						
+						includeInOutput.append(ProjectConfigEnum.ConfigProperties.IN_NO_MATCH.getAttributeDbValue());
+						includeInOutput.append(",");
+					}
+					else if(projectConfigDomain.getAttributeValue() &&  projectConfigDomain.getAttribute().equals(ProjectConfigEnum.ConfigProperties.IN_EXCEPTION_REPORT.getAttribute())){
+						criteria.append("'"+ProjectConfigEnum.ConfigProperties.IN_EXCEPTION_REPORT.getAttributeDbValue()+"'");
+						criteria.append(",");
+						
+						includeInOutput.append(ProjectConfigEnum.ConfigProperties.IN_EXCEPTION_REPORT.getAttributeDbValue());
+						includeInOutput.append(",");
+					}
+					else if(projectConfigDomain.getAttributeValue() && projectConfigDomain.getAttribute().equals(ProjectConfigEnum.ConfigProperties.IN_PERFECT_MATCH_ONLY.getAttribute())){
+						criteria.append("'"+ProjectConfigEnum.ConfigProperties.IN_PERFECT_MATCH_ONLY.getAttributeDbValue()+"'");
+						criteria.append(",");
+						
+						includeInOutput.append(ProjectConfigEnum.ConfigProperties.IN_PERFECT_MATCH_ONLY.getAttributeDbValue());
+						includeInOutput.append(",");
+					}else{
+						//
+					}
+
+				}
+			}
+		}
+
+		if(criteria!=null && criteria.length()>0 && criteria.charAt(criteria.length()-1)==','){
+			criteria.deleteCharAt(criteria.length()-1);
+		}
+
+		if(!criteria.toString().contains("1=1")){
+
+			criteria.append(")");
+		}
+
+		if(columns!=null && columns.length()>0 && columns.charAt(columns.length()-1)==','){
+			columns.deleteCharAt(columns.length()-1);
+		}
+
+		if(reportFormats!=null && reportFormats.length()>0 && reportFormats.charAt(reportFormats.length()-1)==','){
+			reportFormats.deleteCharAt(reportFormats.length()-1);
+		}
+		
+		if(includeInOutput!=null && includeInOutput.length()>0 && includeInOutput.charAt(includeInOutput.length()-1)==','){
+			includeInOutput.deleteCharAt(includeInOutput.length()-1);
+		}
+
+		
+
+		reportsColsNCriteriaMap.put(ReportDefaultsEnum.KEY_COLUMNS.getValue(), columns.toString());
+		reportsColsNCriteriaMap.put(ReportDefaultsEnum.KEY_CRITERIA.getValue(), criteria.toString());
+
+		// set default report
+		if(reportFormats.toString().trim().equals("")){
+			reportFormats= new StringBuffer(ReportDefaultsEnum.XLSX.getKey());
+		}
+		reportsColsNCriteriaMap.put(ReportDefaultsEnum.KEY_REPORT_FORMATS.getValue(), reportFormats.toString());
+		reportsColsNCriteriaMap.put(ReportDefaultsEnum.KEY_EMAIL_ME.getValue(), emailMe);
+		
+		reportsColsNCriteriaMap.put(ReportDefaultsEnum.KEY_INCLUDE_IN_OUTPUT.getValue(), includeInOutput.toString());
+		
+	/*	if(includeInOutput.equals("")){
+			reportsColsNCriteriaMap.put(ReportDefaultsEnum.KEY_INCLUDE_IN_OUTPUT.getValue(), null);
+		}else{
+			reportsColsNCriteriaMap.put(ReportDefaultsEnum.KEY_INCLUDE_IN_OUTPUT.getValue(), includeInOutput.toString());
+		}*/
+
+		return reportsColsNCriteriaMap;	
+
+	}
+
+
+
+
+	private String reportsQueryBuilder(Map<String , String> colsAndCriteriaMap ){
+
+
+		String statementQuery =  ReportDefaultsEnum.BASE_QUERY.getValue();
+		StringBuffer query = new StringBuffer("");
+		if(colsAndCriteriaMap!=null){
+			//if(colsAndCriteriaMap.get(ReportDefaultsEnum.REPORT_COLS_KEY.getValue())!=null){
+
+			statementQuery = statementQuery.replaceFirst("\\*", colsAndCriteriaMap.get(ReportDefaultsEnum.KEY_COLUMNS.getValue()));
+			query = new StringBuffer(statementQuery);
+			query.append(" WHERE ");
+			query.append(ReportDefaultsEnum.DEFAULT_REPORT_CRITERIA.getValue());
+
+			query.append(" AND ");
+			query.append( colsAndCriteriaMap.get(ReportDefaultsEnum.KEY_CRITERIA.getValue()));
+			
+			/*query.append(" AND ");
+			query.append(" a.PROJECTID=b.PROJECTID ");
+			query.append(" AND ");
+			query.append(" NVL(a.NAME,'X')=NVL(b.NAME,'X') ");
+			query.append(" AND ");
+			query.append(" NVL(a.COUNTRY,'X')=NVL(b.COUNTRY,'X') ");*/
+			
+			//}
+		}
+
+		query.append("  "+ReportDefaultsEnum.DEFAULT_ORDERBY.getValue());
+		return query.toString();
+
+	}
+
+
+
+
+	public ReportDataTable getReportsData(String projectId,String isFetchDataInChunks) throws ProjectConfigNotFoundException, NumberFormatException, ObjectNotSupportedException, ProcessFailedException{
+	
+		ReportDataTable table = new ReportDataTable();
+		Set<String> matchStatus = new HashSet<String>();
+		Set<String> downloadFormat = new HashSet<String>();
+		Set<String> hinfo = new HashSet<String>();
+		HashMap<String,ArrayList<ProjectConfigXrefDto>> savedprojectConfigMap = null;
+		IProjectDao projetDao = DaoManager.PROJECTDAO.getDao(getTenantEmail(),IProjectDao.class);
+		List<ProjectConfigDomain> savedProjectAndResultConfign = null;
+		//Fetching project details to retrieve template Id
+		ProjectDTO projectObj = new ProjectDTO();
+		try {
+			projectObj = projetDao.getProjectDetailsById(Long.valueOf(projectId));
+		} catch (Exception e) {
+			//Do Nothing
+		}
+		
+		table.setEmailMe("N");
+		
+		//For templateID 1 and 2
+		if(projectObj != null &&(projectObj.getTemplateID() == CommonConstants.REFERENCE_DATA_ENRICHMENT_ID || projectObj.getTemplateID() == CommonConstants.INSTRUMENTS_ISSUER_MAPPING)){
+			
+			savedProjectAndResultConfign = projetDao.getSavedProjectConfigurations(Long.valueOf(projectId));
+			//table.setDefaultHeader(getHeaderList(savedProjectAndResultConfign,projectObj.getTemplateID()));
+			
+			for (ProjectConfigDomain configDomain : savedProjectAndResultConfign) {
+				if(configDomain.getType().equalsIgnoreCase(ProjectConfigEnum.INCLUDEINRESULT.getProjectType()) && configDomain.getAttributeValue()){
+					matchStatus.add(ProjectConfigEnum.ConfigProperties.valueOf(configDomain.getAttribute()).getAttributeDbValue());
+				}else if(configDomain.getType().equalsIgnoreCase(ReportDefaultsEnum.DB_ATTRIB_FORMAT.getKey()) && configDomain.getAttributeValue()){
+					downloadFormat.add(configDomain.getAttribute());
+				}else if(configDomain.getType().equalsIgnoreCase("EMAIL")){
+					if(configDomain.getAttributeValue()){
+						table.setEmailMe("Y");
+					}
+				}
+			}
+			table.setIncludeInOutput(matchStatus.toArray(new String[matchStatus.size()]));
+			table.setReportFormats(downloadFormat.toArray(new String[downloadFormat.size()]));
+			
+		//For templateID 3
+		}else if(projectObj.getTemplateID() == CommonConstants.DATA_CROSS_REFERENCING){
+			
+			savedprojectConfigMap = (HashMap<String, ArrayList<ProjectConfigXrefDto>>)  projetDao.getSavedProjectConfigForXref(Long.valueOf(projectId));
+
+			//table.setDefaultHeader(getHeaderListForXref(savedprojectConfigMap,projectObj.getTemplateID()));
+			
+			if(null != savedprojectConfigMap && !savedprojectConfigMap.isEmpty()){
+				List<ProjectConfigXrefDto> matchStatusSavedList = savedprojectConfigMap.get(CommonConstants.MATCH_STAT);
+				List<ProjectConfigXrefDto> filAandEmailSavedList = savedprojectConfigMap.get(CommonConstants.FILE_FORMAT_AND_EMAIL);
+				
+				if(null != matchStatusSavedList && !matchStatusSavedList.isEmpty()){
+					for (ProjectConfigXrefDto projectConfigXrefDto : matchStatusSavedList) {
+						if (projectConfigXrefDto.getType().equalsIgnoreCase(CommonConstants.MATCH_STAT) && projectConfigXrefDto.getValue()) {
+							matchStatus.add(ProjectConfigEnum.ConfigPropertiesForXref.valueOf(projectConfigXrefDto.getAttributeName()).getAttributeDbValue());
+						}
+					}
+					table.setIncludeInOutput(matchStatus.toArray(new String[downloadFormat.size()]));
+				}
+				if(null != filAandEmailSavedList && !filAandEmailSavedList.isEmpty()){
+					for (ProjectConfigXrefDto projectConfigXrefDto : filAandEmailSavedList) {
+						if (projectConfigXrefDto.getType().equalsIgnoreCase(CommonConstants.FILE_FORMAT) && projectConfigXrefDto.getValue()) {
+							downloadFormat.add(projectConfigXrefDto.getAttributeName());
+						}else if(projectConfigXrefDto.getType().equalsIgnoreCase(CommonConstants.EMAIL_ME)){
+							if(projectConfigXrefDto.getValue()){
+								table.setEmailMe("Y");
+							}
+						}
+					}
+					table.setReportFormats(downloadFormat.toArray(new String[downloadFormat.size()]));
+				}
+			}
+			
+			table.setFeedCriticalRecords(getCriticalRecordsForAllFeeds(getTenantEmail(), Long.valueOf(projectId)));;
+			
+		//For templateID 6 and 7	
+		}else if(projectObj.getTemplateID() == CommonConstants.ENRICH || projectObj.getTemplateID() == CommonConstants.BUILD){
+			savedProjectAndResultConfign = projetDao.getSavedProjectConfigurations(Long.valueOf(projectId));
+			if(null != savedProjectAndResultConfign && !savedProjectAndResultConfign.isEmpty()){
+				for (ProjectConfigDomain configDomain : savedProjectAndResultConfign) {
+					if(configDomain.getType().equalsIgnoreCase(ProjectConfigEnum.INCLUDEINRESULT.getProjectType()) && configDomain.getAttributeValue()){
+						matchStatus.add(ProjectConfigEnum.ConfigProperties.valueOf(configDomain.getAttribute()).getAttributeDbValue());
+					}else if(configDomain.getType().equalsIgnoreCase(ReportDefaultsEnum.DB_ATTRIB_FORMAT.getKey()) && configDomain.getAttributeValue()){
+						downloadFormat.add(configDomain.getAttribute());
+					}else if(configDomain.getType().equalsIgnoreCase("HINFO")){
+						if(configDomain.getAttributeValue()){
+							hinfo.add(configDomain.getAttribute());
+						}
+					}else if(configDomain.getType().equalsIgnoreCase("EMAIL")){
+						if(configDomain.getAttributeValue()){
+							table.setEmailMe("Y");
+						}
+					}
+				}
+				table.setIncludeInOutput(matchStatus.toArray(new String[matchStatus.size()]));
+				table.setReportFormats(downloadFormat.toArray(new String[downloadFormat.size()]));
+				table.setHinfo(hinfo.toArray(new String[hinfo.size()]));
+			}
+	
+			table.setHierarchyReportingData(getHierarchyReportingData(getTenantEmail(), Long.valueOf(projectId),matchStatus,projectObj.getTemplateID()));;
+		}
+		
+		
+		
+		 // REPORTING || Parallel fetch  starts  | Only for RDE, IIM, and DCR 
+		if ((isFetchDataInChunks.equals("Y"))  && !(projectObj.getTemplateID() == CommonConstants.ENRICH || projectObj.getTemplateID() == CommonConstants.BUILD)) {
+			
+			List<LinkedHashMap<String, Object>> dataMapList = getDataMapModeChunklFetch(projectId);
+			table.setDataMapList(dataMapList);
+			System.out.println("Final Data Map List Size is : "
+					+ dataMapList.size());
+
+		}
+		
+		 // REPORTING || normal fetch  starts
+		else if (!(projectObj.getTemplateID() == CommonConstants.ENRICH || projectObj.getTemplateID() == CommonConstants.BUILD)){
+			////Added for LP-833
+			beginTransaction();
+			
+			String statementQuery = "";
+			
+			//	String statementQuery = reportsQueryBuilder(reportsColsNCriteriaMap);
+				
+//				String sqlQuery = "select QUERY_TEXT from FILE_GENERATION_QUERY where PROJECT_ID = :projectID ";
+				
+//				List<Object[]>  results =  (List<Object[]>) hibernatePersistenceManager.createSQLQuery(sqlQuery.toString()).setLong("projectID",Long.valueOf(projectId)).list();
+				List<FileGenerationQueryDomain> results=hibernatePersistenceManager.createCriteria(FileGenerationQueryDomain.class)
+						.add(Restrictions.eq("projectId", Long.valueOf(projectId))).list();
+				
+				if(null != results && !results.isEmpty()){
+//					Object rowArray = results.get(0);
+					FileGenerationQueryDomain rowArray = results.get(0);
+					
+//					statementQuery = (String) rowArray.toString();
+					statementQuery =rowArray.getQueryText();
+					//statementQuery = " SELECT a.LEGALNAME ENTITY_PUBLISHED_NAME,a.DOMICILECNTRY COUNTRY,a.DOMICILECNTRY ISSUER_COUNTRY_CODE,a.LEGALNAME ISSUER_NAME,(SELECT AGENCYID FROM COUNTERPARTYXREF WHERE AGENCYCODE='MDID' AND CDID=a.CDID) MOODYS_ISSUER_NUMBER,(SELECT AGENCYID FROM COUNTERPARTYXREF WHERE AGENCYCODE='SPID' AND CDID=a.CDID) ENTITY_ID,(SELECT AGENCYID FROM COUNTERPARTYXREF WHERE AGENCYCODE='FITCHID'AND CDID        =a.CDID) FITCH_ISSUER_ID_NUMBER,(SELECT STATEPROVINCE FROM COUNTERPARTYADDRESS WHERE ADDRESSTYPE='INC' AND CDID         =a.CDID) STATE_CODE,(SELECT STATEPROVINCE FROM COUNTERPARTYADDRESS WHERE ADDRESSTYPE='INC'AND CDID         =a.CDID) STATE_PROVINCE, (SELECT ATTRIBUTEVALUE FROM COUNTERPARTYATTRIBUTES WHERE ATTRIBUTETYPE='TICKER'AND CDID           =a.CDID) TICKER,(SELECT ATTRIBUTEVALUE FROM COUNTERPARTYATTRIBUTES WHERE ATTRIBUTETYPE='ENTITY_SUB_SECTOR' AND CDID=a.CDID) ENTITY_SUB_SECTOR FROM COUNTERPARTY a WHERE FUN_CHK_FOR_XREF (a.CDID,100004)='Y' AND EXISTS (SELECT 1 FROM CDID_PROJECT_MAPPING WHERE a.CDID=CDID AND PROJECTID=100004 ) ";
+					
+					Query query = hibernatePersistenceManager.createSQLQuery(statementQuery);
+					
+					
+					
+					
+					/*UserDaoImpl userDaoImpl = new UserDaoImpl();
+						Long id = userDaoImpl.getUserID(userName);*/
+
+					//query.setParameter(ReportDefaultsEnum.COLUMN_USERID.getValue(), userId);
+					
+				//	query.setParameter(ReportDefaultsEnum.COLUMN_PROJECTID.getValue(), projectId);
+
+
+					/*	query.setParameter(ReportDefaultsEnum.COLUMN_USERID.getValue(), 1128);
+						query.setParameter(ReportDefaultsEnum.COLUMN_PROJECTID.getValue(), 321);*/
+
+					query.setResultTransformer(AliasToEntityOrderedMapResultTransformer.INSTANCE);
+					List<LinkedHashMap<String,Object>> dataMapList = query.list();
+					table.setDataMapList(dataMapList);
+				}
+				
+			endTransaction();
+		}
+
+		table.setReportDataRows(new ArrayList<ReportDataRow>());
+
+		table.setProjectId(projectId);
+		table.setTemplateID(projectObj.getTemplateID());
+
+		return table;
+
+	}
+	
+	/**
+	 * This method is used for cross ref template and fetching data for creating report
+	 * @param userEmail This is the first paramter to getCriticalRecordsForAllFeeds method
+	 * @param projectId  This is the second parameter to getCriticalRecordsForAllFeeds method
+	 */
+	private Map<String,FileReportDto> getCriticalRecordsForAllFeeds(String userEmail,long projectId) throws ProcessFailedException{
+		Map<String,FileReportDto> feedCriticalRecordsMap = new HashMap<>();
+		StringBuilder sqlQuery = null;
+		Map<String, Object> map = null;
+		FileReportDto fileReportDto = null;
+		List<String> headers = null;
+		List<RowDto> dataRows = null;
+		RowDto rowHeaders = null;
+		RowDto Datavalues = null;
+		CrossRefMaintenanceImpl impl = new CrossRefMaintenanceImpl();
+		List<String> values = null;
+		if(projectId>0){
+			 ICrossRefDao dao = DaoManager.CROSSREFDAO.getDao(userEmail,ICrossRefDao.class);
+			   ProjectDTO projectDto = dao.getFeedListByProjectId(userEmail,projectId);
+			   if(null != projectDto && null != projectDto.getFeedMasterDtos() && !projectDto.getFeedMasterDtos().isEmpty()){
+				   for (FeedMasterDto feedDto : projectDto.getFeedMasterDtos()) {
+					   String prestageTableName = FileConstants.PREFFIX_FOR_PRESTAGE+feedDto.getFeedType().toUpperCase()+FileConstants.SUFFIX_FOR_PRESTAGE;
+					   List<String> prestageColumnList = impl.getPrestageFileColumns(userEmail, feedDto.getFeedid());
+					   sqlQuery = new StringBuilder("select ").append(StringUtils.arrayToCommaDelimitedString(prestageColumnList.toArray())).append(",COMMENTS").append(" from ").append(prestageTableName).append(" where status = 'CRITICAL' ");
+						Query query = hibernatePersistenceManager.createSQLQuery(sqlQuery.toString());
+						query.setResultTransformer(AliasToEntityOrderedMapResultTransformer.INSTANCE);
+						List<LinkedHashMap<String,Object>> dataMapList = query.list();
+						if(null != dataMapList && !dataMapList.isEmpty()){
+							fileReportDto = new FileReportDto();
+							headers = new ArrayList<>();
+							rowHeaders = new RowDto();
+							dataRows = new ArrayList<>();
+							 map = dataMapList.get(0);
+							 for (Entry dataRow : map.entrySet()) { 
+								headers.add((String) dataRow.getKey());
+							 }
+							 rowHeaders.setColumns(headers);
+							 
+							 for (LinkedHashMap<String, Object> linkedHashMap : dataMapList) {
+								 Datavalues = new RowDto();
+								 values = new ArrayList<>();
+								 for (Entry dataRow : linkedHashMap.entrySet()) { 
+									values.add(dataRow.getValue()!=null?dataRow.getValue().toString():"");
+								}
+								 Datavalues.setColumns(values);
+								 dataRows.add(Datavalues);
+							}
+							 fileReportDto.setHeader(rowHeaders);
+							 fileReportDto.setDataRows(dataRows);
+							 feedCriticalRecordsMap.put(feedDto.getFeedType().toUpperCase(), fileReportDto);
+							 
+						}else{
+							log.info("dataMapList found Null");
+						}
+				   }
+			   }else{
+				   log.info("projectDto or feedmasterDtos found Null");
+			   }
+		}else{
+			log.info("projectId found zero");
+		}
+		return feedCriticalRecordsMap;
+	}
+	
+	
+	/**
+	 * This method is used for hierarchy template and fetching data from HIERARCHY_QUERY table
+	 * @param userEmail This is the first paramter to getHierarchyReportingData method
+	 * @param projectId  This is the second parameter to getHierarchyReportingData method
+	 * @param matchStatus This is the third parameter to getHierarchyReportingData method
+	 */
+	private Map<String, List<FileReportDto>> getHierarchyReportingData(String userEmail, long projectId, Set<String> matchStatus,long templateId) throws ProcessFailedException {
+		Map<String, List<FileReportDto>> hierarchyRecordsMap = new HashMap<>();
+		FileReportDto fileReportDto = null;
+		List<FileReportDto> legalRefTypeDto = new ArrayList<>();
+		List<FileReportDto> businessRefTypeDto = new ArrayList<>();
+		List<FileReportDto> noMatchDtos = new ArrayList<>();
+		List<FileReportDto> potentialMatchDtos = new ArrayList<>();
+		String sqlQuery = "";
+		if (projectId > 0) {
+				if(matchStatus.contains(ReportDefaultsEnum.MatchStatus.PERFECT_MATCH_ONLY.getAttributeDbValue())){
+					beginTransaction();
+					Criteria hierarchyCriteria = createCriteria(HierarchyQueryDomain.class);
+					hierarchyCriteria.add(Restrictions.eq("projectId", projectId));
+					List<HierarchyQueryDomain> hierarchyQuerylst = hierarchyCriteria.list();
+					endTransaction();
+					if (null != hierarchyQuerylst && !hierarchyQuerylst.isEmpty()) {
+						for (HierarchyQueryDomain hierarchyQueryDomain : hierarchyQuerylst) {
+							if (null != hierarchyQueryDomain.getQuery() && !hierarchyQueryDomain.getQuery().isEmpty()) {
+								
+								if(CommonConstants.ENRICH == templateId){
+									sqlQuery = CommonUtils.removeReferenceTypeColumnFromHierarchyQuery(hierarchyQueryDomain.getQuery(),CommonConstants.X_REFERENCETYPE,"");
+								}else if(CommonConstants.BUILD == templateId){	
+									String header = CommonConstants.BUILD_HIERARCHY_COLUMN.replaceAll("\\?",String.valueOf(projectId));
+									sqlQuery = header+hierarchyQueryDomain.getQuery()+CommonConstants.BUILD_HIERARCHY_COLUMN_CONDITION;
+								}
+								
+								Query query = hibernatePersistenceManager.createSQLQuery(sqlQuery);
+								query.setResultTransformer(AliasToEntityOrderedMapResultTransformer.INSTANCE);
+								List<LinkedHashMap<String, Object>> dataMapList = query.list();
+								
+								
+								if (null != dataMapList && !dataMapList.isEmpty()) {
+									fileReportDto = getFileReportsDtoByDataMapList(dataMapList);
+									if(CommonConstants.LEGAL_REFTYPE_.equalsIgnoreCase(hierarchyQueryDomain.getReferenceType())){
+										legalRefTypeDto.add(fileReportDto);
+									}else if(CommonConstants.BUSINESS_REFTYPE_.equalsIgnoreCase(hierarchyQueryDomain.getReferenceType())){
+										businessRefTypeDto.add(fileReportDto);
+									}
+								} else {
+									log.info("dataMapList found Null in Perfect Match");
+								}
+							}
+						}
+					} else {
+						log.info("hierarchyQuerylst found Null");
+					}
+				
+				if(!legalRefTypeDto.isEmpty()){
+					hierarchyRecordsMap.put(CommonConstants.LEGAL_REFTYPE, legalRefTypeDto);
+				}
+				if(!businessRefTypeDto.isEmpty()){
+					hierarchyRecordsMap.put(CommonConstants.BUSINESS_REFTYPE, businessRefTypeDto);
+				}
+				
+			 }
+			
+			if(matchStatus.contains(ReportDefaultsEnum.MatchStatus.NO_MATCH.getAttributeDbValue())){
+				StringBuilder noMatchQuery = new StringBuilder(" SELECT c.serial_no, c.legalname name, c.domicilecntry country, b.match_status, b.matching_score FROM (     SELECT entityid, (     SELECT agencyid     FROM clientcounterpartyxref     WHERE agencycode IN  ('HIER_ENR','HIER_BUILD') AND   entityid = a.entityid ) serial_no, legalname, domicilecntry     FROM clientcounterparty a    WHERE EXISTS (     SELECT 1     FROM clientfeed     WHERE a.fileid = fileid AND   project_id = "+projectId+" ) AND   EXISTS (     SELECT 1     FROM pre_clientctrptymatch     WHERE entityid = a.entityid  ) ) c, (     SELECT entityid, cdid, match_status, matching_score     FROM hierarchy_match_enr ) b, (     SELECT *     FROM ondemand_1.counterparty_gold ) a WHERE a.cdid (+) = b.cdid AND   b.entityid = c.entityid AND   b.match_status = 'MATE' ORDER BY c.serial_no,b.matching_score");
+				Query query = hibernatePersistenceManager.createSQLQuery(noMatchQuery.toString());
+				query.setResultTransformer(AliasToEntityOrderedMapResultTransformer.INSTANCE);
+				List<LinkedHashMap<String, Object>> dataMapList = query.list();
+				if (null != dataMapList && !dataMapList.isEmpty()) {
+					fileReportDto = getFileReportsDtoByDataMapList(dataMapList);
+					if(null != fileReportDto){
+						noMatchDtos.add(fileReportDto);
+						hierarchyRecordsMap.put(CommonConstants.NOMATCH_REFTYPE,noMatchDtos);
+					}
+				} else {
+					log.info("dataMapList found Null in NoMatch");
+				}
+			}
+			
+			if(matchStatus.contains(ReportDefaultsEnum.MatchStatus.POTEN_MATCH.getAttributeDbValue())){
+				StringBuilder potentialMatchQuery = new StringBuilder("SELECT c.SERIAL_NO, c.LEGALNAME NAME, c.DOMICILECNTRY COUNTRY, b.MATCH_STATUS, b.MATCHING_SCORE, a.LEGALNAME, a.DOMICILECNTRY, a.DOMICILECNTRY_DESC FROM (SELECT ENTITYID,   (SELECT AGENCYID   FROM CLIENTCOUNTERPARTYXREF   WHERE AGENCYCODE IN  ('HIER_ENR','HIER_BUILD')  AND ENTITYID    =a.ENTITYID   ) SERIAL_NO,   LEGALNAME,   DOMICILECNTRY FROM CLIENTCOUNTERPARTY a WHERE EXISTS   (SELECT 1   FROM CLIENTFEED   WHERE a.FILEID=FILEID   AND PROJECT_ID= "+projectId+"   ) AND EXISTS   (SELECT 1   FROM PRE_CLIENTCTRPTYMATCH   WHERE ENTITYID=a.ENTITYID      ) ) c, (SELECT ENTITYID,CDID,MATCH_STATUS,MATCHING_SCORE FROM HIERARCHY_MATCH_ENR ) b, (SELECT * FROM ondemand_1.COUNTERPARTY_GOLD ) a WHERE a.CDID(+)   =b.CDID AND b.ENTITYID    =c.ENTITYID AND B.MATCH_STATUS='MATP' ORDER BY c.SERIAL_NO, b.MATCHING_SCORE");
+				Query query = hibernatePersistenceManager.createSQLQuery(potentialMatchQuery.toString());
+				query.setResultTransformer(AliasToEntityOrderedMapResultTransformer.INSTANCE);
+				List<LinkedHashMap<String, Object>> dataMapList = query.list();
+				if (null != dataMapList && !dataMapList.isEmpty()) {
+					fileReportDto = getFileReportsDtoByDataMapList(dataMapList);
+					if(null != fileReportDto){
+						potentialMatchDtos.add(fileReportDto);
+						hierarchyRecordsMap.put(CommonConstants.POTEN_REFTYPE,potentialMatchDtos);
+					}
+				} else {
+					log.info("dataMapList found Null in Potential Match");
+				}
+			}
+		
+		} else {
+			log.info("projectId found zero");
+		}
+		
+		return hierarchyRecordsMap;
+	}
+	
+	private FileReportDto getFileReportsDtoByDataMapList(List<LinkedHashMap<String, Object>> dataMapList){
+		FileReportDto fileReportDto = new FileReportDto();
+		List<String> headers = new ArrayList<>();
+		RowDto rowHeaders = new RowDto();
+		List<RowDto> dataRows = new ArrayList<>();
+		RowDto Datavalues = null;
+		List<String> values = null;
+		Map<String, Object> map  = dataMapList.get(0);
+		for (Entry dataRow : map.entrySet()) {
+			headers.add((String) dataRow.getKey());
+		}
+		rowHeaders.setColumns(headers);
+		
+		for (LinkedHashMap<String, Object> linkedHashMap : dataMapList) {
+			Datavalues = new RowDto();
+			values = new ArrayList<>();
+			for (Entry dataRow : linkedHashMap.entrySet()) {
+				values.add(dataRow.getValue() != null ? dataRow.getValue().toString() : "");
+			}
+			Datavalues.setColumns(values);
+			dataRows.add(Datavalues);
+		}
+		fileReportDto.setHeader(rowHeaders);
+		fileReportDto.setDataRows(dataRows);
+		return fileReportDto;
+	}
+	
+
+	@Override
+	public boolean saveGeneratedReports(GeneratedReportsDomain generatedReportsDomain)  throws ProcessFailedException {
+		boolean result= false;
+		try {
+			beginTransaction();
+			hibernatePersistenceManager.save(generatedReportsDomain);
+			result = true;
+			endTransaction();
+		} catch (Exception e) {
+			e.printStackTrace();
+			rollBack();
+			throw new ProcessFailedException("GeneratedReports Failed in DAO.");
+		}
+		return result;
+	}
+
+
+
+
+
+	/**
+	 * Fetch data for Dashboard Gold Chart
+	 */
+	@Override
+	public DashboardDto getDashboardData(String userEmailId) throws ObjectNotSupportedException{
+
+
+		beginTransaction();
+		Criteria data = hibernatePersistenceManager.createCriteria(CounterpartyGoldDomain.class)
+				.setResultTransformer(new AliasToBeanResultTransformer(GoldWidgetDto.class));
+		ProjectionList add = Projections.projectionList()
+				.add(Projections.groupProperty("matchStatus").as("matchStatus"))
+				.add(Projections.count("entityId").setDistinct());
+		data.setProjection(add);
+		List<Object[]> rows = data.list();
+		ArrayList<GoldWidgetDto> resultGoldWidgetDtos = new ArrayList<>();
+
+
+		// make goldWidgetDto objects based of 4 records categories - 
+		// MATG, MATE, MATP,INEXP
+		// and set the count fetched against each category to corresponding goldWidgetDto object
+		for (MatchStatus property : ReportDefaultsEnum.MatchStatus.values()) {
+			GoldWidgetDto goldWidgetDto = new GoldWidgetDto();
+
+			Object[] row = getRecordObjectByMatchStatus(rows, property.getAttributeDbValue());
+			String matchStatus = property.getAttributeText();
+			Long count = 0L;
+			if(row!=null){
+				count = (Long) row[1];
+			}
+			goldWidgetDto.setMatchStatusName(property.getAttributeDbValue());
+			goldWidgetDto.setMatchStatus(matchStatus);
+			goldWidgetDto.setCount(count);
+			resultGoldWidgetDtos.add(goldWidgetDto);
+		}
+
+
+
+		endTransaction();
+
+		DashboardDto dashboardDto = new DashboardDto();
+		dashboardDto.setGoldWidgetData(resultGoldWidgetDtos);
+
+		return dashboardDto;
+	}
+
+	
+	
+	
+	/**
+	 * Fetch data for platinum data coverage component on Dashboard
+	 */
+@Override
+	public PlatinumDataCoverageDtoCollection getDashboardPlatinumCoverageData(String type) throws ObjectNotSupportedException{
+		
+	requestPlatinumConnection();
+	beginTransaction();
+	Criteria platinumCriteria = hibernatePersistenceManager.createCriteria(PlatinumDataCoverageDomain.class);
+	List<PlatinumDataCoverageDto> platinumDataDtos = new ArrayList<>();
+	PlatinumDataCoverageDtoCollection platinumDataCoverageDtoCollection = new PlatinumDataCoverageDtoCollection();
+
+	try {
+		
+		platinumCriteria.add(Restrictions.eq("type", type));
+		List<PlatinumDataCoverageDomain> result = platinumCriteria.list();
+		for (PlatinumDataCoverageDomain dataDomain : result) {
+			PlatinumDataCoverageDto platinumDto = new PlatinumDataCoverageDto();
+			
+			platinumDto = CommonUtils.convertObject(dataDomain, PlatinumDataCoverageDto.class);
+			
+			if(platinumDto.getLabel() != null){
+				platinumDto.setLabel(WordUtils.capitalizeFully(platinumDto.getLabel()));
+			}
+			platinumDataDtos.add(platinumDto);
+		}
+		
+		
+		
+	} catch (ObjectNotSupportedException e) {
+	}finally{
+		rollBack();
+	}
+	endTransaction();
+	releasePlatinumConnection();
+	platinumDataCoverageDtoCollection.setPlatinumData(platinumDataDtos);
+	return platinumDataCoverageDtoCollection;
+		
+	}
+
+
+
+/**
+ * Fetch Platinum Data Coverage Type for Dashboard data Coverage Component
+ */
+public List<PlatinumDataTypeDto> getDashboardPlatinumCoverageDataType() throws ProcessFailedException{
+	requestPlatinumConnection();
+	beginTransaction();
+	List<PlatinumDataTypeDto> platinumDataTypeDtos = new ArrayList<PlatinumDataTypeDto>();
+	
+try {
+		
+		Query query = hibernatePersistenceManager.createQuery("select distinct displayLabel,type from PlatinumDataCoverageDomain");
+		List<Object[]> dataTypes = (List<Object[]>)query.list();
+		
+		
+		Iterator it = dataTypes.iterator();
+		while(it.hasNext())  
+		{
+			PlatinumDataTypeDto pDto = new PlatinumDataTypeDto();
+			Object objType[] = (Object[])it.next();
+			pDto.setDisplayLabel(objType[0].toString());
+			pDto.setValue(objType[1].toString());
+			platinumDataTypeDtos.add(pDto);
+		}
+		
+				
+		
+	}catch(Exception e){
+		e.printStackTrace();
+	}
+	endTransaction();
+	releasePlatinumConnection();
+	return platinumDataTypeDtos;
+	
+}
+
+
+
+
+
+
+
+	/**
+	 * 
+	 * @param rows
+	 * @param matchStatus
+	 * @return
+	 */
+	private Object[] getRecordObjectByMatchStatus(List<Object[]> rows, String matchStatus){
+		for (Object[] row : rows) {
+			if(matchStatus.equals((String) row[0])){
+				return row;
+			}
+		}
+
+		return null;
+	}
+
+
+	@Override
+	public RecordCountsDto getProjectStats(Long projectId) {
+		/*
+			Following Query should be generated.
+			select count(distinct id),match_status from counterparty_report where PROJECTID=100001 group by match_status;
+		 */
+		RecordCountsDto responseDto = new RecordCountsDto();
+
+		beginTransaction();
+		
+		/*Criteria crit = createCriteria(CounterpartyGoldDomain.class).add(Restrictions.eq("projectid", Long.toString(projectId)));
+		ProjectionList projList = Projections.projectionList();
+		projList.add(Projections.groupProperty("matchStatus").as("matchStatus"));
+		projList.add(Projections.count("entityId").setDistinct());
+		crit.setProjection(projList);
+		List<Object[]>  results = crit.list();*/
+		
+		
+		/*	StringBuilder query = new StringBuilder(" select a.MATCH_STATUS , count(distinct a.ID) from COUNTERPARTY_REPORT a, CLIENT_DATA b  WHERE a.PROJECTID=b.PROJECTID ")
+		.append(" AND NVL(a.NAME,'X')=NVL(b.NAME,'X') ")
+		.append(" AND NVL(a.COUNTRY,'X')=NVL(b.COUNTRY,'X') ")
+		.append(" AND a.PROJECTID = :projectID  ")
+		.append(" group by a.MATCH_STATUS ");*/
+
+		/*StringBuilder query = new StringBuilder(" select a.MATCH_STATUS , count(distinct a.ID) from REPORTING_DATA a  WHERE ")
+		.append(" a.PROJECTID = :projectID  ")
+		.append(" group by a.MATCH_STATUS ");
+		*/
+		
+		StringBuilder query = new StringBuilder("SELECT MATCHSTATUS,SUM(RECORDCOUNT) FROM (");
+		query.append("	SELECT A.MATCHSTATUS AS MATCHSTATUS, COUNT(DISTINCT A.ENTITYID) AS RECORDCOUNT FROM DATA_SEARCH A  WHERE  A.PROJECTID = :projectID   GROUP BY A.MATCHSTATUS");
+		query.append("	UNION ");
+		query.append("	SELECT A.MATCH_STATUS AS MATCHSTATUS, COUNT(DISTINCT A.ENTITYID) AS RECORDCOUNT FROM HIERARCHY_MATCH_ENR A  WHERE  A.PROJECTID = :projectID   GROUP BY A.MATCH_STATUS)");
+		query.append("	GROUP BY MATCHSTATUS");
+		
+		
+		List<Object[]>  results =  (List<Object[]>)hibernatePersistenceManager.createSQLQuery(query.toString()).setLong("projectID",projectId).list();
+		
+		
+
+		for(Object[] row : results){
+			if(row[0].toString().equalsIgnoreCase("MATG")){
+				responseDto.setPerfectMatch(Long.parseLong(row[1].toString()));
+			}else if(row[0].toString().equalsIgnoreCase("MATP")){
+				responseDto.setPartialMatch(Long.parseLong(row[1].toString()));
+			}else if(row[0].toString().equalsIgnoreCase("MATE")){
+				responseDto.setNoMatch(Long.parseLong(row[1].toString()));
+			}else{
+				responseDto.setException(Long.parseLong(row[1].toString()));
+			}
+		}
+
+		endTransaction();
+		
+				
+		return responseDto;
+	}
+
+	
+	@Override
+	public List<RecordCountsDto> getProjectStatsForFeeds(Long projectId)
+			throws ObjectNotSupportedException {
+
+		List<RecordCountsDto> dtosList = new ArrayList<>();
+
+		beginTransaction();
+
+		Query query = hibernatePersistenceManager
+				.createQuery("from ProjectMatchStatsDomain where projectId=:projectId order by feedId ");
+		query.setParameter("projectId", projectId);
+		List<ProjectMatchStatsDomain> domains = query.list();
+
+		if(domains != null && domains.size()>0){
+			for (ProjectMatchStatsDomain projectMatchStatsDomain : domains) {
+				RecordCountsDto responseDto = CommonUtils.convertObject(
+						projectMatchStatsDomain, RecordCountsDto.class);
+				dtosList.add(responseDto);
+			}
+		}
+	
+
+		endTransaction();
+
+		return dtosList;
+	}
+	
+	
+	
+	
+	
+	
+	
+	@Override
+	public List<GoldDataTypeDto> getDashboardGoldCoverageDataType()
+			throws ProcessFailedException {
+
+		beginTransaction();
+		List<GoldDataTypeDto> goldDataTypeDtos = new ArrayList<GoldDataTypeDto>();
+		
+	try {
+			
+			Query query = hibernatePersistenceManager.createQuery("select distinct displayLabel,type from GoldDataCoverageDomain");
+			List<Object[]> dataTypes = (List<Object[]>)query.list();
+			
+			
+			Iterator it = dataTypes.iterator();
+			while(it.hasNext())  
+			{
+				GoldDataTypeDto gDto = new GoldDataTypeDto();
+				Object objType[] = (Object[])it.next();
+				gDto.setDisplayLabel(objType[0].toString());
+				gDto.setValue(objType[1].toString());
+				System.out.println(objType[0].toString());
+				System.out.println(objType[1].toString());
+				goldDataTypeDtos.add(gDto);
+			}
+			
+					
+			
+		}catch(Exception e){
+			rollBack();
+		}finally{
+			endTransaction();
+		}
+		
+		return goldDataTypeDtos;
+	}
+
+	
+	/**
+	 * Fetch data for platinum data coverage component on Dashboard
+	 */
+	@Override
+	public GoldDataCoverageDtoCollection getDashboardGoldCoverageData(String type) throws ObjectNotSupportedException{
+		
+	
+	beginTransaction();
+	Criteria goldCriteria = hibernatePersistenceManager.createCriteria(GoldDataCoverageDomain.class);
+	List<GoldDataCoverageDto> goldDataDtos = new ArrayList<>();
+	GoldDataCoverageDtoCollection goldDataCoverageDtoCollection = new GoldDataCoverageDtoCollection();
+
+	try {
+		
+		goldCriteria.add(Restrictions.eq("type", type));
+		List<GoldDataCoverageDomain> result = goldCriteria.list();
+		
+		for (GoldDataCoverageDomain dataDomain : result) {
+			GoldDataCoverageDto goldDto = new GoldDataCoverageDto();
+			
+			goldDto = CommonUtils.convertObject(dataDomain, GoldDataCoverageDto.class);
+			
+			if(goldDto.getLabel() != null){
+				goldDto.setLabel(WordUtils.capitalizeFully(goldDto.getLabel()));
+			}
+			goldDataDtos.add(goldDto);
+		}
+		
+		
+		
+	} catch (ObjectNotSupportedException e) {
+		rollBack();	
+	}finally{
+			
+			endTransaction();
+		}
+	
+	
+	goldDataCoverageDtoCollection.setGoldData(goldDataDtos);
+	return goldDataCoverageDtoCollection;
+		
+	}
+	
+	//Created for LP-768
+	@Override
+	public RecordCountsDto getProjectStatsForDashboard(Long projectId,Boolean addToGold) {
+		
+		RecordCountsDto responseDto = new RecordCountsDto();
+
+		beginTransaction();
+		
+		StringBuilder query =null;
+		
+		if(addToGold) {
+			 query = new StringBuilder("SELECT A.MATCHSTATUS        AS MATCHSTATUS,  COUNT(DISTINCT A.ENTITYID) AS RECORDCOUNT  FROM DATA_SEARCH A  WHERE A.PROJECTID = :projectID  GROUP BY A.MATCHSTATUS  ");
+		}else {
+			 query = new StringBuilder("SELECT A.MATCH_STATUS        AS MATCHSTATUS,    COUNT(DISTINCT A.ENTITYID) AS RECORDCOUNT  FROM HIERARCHY_MATCH_ENR A  WHERE A.PROJECTID = :projectID  GROUP BY A.MATCH_STATUS");
+		}
+		
+		List<Object[]>  results =  (List<Object[]>)hibernatePersistenceManager.createSQLQuery(query.toString()).setLong("projectID",projectId).list();
+
+		for(Object[] row : results){
+			if(row[0].toString().equalsIgnoreCase("MATG")){
+				responseDto.setPerfectMatch(Long.parseLong(row[1].toString()));
+			}else if(row[0].toString().equalsIgnoreCase("MATP")){
+				responseDto.setPartialMatch(Long.parseLong(row[1].toString()));
+			}else if(row[0].toString().equalsIgnoreCase("MATE")){
+				responseDto.setNoMatch(Long.parseLong(row[1].toString()));
+			}else{
+				responseDto.setException(Long.parseLong(row[1].toString()));
+			}
+		}
+
+		endTransaction();
+		return responseDto;
+	}
+
+	
+	@Override
+	public List<FileDataDTO> getBadRecords(long projectId) throws ObjectNotSupportedException {
+		beginTransaction();
+		Criteria criteria = hibernatePersistenceManager.createCriteria(FileDataDomain.class);
+		List<FileDataDTO> badRecords = new ArrayList<>();
+
+		try {
+			criteria.add(Restrictions.eq("status", "CRITICAL"));
+			criteria.add(Restrictions.eq("projectId", projectId));
+			List<FileDataDomain> result = criteria.list();
+			for (FileDataDomain userDomain : result) {
+				// ProjectDTO projectDTO =
+				// conversonUtility.convertObject(userDomain, ProjectDTO.class);
+
+				FileDataDTO badRecord;
+				badRecord = CommonUtils.convertObject(userDomain, FileDataDTO.class);
+				badRecords.add(badRecord);
+			}
+		} catch (ObjectNotSupportedException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		endTransaction();
+		return badRecords;
+	}
+	
+	
+	//Added for LP-833
+	private List<String> getHeaderList(List<ProjectConfigDomain> list,Long templateID){
+		 List<String> headerList=new ArrayList<>();
+		 headerList.addAll(Arrays.asList(ReportDefaultsEnum.DISPALY_DEFAULT_REPORT_COLS.getValue().split(",")));
+			try{
+				if(templateID==1)
+					headerList.addAll(Arrays.asList(ReportDefaultsEnum.DISPALY_1_ADDED_REPORT_COLS.getValue().split(",")));
+				else if(templateID==2)
+					headerList.addAll(Arrays.asList(ReportDefaultsEnum.DISPALY_2_ADDED_REPORT_COLS.getValue().split(",")));
+			}catch (Exception e) {
+				log.warn("DISPALY_"+templateID+"_ADDED_REPORT_COLS entry not found in ReportDefaultsEnum");
+				}
+			ArrayList<String> attrList=new ArrayList<>();
+			for(ProjectConfigDomain obj:list){
+				if(obj.getAttributeValue()){
+					try{
+						attrList.add(obj.getAttribute());
+					}catch (Exception e) {
+						log.warn("getHeaderList() method "+e.getMessage());
+					}
+				}
+			}
+			headerList.addAll(attrList);
+		return headerList;
+	}
+	
+	private List<String> getHeaderListForXref(HashMap<String, List<ProjectConfigXrefDto>> savedprojectConfigMap,Long templateID){
+		 List<String> headerList=new ArrayList<>();
+		 headerList.addAll(Arrays.asList(ReportDefaultsEnum.DISPALY_DEFAULT_REPORT_COLS.getValue().split(",")));
+			/*try{
+				if(templateID==1)
+					headerList.addAll(Arrays.asList(ReportDefaultsEnum.DISPALY_1_ADDED_REPORT_COLS.getValue().split(",")));
+				else if(templateID==2)
+					headerList.addAll(Arrays.asList(ReportDefaultsEnum.DISPALY_2_ADDED_REPORT_COLS.getValue().split(",")));
+			}catch (Exception e) {
+				log.warn("DISPALY_"+templateID+"_ADDED_REPORT_COLS entry not found in ReportDefaultsEnum");
+				}*/
+		 
+		 if(null != savedprojectConfigMap && !savedprojectConfigMap.isEmpty()){
+
+				List<ProjectConfigXrefDto> matchStatusSavedList = savedprojectConfigMap.get(CommonConstants.MATCH_STAT);
+				List<ProjectConfigXrefDto> filAandEmailSavedList = savedprojectConfigMap.get(CommonConstants.FILE_FORMAT_AND_EMAIL);
+				List<ProjectConfigXrefDto> mappedColumnSavedList = savedprojectConfigMap.get(CommonConstants.MAPPED_COL);
+				
+				if(null != matchStatusSavedList && !matchStatusSavedList.isEmpty()){
+					for (ProjectConfigXrefDto projectConfigXrefDto : matchStatusSavedList) {
+						if(projectConfigXrefDto.getValue()){
+							headerList.add(projectConfigXrefDto.getAttributeName());
+						}
+					}
+				}
+				if(null != filAandEmailSavedList && !filAandEmailSavedList.isEmpty()){
+					for (ProjectConfigXrefDto projectConfigXrefDto : filAandEmailSavedList) {
+						if(projectConfigXrefDto.getValue()){
+							headerList.add(projectConfigXrefDto.getAttributeName());
+						}
+					}
+				}
+				if(null != mappedColumnSavedList && !mappedColumnSavedList.isEmpty()){
+					for (ProjectConfigXrefDto projectConfigXrefDto : mappedColumnSavedList) {
+						if(projectConfigXrefDto.getValue()){
+							headerList.add(projectConfigXrefDto.getAttributeName());
+						}
+					}
+				}
+		 }
+	
+		return headerList;
+	}
+	
+	
+
+	@Override
+	public List<LinkedHashMap<String, Object>> getReportsData(int startingIndex, int chunkSize,String projectId) throws ProjectConfigNotFoundException,NumberFormatException, ObjectNotSupportedException,	ProcessFailedException {
+				
+		beginTransaction();
+
+		String statementQuery = "";
+		List<LinkedHashMap<String, Object>> dataMapList = null;
+
+		List<FileGenerationQueryDomain> results = hibernatePersistenceManager
+				.createCriteria(FileGenerationQueryDomain.class)
+				.add(Restrictions.eq("projectId", Long.valueOf(projectId)))
+				.list();
+
+		if (null != results && !results.isEmpty()) {
+
+			FileGenerationQueryDomain rowArray = results.get(0);
+
+			statementQuery = rowArray.getQueryText();
+
+			Query query = hibernatePersistenceManager
+					.createSQLQuery(statementQuery);
+
+			query.setResultTransformer(AliasToEntityOrderedMapResultTransformer.INSTANCE);
+			dataMapList = query.setFirstResult(startingIndex)
+					.setMaxResults(chunkSize).list();
+
+			endTransaction();
+
+		}
+		return dataMapList;
+	}
+	
+	
+	
+	
+	
+
+	private List<LinkedHashMap<String, Object>> getDataMapModeChunklFetch(String projectId) {
+
+		beginTransaction();
+
+		String countRecordQueryStatement =  null;
+		long starttime = System.currentTimeMillis();
+		// need to update this +++++++++++++
+		//String countRecordQueryStatement = "select count(*) from (select CDID ,LEGALNAME ,DOMICILECNTRY from DATA_DUMP)";
+		
+		List<FileGenerationQueryDomain> results = hibernatePersistenceManager
+				.createCriteria(FileGenerationQueryDomain.class)
+				.add(Restrictions.eq("projectId", Long.valueOf(projectId)))
+				.list();
+
+		if (null != results && !results.isEmpty()) {
+
+			FileGenerationQueryDomain rowArray = results.get(0);
+
+			countRecordQueryStatement ="select count(*) from ("+ rowArray.getQueryText()+")";
+			
+		}
+
+		
+		int totalRecords = ((BigDecimal) hibernatePersistenceManager
+				.createSQLQuery(countRecordQueryStatement).uniqueResult())
+				.intValue();
+
+		System.out.println("++++++++++++++++++++++++++++++++++++ : "
+				+ totalRecords);
+
+		// Partition the Records in equal parts , using this we can decide how
+		// many threads should be used for data fetching from database operation
+		
+		int threadsNeeded = 0;
+		if(totalRecords < 50000){
+			threadsNeeded = 1;
+		}else{
+			threadsNeeded = NUMBER_OF_CHUNK;
+		}
+		
+		int[] partition = new int[threadsNeeded];
+		int remain = totalRecords;
+		int partsLeft  = threadsNeeded;
+		
+	
+		for (int i = 0; partsLeft > 0; i++) {
+			int size = (remain + partsLeft - 1) / partsLeft; // rounded up, aka
+																// ceiling
+			partition[i] = size;
+			remain -= size;
+			partsLeft--;
+		}
+
+		// no. of thread needed to handle the data chunks
+		// int threadCount = partition.length;
+		QueueManager queueManager = new QueueManager(partition.length);
+
+		int startingRow, endingRow = 0;
+		//
+		Future<List<LinkedHashMap<String, Object>>> futureObject = null;
+		for (int i = 0; i < partition.length; i++) {
+
+			if (i == 0) {
+				startingRow = 0;
+				endingRow = partition[i];
+				futureObject = queueManager
+						.submitJob(new ReportDataChunkFetchingProcess<>(
+								getTenantEmail(), startingRow, i,
+								partition[i] + 1, projectId));
+
+				FETCH_DATA_CHUNKS_MAP.put(i, futureObject);
+
+			} else {
+				startingRow = endingRow + 1;
+				endingRow = endingRow + partition[i];
+				futureObject = queueManager
+						.submitJob(new ReportDataChunkFetchingProcess<>(
+								getTenantEmail(), startingRow, i, partition[i],
+								projectId));
+
+				FETCH_DATA_CHUNKS_MAP.put(i, futureObject);
+
+			}
+			
+			System.out.println("\nStarting Row : "+ startingRow + " Ending Row : "+endingRow+ " chunkSize : "+partition[i]);
+		
+
+		}
+
+		queueManager.noMoreJobs();
+
+		List<LinkedHashMap<String, Object>> dataMapList = new LinkedList<LinkedHashMap<String, Object>>();
+
+		for (int i = 0; i < FETCH_DATA_CHUNKS_MAP.size(); i++) {
+			Future<List<LinkedHashMap<String, Object>>> futureObjectforList = FETCH_DATA_CHUNKS_MAP.get(i);
+			List<LinkedHashMap<String, Object>> result = null;
+			try {
+				result = futureObjectforList.get();
+				System.out.println("from Get() for index: " + i + " size is :"
+						+ result.size());
+			} catch (InterruptedException | ExecutionException e) {
+				
+				e.printStackTrace();
+			}
+
+			if (result != null) {
+				dataMapList.addAll(result);
+			}
+
+		}
+
+		queueManager.forceStop();
+		System.out.println("\nTotal Time taken is : "
+				+ (System.currentTimeMillis() - starttime));
+
+		endTransaction();
+		return dataMapList;
+
+	}
+}

@@ -1,0 +1,9 @@
+package com.lei.dao.workflow;
+
+import com.lei.dao.base.DaoBaseInterface;
+import com.lei.dto.workflow.WorkflowCoreDTO;
+
+public interface WorkflowCoreDao extends DaoBaseInterface{
+	public String updateWorkflow(WorkflowCoreDTO workflowDTO);
+
+}

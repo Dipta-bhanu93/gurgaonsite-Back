@@ -1,0 +1,135 @@
+package com.dipta.project.dto.common;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+
+import javax.xml.bind.annotation.XmlAccessType;
+import javax.xml.bind.annotation.XmlAccessorType;
+import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlRootElement;
+import javax.xml.bind.annotation.XmlSeeAlso;
+
+import lombok.Getter;
+import lombok.Setter;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonInclude.Include;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonRootName;
+import com.dipta.project.dto.acl.AclDto;
+//import com.dipta.project.dto.company.CompanyDtoCollection;
+//import com.dipta.project.dto.company.ConfigSettingDto;
+//import com.dipta.project.dto.company.EntityStatusMasterDto;
+//import com.dipta.project.dto.company.GoldSearchGridDto;
+//import com.dipta.project.dto.company.SettingDto;
+import com.dipta.project.dto.crossReference.EtlCreateMappingDto;
+import com.dipta.project.dto.crossReference.EtlFeedMatchingDetailDto;
+import com.dipta.project.dto.crossReference.EtlIDRuleDetailDto;
+import com.dipta.project.dto.crossReference.EtlIDRuleMasterDto;
+import com.dipta.project.dto.crossReference.EtlMatchMasterColumnsDto;
+import com.dipta.project.dto.crossReference.EtlMatchingColumnDetailDto;
+import com.dipta.project.dto.crossReference.EtlMatchingScoreDetailDto;
+import com.dipta.project.dto.crossReference.EtlPrestageMapDto;
+import com.dipta.project.dto.crossReference.EtlPrestageMasterDto;
+import com.dipta.project.dto.crossReference.EtlStageFieldMapDto;
+import com.dipta.project.dto.crossReference.EtlTransformMasterDto;
+import com.dipta.project.dto.crossReference.FeedMasterDto;
+import com.dipta.project.dto.crossReference.FeedMasterDtoCollection;
+import com.dipta.project.dto.crossReference.FeedSetupDetailsDto;
+import com.dipta.project.dto.crossReference.MappingCollection;
+import com.dipta.project.dto.crossReference.ProjectFeedDto;
+import com.dipta.project.dto.crossReference.ReplaceCategoryCollection;
+import com.dipta.project.dto.crossReference.SourceTargetInfoDto;
+import com.dipta.project.dto.crossReference.TransformationCollection;
+//import com.dipta.project.dto.customSearch.AdvanceSearchGridDto;
+//import com.dipta.project.dto.customSearch.CustomSearchGridDto;
+//import com.dipta.project.dto.customSearch.CustomerDetailDto;
+import com.dipta.project.dto.dashboard.DashboardDto;
+import com.dipta.project.dto.dashboard.GeoWidgetDtos;
+import com.dipta.project.dto.dashboard.ProjectStatusCollectionDto;
+import com.dipta.project.dto.dashboard.WorkItemDto;
+import com.dipta.project.dto.dashboard.WorkItemNotificationDto;
+import com.dipta.project.dto.dashboard.WorkItemTicketDto;
+import com.dipta.project.dto.dashboard.WorkItemWorkFlowDto;
+//import com.dipta.project.dto.deduplication.DeduplicationDTOCollection;
+import com.dipta.project.dto.hierarchy.HierarchyEntityDTO;
+import com.dipta.project.dto.hierarchy.HierarchyDataCollection;
+import com.dipta.project.dto.hierarchy.HierarchyMasterFilterDTO;
+//import com.dipta.project.dto.mdv.EntityRecord;
+//import com.dipta.project.dto.mdv.MDVGridDto;
+//import com.dipta.project.dto.news.CorporateCollectionDto;
+//import com.dipta.project.dto.platinum.CounterPartyPlatinumDtoCollection;
+import com.dipta.project.dto.project.template.ProjectTemplateCountsDto;
+import com.dipta.project.dto.project.template.ProjectTemplateMasterDto;
+import com.dipta.project.dto.project.template.TemplateServiceMasterDto;
+//import com.dipta.project.dto.report.ReportDTO;
+//import com.dipta.project.dto.search.SearchDTO;
+//import com.dipta.project.dto.subscription.CountryWrapperDto;
+//import com.dipta.project.dto.subscription.OrderDetailDto;
+//import com.dipta.project.dto.subscription.PackageWithCHeaderDto;
+//import com.dipta.project.dto.subscription.SubscriptionDto;
+//import com.dipta.project.dto.ticketManagement.NotificationDto;
+//import com.dipta.project.dto.ticketManagement.TicketDetailsDto;
+//import com.dipta.project.dto.ticketManagement.TicketDto;
+//import com.dipta.project.dto.ticketManagement.TicketMessageDto;
+import com.dipta.project.dto.user.CodApiRequestDto;
+import com.dipta.project.dto.user.UserDTO;
+import com.dipta.project.dto.user.UserDTOCollection;
+import com.dipta.project.dto.user.UserProjectCollection;
+import com.dipta.project.dto.workflow.ProjectConfigurationDto;
+import com.dipta.project.dto.workflow.ProjectDTO;
+import com.dipta.project.dto.workflow.WorkFlowMasterDto;
+import com.dipta.project.dto.workflow.WorkFlowRecordsCountDto;
+import com.dipta.project.dto.workflow.WorkFlowSearchGridDto;
+import com.dipta.project.dto.workflow.WorkFlowUsersMapDto;
+import com.dipta.project.dto.workflow.WorkflowCoreDTO;
+
+/**
+ * 
+ * @author Saurabh.Agarwal
+ *
+ */
+@XmlRootElement(name = "Response")
+@JsonRootName(value = "Response")
+@JsonInclude(Include.NON_NULL)
+@XmlAccessorType(XmlAccessType.NONE)
+@XmlSeeAlso({HashMap.class,UserDTO.class,SearchDTO.class,ArrayList.class,UserProjectCollection.class, ProjectDTO.class, AclDto.class, ReportDTO.class, DashboardDto.class, CountryWrapperDto.class,PackageWithCHeaderDto.class,GoldSearchGridDto.class,SubscriptionDto.class,EntityStatusMasterDto.class,OrderDetailDto.class,TicketDto.class,WorkFlowMasterDto.class,WorkFlowUsersMapDto.class,NotificationDto.class,CompanyDtoCollection.class,WorkFlowSearchGridDto.class,WorkFlowRecordsCountDto.class,MDVGridDto.class, CommonExternalFilterDto.class,WorkflowCoreDTO.class,ProjectConfigurationDto.class,TicketDetailsDto.class,TicketMessageDto.class,WorkItemDto.class,WorkItemNotificationDto.class,WorkItemTicketDto.class,WorkItemWorkFlowDto.class,ProjectTemplateMasterDto.class,ProjectTemplateCountsDto.class,CustomSearchGridDto.class,EntityRecord.class,CounterPartyPlatinumDtoCollection.class, GeoWidgetDtos.class, DeduplicationDTOCollection.class,CorporateCollectionDto.class,CommonSearchFilterDto.class,AdvanceSearchGridDto.class,String.class,ProjectStatusCollectionDto.class,ConfigSettingDto.class,SettingDto.class,TemplateServiceMasterDto.class,UserDTOCollection.class,FeedMasterDto.class,FeedMasterDtoCollection.class,MappingCollection.class,EtlPrestageMasterDto.class,EtlPrestageMapDto.class,ProjectFeedDto.class,EtlCreateMappingDto.class,EtlStageFieldMapDto.class,EtlIDRuleMasterDto.class,EtlTransformMasterDto.class,SourceTargetInfoDto.class,EtlIDRuleDetailDto.class,TransformationCollection.class,EtlFeedMatchingDetailDto.class,EtlMatchingColumnDetailDto.class,EtlMatchingScoreDetailDto.class,EtlMatchMasterColumnsDto.class,ReplaceCategoryCollection.class,CustomerDetailDto.class,FeedSetupDetailsDto.class,HierarchyDataCollection.class,HierarchyEntityDTO.class,HierarchyMasterFilterDTO.class,CodApiRequestDto.class})
+public class ResponseMessageDTO {
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "AuthToken")
+	@JsonProperty(value = "AuthToken")
+	private String authToken;
+
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "ResponseCode")
+	@JsonProperty(value = "ResponseCode")
+	private String responseCode;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "IsError")
+	@JsonProperty(value = "IsError")
+	private boolean isError;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "ResponseMessage")
+	@JsonProperty(value = "ResponseMessage")
+	private String responseMessage;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "ErrorDiscription")
+	@JsonProperty(value = "ErrorDiscription")
+	private String errorDiscription;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "Data")
+	@JsonProperty(value = "Data")
+	private Object data;
+}

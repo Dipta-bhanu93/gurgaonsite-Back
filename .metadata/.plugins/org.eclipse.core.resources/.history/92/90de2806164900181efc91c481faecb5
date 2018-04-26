@@ -1,0 +1,35 @@
+package com.dipta.project.constants;
+
+
+/**
+ * 
+ * @author Saurabh.Agarwal
+ *
+ */
+public enum MessageKeyConstants {
+	NEWREGISTRATIONBODY("register.email.password"),
+	LOGINFORGETPASSWORDBODY("login.email.forgetpassword"),
+	PROJECTREPORTSUCCESS("email.project.report"),
+	USERCHANGEPASSWORD("email.user.changepassword"),
+	NEWUSERACTIVATION("new.user.activation"),
+	ORDER_SUBSCRIPTION("email.order.subscription"),
+	TICKET_NOTIFICATION("ticket.notification.send"),
+	COMPANY_CREATESCHEMA_FAIL("company.createschema.fail"),
+	COMPANY_REGISTRATION_SUCCESS("company.registration.success"),
+	USER_PROFILEUPDATE_SUCCESS("user.profileupdate.success"),
+	CONTACT_US("contact.us"),
+	CONTACT_SUPPORT("contact.us.support"),
+	TICKET_CREATION_SUCCESS("ticket.creation.success"),
+	ADD_TO_TICKET_SUCCESS("add.toticket.success"),
+	WORKFLOW_TRANSFER_TICKET_SUCCESS("workflowrecord.transfer.ticket"),
+	WORKFLOW_BYPASS_SUCCESS("workflow.bypass.success"),
+	NEW_USER_EXPOSEMAIL("new.user.exposeMail");
+	
+	private String key;
+	private MessageKeyConstants(String key) {
+		this.key=key;
+	}
+	public String getKey() {
+		return key;
+	}
+}

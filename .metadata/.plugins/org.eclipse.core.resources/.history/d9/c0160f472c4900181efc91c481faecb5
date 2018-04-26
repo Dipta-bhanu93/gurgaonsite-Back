@@ -1,0 +1,97 @@
+package com.dipta.project.scheduler;
+
+import org.quartz.InterruptableJob;
+import org.quartz.JobExecutionContext;
+import org.quartz.JobExecutionException;
+import org.quartz.UnableToInterruptJobException;
+
+import com.lei.dao.base.DaoManager;
+import com.lei.dao.base.orm.TenantPool;
+import com.lei.dao.scheduler.ISchedulerDao;
+import com.lei.dto.scheduler.SchedulerJobDto;
+import com.lei.exception.common.ProcessFailedException;
+import com.lei.utility.constants.StatusConstants;
+
+/**
+ * 
+ * @author saurabh.agarwal
+ *
+ */
+public abstract class SchedulerJob implements InterruptableJob{
+	private SchedulerJobDto jobDto;
+//	private String userEmail;
+	public SchedulerJob(SchedulerJobDto jobDto){
+		Long clientId = TenantPool.getConnectionDetail(jobDto.getUserEmail()).getClientId();
+		
+		String jobId = clientId+"-"+jobDto.getJobId();
+		
+		jobDto.setJobId(jobId);
+		jobDto.setJobCategory(this.getClass().getName());
+		jobDto.setStatusId(StatusConstants.NEW.getID());
+		this.jobDto = jobDto;
+	}
+	public SchedulerJob() {
+	}
+	
+	public void setJobData(SchedulerJobDto jobDto){
+		Long clientId = TenantPool.getConnectionDetail(jobDto.getUserEmail()).getClientId();
+		
+		String jobId = clientId+"-"+jobDto.getJobId();
+		
+		jobDto.setJobId(jobId);
+		jobDto.setJobCategory(this.getClass().getName());
+		jobDto.setStatusId(StatusConstants.NEW.getID());
+		this.jobDto=jobDto;
+	}
+	
+	public SchedulerJobDto getJobData(){
+		return jobDto;
+	}
+	
+	/*public String getUserEmail() {
+		return userEmail;
+	}*/
+	
+	@Override
+	public final void execute(JobExecutionContext context)
+			throws  JobExecutionException{
+		ISchedulerDao schedulerDao = null;
+		try {
+			jobDto =(SchedulerJobDto)context.getJobDetail().getJobDataMap().get(ScheduleManager.DATAKEY);
+			jobDto.setStatusId(StatusConstants.PROCESSING.getID());
+			
+			schedulerDao = DaoManager.SCHEDULERDAO.getDao(jobDto.getUserEmail(),ISchedulerDao.class);
+			schedulerDao.saveUpdateJobInfo(jobDto);
+			
+			executionStart(jobDto);
+			execute(jobDto);
+			executionFinish(jobDto);
+			
+			jobDto.setStatusId(StatusConstants.COMPLETED.getID());
+			schedulerDao.saveUpdateJobInfo(jobDto);
+		} catch (Exception e) {
+			jobDto.setStatusId(StatusConstants.FAILED.getID());
+			try {
+				schedulerDao.saveUpdateJobInfo(jobDto);
+				executionFailed(jobDto,e.getMessage());
+			} catch (ProcessFailedException e1) {
+				throw new JobExecutionException(" Job execution failed due to following error:"+e1);
+			}
+			e.printStackTrace();
+		}
+		
+	}
+	@Override
+	public void interrupt() throws UnableToInterruptJobException {
+		System.out.println("Job have been intrupted.");
+		
+	}
+	
+	
+	abstract public boolean execute(SchedulerJobDto jobDto)throws Exception ;
+	
+	abstract public void scheduled(SchedulerJobDto jobDto) throws ProcessFailedException;
+	abstract public void executionStart(SchedulerJobDto jobDto) throws ProcessFailedException;
+	abstract public void executionFinish(SchedulerJobDto jobDto) throws ProcessFailedException;
+	abstract public void executionFailed(SchedulerJobDto jobDto,String exceptionMessage) throws ProcessFailedException;
+}

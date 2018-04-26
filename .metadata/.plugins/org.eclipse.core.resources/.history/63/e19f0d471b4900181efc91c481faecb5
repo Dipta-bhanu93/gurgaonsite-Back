@@ -1,0 +1,17 @@
+package com.dipta.project.report;
+
+import java.util.List;
+
+import lombok.Getter;
+import lombok.Setter;
+
+public class ReportDataRow {
+
+	
+	@Getter
+	@Setter
+	private List<ReportDataColumn> colums;
+	
+	
+	
+}

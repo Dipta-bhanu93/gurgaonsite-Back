@@ -1,0 +1,24 @@
+package com.lei.utility.queue.jobcategory;
+
+import com.lei.exception.common.ProcessFailedException;
+import com.lei.report.IReportGenerator;
+import com.lei.report.ReportDataTable;
+import com.lei.utility.queue.CallableQueueJob;
+
+public class ProjectReportGenerationProcess<T extends Object> extends CallableQueueJob<Long>{
+
+	public ProjectReportGenerationProcess(ReportDataTable reportDataTable,IReportGenerator generator) {
+	 super(reportDataTable,generator);
+	}
+	
+	@Override
+	public Long execute(Object[] userData) throws ProcessFailedException {
+		ReportDataTable reportDataTable = (ReportDataTable)userData[0];
+		IReportGenerator generator = (IReportGenerator)userData[1];
+		try{return generator.generateReport(reportDataTable);
+		}catch(Exception e){
+			e.printStackTrace();
+			throw new ProcessFailedException(e.getMessage());
+		}
+		}
+}

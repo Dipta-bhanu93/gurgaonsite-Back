@@ -1,0 +1,2464 @@
+/**
+ * 
+ */
+package com.lei.dao.workflow.orm;
+
+import java.math.BigDecimal;
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
+
+import lombok.extern.slf4j.Slf4j;
+
+import org.hibernate.Criteria;
+import org.hibernate.criterion.Projections;
+import org.hibernate.criterion.Restrictions;
+import org.hibernate.transform.Transformers;
+import org.hibernate.type.StandardBasicTypes;
+import org.springframework.stereotype.Repository;
+
+import com.lei.dao.base.DaoManager;
+import com.lei.dao.base.orm.AbstractBaseDao;
+import com.lei.dao.project.IProjectDao;
+import com.lei.dao.ticketManagement.ITicketMaintenanceDao;
+import com.lei.dao.user.IUserDao;
+import com.lei.dao.workflow.IWorkFlowDao;
+import com.lei.domain.acl.RolesDomain;
+import com.lei.domain.company.CompanyDomain;
+import com.lei.domain.project.ProjectTemplateMasterDomain;
+import com.lei.domain.project.TemplateServiceMasterDomain;
+import com.lei.domain.ticketManagement.TicketDomain;
+import com.lei.domain.user.StatusDomain;
+import com.lei.domain.user.UserDomain;
+import com.lei.domain.workflow.WorkFlowAuditDomain;
+import com.lei.domain.workflow.WorkFlowBatchDomain;
+import com.lei.domain.workflow.WorkFlowDetailsDomain;
+import com.lei.domain.workflow.WorkFlowDomain;
+import com.lei.domain.workflow.WorkFlowMasterDomain;
+import com.lei.domain.workflow.WorkFlowStatusDomain;
+import com.lei.dto.project.template.TemplateServiceMasterDto;
+import com.lei.dto.ticketManagement.TicketDto;
+import com.lei.dto.user.ClientDto;
+import com.lei.dto.user.RolesDto;
+import com.lei.dto.user.UserDTO;
+import com.lei.dto.workflow.ProjectDTO;
+import com.lei.dto.workflow.WorkFlowGridData;
+import com.lei.dto.workflow.WorkFlowLevelDto;
+import com.lei.dto.workflow.WorkFlowMasterDto;
+import com.lei.dto.workflow.WorkFlowRecordsCountDto;
+import com.lei.dto.workflow.WorkFlowSearchGridDto;
+import com.lei.dto.workflow.WorkFlowUserDto;
+import com.lei.dto.workflow.WorkflowRecordsMappingCollection;
+import com.lei.dto.workflow.WorkflowRecordsMappingDto;
+import com.lei.exception.common.EmailException;
+import com.lei.exception.common.ObjectNotSupportedException;
+import com.lei.exception.common.ProcessFailedException;
+import com.lei.exception.workflow.DuplicateWorkFlowNameException;
+import com.lei.maintenance.workflow.IWorkFlowMaintenance;
+import com.lei.maintenance.workflow.WorkFlowMaintenanceImpl;
+import com.lei.security.configuration.RolesEnum;
+import com.lei.utility.CommonUtils;
+import com.lei.utility.MessageUtils;
+import com.lei.utility.constants.ApplicationConstants;
+import com.lei.utility.constants.CommonConstants;
+import com.lei.utility.constants.EmailEvent;
+import com.lei.utility.constants.GanttConstant;
+import com.lei.utility.constants.MessageKeyConstants;
+import com.lei.utility.constants.StatusConstants;
+import com.lei.utility.email.SendMail;
+
+/**
+ * @author Ashish.Patel
+ *
+ */
+
+@Slf4j
+@Repository("workflowdao")
+public class WorkFlowDaoImpl extends AbstractBaseDao implements IWorkFlowDao {
+
+	public WorkFlowDaoImpl() {
+		this(ApplicationConstants.SUPERUSEREMAIL.getValue());
+	}
+
+	public WorkFlowDaoImpl(String tenantEmail) {
+		super(tenantEmail);
+	}
+
+	 public WorkFlowDaoImpl(Long tenantId) {
+		 super(tenantId);
+	 }
+	 
+	 
+	private static final String CLASSNAME = "WorkFlowDaoImpl";
+	private static final String EXCEPTION = "Exception in WorkFlowDaoImpl";
+	private static final String WORKFLOW_ID = "workFlowId";
+	private static final String USER_ID = "userId";
+	private static final String COMPANY_ID = "companyId";
+	private static final String WORKFLOW_NAME = "workFlowName";
+	private static final String ASSOCIATE_USERID = "associateUserId";
+	private static final String ADMIN = "ADMIN";
+	private static final String DATAANALYST = "DATAANALYST";
+	private static final String QAANALYST = "QAANALYST";
+	private static final String COMMON_POOL = "COMMON_POOL";
+	private static final String WORKFLOW_RECORD_ID = "workFlowRecordId";
+	private static final String EXSUPER = "EXSUPER";
+	private static final String REC_APPROVED = "REC_APPROVED";
+	private static final String REC_ALLOCATED = "REC_ALLOCATED";
+	private static final String STATUSMASTER_ID = "statusMaster.id";
+	private static final String TEMPLATE_ID = "templateID";
+
+	/**
+	 * This method is used for createWorkFlow.
+	 * @param userEmail This is the first paramter to createWorkFlow
+	 * @param workFlowMasterDto  This is the second parameter to createWorkFlow method
+	 * @return WorkFlowMasterDto 
+	 */
+	@Override
+	public WorkFlowMasterDto createWorkFlowMaster(String userEmail,WorkFlowMasterDto workFlowMasterDto) throws ObjectNotSupportedException {
+		final String methodName = "createWorkFlowMaster";
+		log.info("Inside "+methodName+" method of "+CLASSNAME);
+		WorkFlowMasterDto masterDto = new WorkFlowMasterDto();
+		List<String> userIdList = new ArrayList<String>();
+		WorkFlowDetailsDomain detailsDomain = null;
+		TemplateServiceMasterDomain templateServiceMasterDomain = null;
+		Criteria criteria = null;
+		if(workFlowMasterDto != null){
+			beginTransaction();
+			IUserDao iUserDao = DaoManager.USER.getDao(userEmail,IUserDao.class);
+			//UserDTO userDTO = iUserDao.getUser(userEmail);
+			long id = iUserDao.getUserID(userEmail);
+			WorkFlowMasterDomain workFlowMasterDomain = CommonUtils.convertObject(workFlowMasterDto, WorkFlowMasterDomain.class);
+			workFlowMasterDomain.setUserId(id);
+			
+			criteria = createCriteria(TemplateServiceMasterDomain.class);
+			criteria.add(Restrictions.eq("serviceId",workFlowMasterDto.getServiceID()));
+			templateServiceMasterDomain = (TemplateServiceMasterDomain) criteria.uniqueResult();
+			workFlowMasterDomain.setTemplateServiceMasterDomain(templateServiceMasterDomain);
+			
+			workFlowMasterDomain.setDateCreated(new Timestamp(new Date().getTime()));
+			workFlowMasterDomain = (WorkFlowMasterDomain)hibernatePersistenceManager.saveOrUpdate(workFlowMasterDomain);
+			masterDto = CommonUtils.convertObject(workFlowMasterDomain, WorkFlowMasterDto.class);
+
+			if(workFlowMasterDto.getAttachedAdminUsers() != null && workFlowMasterDto.getAttachedAdminUsers().length != 0){
+				Collections.addAll(userIdList, workFlowMasterDto.getAttachedAdminUsers());
+				masterDto.setAttachedAdminUsers(workFlowMasterDto.getAttachedAdminUsers());
+			}
+			if(workFlowMasterDto.getAttachedAnalystUsers() != null && workFlowMasterDto.getAttachedAnalystUsers().length != 0){
+				Collections.addAll(userIdList, workFlowMasterDto.getAttachedAnalystUsers());
+				masterDto.setAttachedAnalystUsers(workFlowMasterDto.getAttachedAnalystUsers());
+			}
+			if(workFlowMasterDto.getAttachedQAUsers() != null && workFlowMasterDto.getAttachedQAUsers().length != 0){
+				Collections.addAll(userIdList, workFlowMasterDto.getAttachedQAUsers());
+				masterDto.setAttachedQAUsers(workFlowMasterDto.getAttachedQAUsers());
+			}
+
+			if(userIdList != null && !userIdList.isEmpty()){
+				for (String userId : userIdList) {
+					detailsDomain = new WorkFlowDetailsDomain();
+					detailsDomain.setWorkFlowMaster(workFlowMasterDomain);
+					detailsDomain.setAssociateUserId(Long.parseLong(userId));
+					detailsDomain.setDateCreated(new Timestamp(new Date().getTime()));
+					detailsDomain = (WorkFlowDetailsDomain)hibernatePersistenceManager.saveOrUpdate(detailsDomain);
+				}
+				
+			}else{
+				log.info("workFlowMasterDto.getWorkFlowDetailsDtoList() Found Null");
+			}
+			
+			if(workFlowMasterDomain != null){
+				updateWorkFlowStatus(workFlowMasterDomain.getWorkFlowId(), CommonConstants.WF_NEW_FREE);
+			}
+			
+			endTransaction();
+		}else{
+			log.info("workFlowMasterDto Found Null");
+		}
+		return masterDto;
+	}
+
+
+	/**
+	 * This method is used for updateWorkFlow.
+	 * @param userEmail This is the first paramter to updateWorkFlow
+	 * @param workFlowMasterDto  This is the second parameter to updateWorkFlow method
+	 * @return boolean 
+	 */
+	@Override
+	public boolean updateWorkFlowMaster(String userEmail,WorkFlowMasterDto workFlowMasterDto) throws ObjectNotSupportedException,ProcessFailedException {
+		boolean result = false;
+		final String methodName = "updateWorkFlowMaster";
+		log.info("Inside "+methodName+" method of "+CLASSNAME);
+		List<String> userIdList = new ArrayList<String>();
+		List<String> fetchedUserIdList = new ArrayList<String>();
+		WorkFlowDetailsDomain detailsDomain = null;
+		TemplateServiceMasterDomain templateServiceMasterDomain = null;
+		Criteria criteria = null;
+		try{
+			if(workFlowMasterDto != null){
+				WorkFlowMasterDomain workFlowMasterDomain = getWorkFlowMasterDomainById(workFlowMasterDto.getWorkFlowId());
+				if(workFlowMasterDomain != null){
+					beginTransaction();
+					IUserDao iUserDao = DaoManager.USER.getDao(userEmail,IUserDao.class);
+					//UserDTO userDTO = iUserDao.getUser(userEmail);
+					Long userID =  iUserDao.getUserID(userEmail);
+					workFlowMasterDomain.setUserId(userID);
+					workFlowMasterDomain.setWorkFlowName(workFlowMasterDto.getWorkFlowName());
+					workFlowMasterDomain.setWorkFlowLevel(workFlowMasterDto.getWorkFlowLevel());
+					
+					criteria = createCriteria(TemplateServiceMasterDomain.class);
+					criteria.add(Restrictions.eq("serviceId",workFlowMasterDto.getServiceID()));
+					templateServiceMasterDomain = (TemplateServiceMasterDomain) criteria.uniqueResult();
+					workFlowMasterDomain.setTemplateServiceMasterDomain(templateServiceMasterDomain);
+					
+					hibernatePersistenceManager.saveOrUpdate(workFlowMasterDomain);
+
+					if(workFlowMasterDto.getAttachedAdminUsers() != null && workFlowMasterDto.getAttachedAdminUsers().length != 0){
+						Collections.addAll(userIdList, workFlowMasterDto.getAttachedAdminUsers());
+					}
+					if(workFlowMasterDto.getAttachedAnalystUsers() != null && workFlowMasterDto.getAttachedAnalystUsers().length != 0){
+						Collections.addAll(userIdList, workFlowMasterDto.getAttachedAnalystUsers());
+					}
+					if(workFlowMasterDto.getAttachedQAUsers() != null && workFlowMasterDto.getAttachedQAUsers().length != 0){
+						Collections.addAll(userIdList, workFlowMasterDto.getAttachedQAUsers());
+					}
+
+					if(userIdList != null && !userIdList.isEmpty()){
+						if(workFlowMasterDomain.getWorkFlowDetailsSet() != null && !workFlowMasterDomain.getWorkFlowDetailsSet().isEmpty()){
+							for (WorkFlowDetailsDomain workFlowDetailsDomain : workFlowMasterDomain.getWorkFlowDetailsSet()) {
+								if(!userIdList.contains(String.valueOf(workFlowDetailsDomain.getAssociateUserId()))){
+									hibernatePersistenceManager.delete(workFlowDetailsDomain);
+								}
+								fetchedUserIdList.add(String.valueOf(workFlowDetailsDomain.getAssociateUserId()));
+							}
+							userIdList.removeAll(fetchedUserIdList);
+							if(userIdList != null && !userIdList.isEmpty()){
+								for (String userid : userIdList) {
+									detailsDomain = new WorkFlowDetailsDomain();
+									detailsDomain.setWorkFlowMaster(workFlowMasterDomain);
+									detailsDomain.setAssociateUserId(Long.parseLong(userid));
+									detailsDomain.setDateCreated(new Timestamp(new Date().getTime()));
+									detailsDomain = (WorkFlowDetailsDomain)hibernatePersistenceManager.saveOrUpdate(detailsDomain);
+								}
+							}
+						}
+					}else{
+						log.info("userIdList Found Null going to remove all related workflowDetails");
+						if(workFlowMasterDomain.getWorkFlowDetailsSet() != null && !workFlowMasterDomain.getWorkFlowDetailsSet().isEmpty()){
+							for (WorkFlowDetailsDomain workFlowDetailsDomain : workFlowMasterDomain.getWorkFlowDetailsSet()) {
+								hibernatePersistenceManager.delete(workFlowDetailsDomain);
+							}
+						}
+					}
+
+					result = true;
+					endTransaction();
+				}else{
+					log.info("workFlowMasterDomain Found Null");
+				}
+			}else{
+				log.info("workFlowMasterDto Found Null");
+			}
+		}catch(Exception e){
+			log.error(EXCEPTION,e);
+			rollBack();
+			throw new ProcessFailedException("WorkFlow Update Failed.");
+		}
+		return result;
+
+	}
+
+	/**
+	 * This method is used for saveWorkflowRecords.
+	 * @param userEmail This is the first paramter to saveWorkflowRecords
+	 * @param WorkflowRecordsMappingCollection  This is the second parameter to saveWorkflowRecords method
+	 * @return WorkFlowRecordsCountDto 
+	 */
+	@Override
+	public WorkFlowRecordsCountDto saveWorkflowRecords(String userEmail,WorkflowRecordsMappingCollection mappingCollection,String description) throws ProcessFailedException{
+		final String methodName = "saveWorkflowRecords";
+		log.info("Inside "+methodName+" method of "+CLASSNAME);
+		WorkFlowRecordsCountDto countDto = new WorkFlowRecordsCountDto();
+		Long existRecords = 0l;
+		long batchID = 0;
+		WorkFlowBatchDomain batchDomain = null;
+		
+		try{
+			
+			if(mappingCollection.getMappedDtos() != null && !mappingCollection.getMappedDtos().isEmpty()){
+				countDto = getWorkFlowRecordsCount(mappingCollection);
+				if(countDto.getWorkFlowRecordsCountMap().containsKey("EXIST_RECORDS")){
+					existRecords = countDto.getWorkFlowRecordsCountMap().get("EXIST_RECORDS");
+				}
+				IUserDao iUserDao = DaoManager.USER.getDao(userEmail,IUserDao.class);
+				UserDTO userDTO = iUserDao.getUser(userEmail,false);
+				
+				
+				if(mappingCollection.isAddToTicket()){
+					countDto = saveWorkFlowRecordsWithTicket(mappingCollection,userDTO,countDto,description);
+				}else{
+					long wofID = mappingCollection.getWorkFlowId();
+					batchDomain = getBatchIDbyWorkFlowID(wofID);
+					//IUserDao iUserDao = DaoManager.USER.getDao(userEmail,IUserDao.class);
+					//UserDTO userDTO = iUserDao.getUser(userEmail);
+					//Long userID =  iUserDao.getUserID(userEmail);
+					Long userID =  userDTO.getId();
+					String status = "";
+					if(existRecords>0 && !mappingCollection.isProcess()){
+						countDto.setProcess(false);
+						return countDto;
+					}else if(existRecords>0 && mappingCollection.isProcess()){
+						List<Long> existDBRecords = countDto.getExistRecords();
+			
+						if(batchDomain != null){
+							//WorkFlowSearchGridDto dto = getWorkFlowStatusAndUpdatedDateByWorkFlowId(userEmail,wofID,batchDomain.getCurrentBatchID(),false);
+							WorkFlowSearchGridDto dto = getWorkFlowStatusAndUpdatedDateByWorkFlowId(userEmail,wofID);
+		                    if(dto != null && !dto.getWorkFlowStatus().isEmpty() && dto.getWorkFlowStatus()!=null){
+		                    	status = dto.getWorkFlowStatus();
+		                    }
+						}
+						beginTransaction();
+						if(batchDomain == null){
+							batchID = (long) hibernatePersistenceManager.createSQLQuery("select SEQ_WORKFLOW_BATCH_ID.nextval as num from dual").addScalar("num", StandardBasicTypes.LONG).uniqueResult();
+							batchDomain = new WorkFlowBatchDomain();
+							batchDomain.setWorkFlowId(wofID);
+							batchDomain.setCurrentBatchID(batchID);
+							batchDomain = (WorkFlowBatchDomain) hibernatePersistenceManager.saveOrUpdate(batchDomain);
+						}else if(status.equalsIgnoreCase(CommonConstants.WF_COMPLETED) || status.equalsIgnoreCase(CommonConstants.WF_NEW_FREE)){
+							batchID = (long) hibernatePersistenceManager.createSQLQuery("select SEQ_WORKFLOW_BATCH_ID.nextval as num from dual").addScalar("num", StandardBasicTypes.LONG).uniqueResult();
+							batchDomain.setCurrentBatchID(batchID);
+							batchDomain = (WorkFlowBatchDomain) hibernatePersistenceManager.saveOrUpdate(batchDomain);
+						}
+						
+						for (WorkflowRecordsMappingDto mappingDto : mappingCollection.getMappedDtos()) {
+							if(existDBRecords.contains(mappingDto.getRecordId())){
+								continue;
+							}
+							WorkFlowDomain workFlowDomain = CommonUtils.convertObject(mappingDto, WorkFlowDomain.class);
+							workFlowDomain.setUserIdCreated(userID);
+							workFlowDomain.setDateCreated(new Timestamp(new Date().getTime()));
+							workFlowDomain.setNextRoleId(RolesEnum.DATAANALYST.getRoleId());
+							workFlowDomain.setBatchID(batchDomain.getCurrentBatchID());
+							workFlowDomain.setWorkFlowId(wofID);
+							hibernatePersistenceManager.saveOrUpdate(workFlowDomain);
+							countDto.setProcess(true);
+						}
+						updateWorkFlowStatus(wofID, CommonConstants.WF_ASSIGNED);
+						endTransaction();
+					}else{
+						
+						if(batchDomain != null){
+							//WorkFlowSearchGridDto dto = getWorkFlowStatusAndUpdatedDateByWorkFlowId(userEmail,wofID,batchDomain.getCurrentBatchID(),false);
+							WorkFlowSearchGridDto dto = getWorkFlowStatusAndUpdatedDateByWorkFlowId(userEmail,wofID);
+		                    if(dto != null && !dto.getWorkFlowStatus().isEmpty() && dto.getWorkFlowStatus()!=null){
+		                    	status = dto.getWorkFlowStatus();
+		                    }
+						}
+						beginTransaction();
+						if(batchDomain == null){
+							batchID = (long) hibernatePersistenceManager.createSQLQuery("select SEQ_WORKFLOW_BATCH_ID.nextval as num from dual").addScalar("num", StandardBasicTypes.LONG).uniqueResult();
+							batchDomain = new WorkFlowBatchDomain();
+							batchDomain.setWorkFlowId(wofID);
+							batchDomain.setCurrentBatchID(batchID);
+							batchDomain = (WorkFlowBatchDomain) hibernatePersistenceManager.saveOrUpdate(batchDomain);
+						}else if(status.equalsIgnoreCase(CommonConstants.WF_COMPLETED) || status.equalsIgnoreCase(CommonConstants.WF_NEW_FREE)){
+							batchID = (long) hibernatePersistenceManager.createSQLQuery("select SEQ_WORKFLOW_BATCH_ID.nextval as num from dual").addScalar("num", StandardBasicTypes.LONG).uniqueResult();
+							batchDomain.setCurrentBatchID(batchID);
+							batchDomain = (WorkFlowBatchDomain) hibernatePersistenceManager.saveOrUpdate(batchDomain);
+						}
+						
+						for (WorkflowRecordsMappingDto mappingDto : mappingCollection.getMappedDtos()) {
+							WorkFlowDomain workFlowDomain = CommonUtils.convertObject(mappingDto, WorkFlowDomain.class);
+							workFlowDomain.setUserIdCreated(userID);
+							workFlowDomain.setDateCreated(new Timestamp(new Date().getTime()));
+							workFlowDomain.setNextRoleId(RolesEnum.DATAANALYST.getRoleId());
+							workFlowDomain.setBatchID(batchDomain.getCurrentBatchID());
+							workFlowDomain.setWorkFlowId(wofID);
+							hibernatePersistenceManager.saveOrUpdate(workFlowDomain);
+							countDto.setProcess(true);
+						}
+						updateWorkFlowStatus(wofID, CommonConstants.WF_ASSIGNED);
+						endTransaction();
+					}
+					if(!(mappingCollection.isAddToTicket())&&countDto.isProcess()){
+						//Gantt WorkFlow Call
+						ITicketMaintenanceDao dao = DaoManager.TICKETMAINTENANCEDAO.getDao(userEmail, ITicketMaintenanceDao.class);
+						
+						dao.populateGanttTables(batchDomain.getCurrentBatchID(),GanttConstant.BATCH_ID.getValue());
+					}
+				}	
+			}else{
+				log.info("mappingCollection.getMappedDtos() Found Null");
+			}
+		}catch(Exception e){
+			log.error(EXCEPTION,e);
+			rollBack();
+			throw new ProcessFailedException("saveWorkflowRecords Failed.");
+		}
+		return countDto;
+	}
+	
+	@Override
+	public WorkFlowBatchDomain getBatchIDbyWorkFlowID(long workFlowID) throws ProcessFailedException{
+		final String methodName = "saveWorkflowRecords";
+		log.info("Inside "+methodName+" method of "+CLASSNAME);
+		WorkFlowBatchDomain workFlowBatchDomain = null;
+		try{
+			beginTransaction();
+			Criteria workFlowCriteria = createCriteria(WorkFlowBatchDomain.class);
+			workFlowCriteria.add(Restrictions.eq(WORKFLOW_ID, workFlowID));
+			workFlowBatchDomain = (WorkFlowBatchDomain) workFlowCriteria.uniqueResult();
+			endTransaction();
+		}catch(Exception e){
+			log.error(EXCEPTION,e);
+			throw new ProcessFailedException("getBatchIDbyWorkFlowID Failed.");
+		}
+		return workFlowBatchDomain;
+	}
+	
+	
+	/**
+	 * This method is used for updateWorkflowRecords.
+	 * @param userEmail This is the first paramter to updateWorkflowRecords
+	 * @param WorkflowRecordsMappingCollection  This is the second parameter to updateWorkflowRecords method
+	 * @return boolean 
+	 */
+	@Override
+	public boolean updateRecordsWorkFlowStatus(String userEmail,WorkflowRecordsMappingCollection mappingCollection,long actionID) throws ProcessFailedException{
+		final String methodName = "updateRecordsWorkFlowStatus";
+		log.info("Inside "+methodName+" method of "+CLASSNAME);
+		boolean result = false;
+		try{
+			if(mappingCollection.getMappedDtos() != null && !mappingCollection.getMappedDtos().isEmpty()){
+				beginTransaction();
+				IUserDao iUserDao = DaoManager.USER.getDao(userEmail,IUserDao.class);
+				UserDTO userDTO = iUserDao.getUser(userEmail,true);
+				//Long userID =  iUserDao.getUserID(userEmail);
+				Criteria workFlowRecordCriteria = null;
+				mappingCollection.getMappedDtos().get(0).getUserIdCreated();
+				//For Update Ticket for Analyst User
+				ITicketMaintenanceDao dao = DaoManager.TICKETMAINTENANCEDAO.getDao(userEmail, ITicketMaintenanceDao.class);
+				
+            //    if( userDTO.getUserRole().getType().equals(DATAANALYST) && userDTO.getClient()!=null && userDTO.getCompanyId()==1){
+/*			    if( userDTO.getUserRole().getType().equals(DATAANALYST) && CommonUtils.isInternalUser(userDTO.getCompanyId())){
+                	TicketDto ticketDto = dao.getLatestTicketByWorkFlowId(mappingCollection.getMappedDtos().get(0).getWorkFlowId());
+                        if(ticketDto !=null && ticketDto.getStatusId() == StatusConstants.OPEN.getID()){
+                        	dao.updateTicketStatus(mappingCollection.getMappedDtos().get(0).getWorkFlowId(), StatusConstants.INPROGRESS.getID()); 
+//                  call to update Actual start date for Gantt Chart  in case of ticket
+                        	ITicketMaintenanceDao ticketdao = DaoManager.TICKETMAINTENANCEDAO.getDao(ticketDto.getCompanyDomain().getId(), ITicketMaintenanceDao.class);
+                        	ticketdao.updateGanttStartDate(ticketDto.getTicketId(),GanttConstant.TICKET_ID.getValue());
+                        }
+                }*/
+				Long batchId=null;
+				   IWorkFlowMaintenance maintainence= new WorkFlowMaintenanceImpl();
+				   WorkFlowSearchGridDto wfstatus=new WorkFlowSearchGridDto();
+				for (WorkflowRecordsMappingDto mappingDto : mappingCollection.getMappedDtos()) {
+					
+					//dao.getTicket(mappingDto.get)
+					
+					
+				   /* if( userDTO.getUserRole().getType().equals(DATAANALYST) && CommonUtils.isInternalUser(userDTO.getCompanyId())){
+	                	TicketDto ticketDto = dao.getTicket(mappingDto.getTicketID());
+	                        if(ticketDto !=null && ticketDto.getStatusId() == StatusConstants.OPEN.getID()){
+	                        	dao.updateTicketStatus(mappingCollection.getMappedDtos().get(0).getWorkFlowId(), StatusConstants.INPROGRESS.getID(), mappingDto.getTicketID()); 
+//	                         the call to update Actual start date for Gantt Chart  
+	                        	ITicketMaintenanceDao ticketdao = DaoManager.TICKETMAINTENANCEDAO.getDao(ticketDto.getCompanyDomain().getId(), ITicketMaintenanceDao.class);
+	                        	ticketdao.updateGanttStartDate(ticketDto.getTicketId(),GanttConstant.TICKET_ID.getValue());
+	                        }
+	                }*/
+					
+					
+					
+					//****************
+					
+					workFlowRecordCriteria = createCriteria(WorkFlowDomain.class); 
+					workFlowRecordCriteria.add(Restrictions.eq(WORKFLOW_RECORD_ID, mappingDto.getWorkFlowRecordId()));
+					WorkFlowDomain workFlowDomain = (WorkFlowDomain) workFlowRecordCriteria.uniqueResult();
+					if(workFlowDomain != null){
+						wfstatus=maintainence.getWorkFlowStatusAndUpdatedDateByWorkFlowId(userEmail, workFlowDomain.getWorkFlowId());
+						workFlowDomain.setUserIdModified(userDTO.getId());
+						workFlowDomain.setStatusUserId(userDTO.getId());
+						workFlowDomain.setWorkflowStatusId(actionID);
+						workFlowDomain.setDateModified(new Timestamp(new Date().getTime()));
+						WorkFlowDomain updatedObject=(WorkFlowDomain) hibernatePersistenceManager.saveOrUpdate(workFlowDomain);
+						batchId=updatedObject.getBatchID();
+						
+					}
+				}
+				//Gantt Chart update Actual date call 
+				if( (userDTO.getUserRole().getType().equals(DATAANALYST)||(userDTO.getUserRole().getType().equals(EXSUPER))) && (!CommonUtils.isInternalUser(userDTO.getCompanyId()))){
+//                update Actual start date for Gantt Chart in case of client workflow  
+					if(batchId!=null && wfstatus.getWorkFlowStatus().equals(CommonConstants.WF_ASSIGNED)){
+						dao.updateGanttStartDate(batchId,GanttConstant.BATCH_ID.getValue());
+					}
+				}
+				result = true;
+				updateWorkFlowStatus(mappingCollection.getMappedDtos().get(0).getWorkFlowId(), CommonConstants.WF_IN_PROGRESS);
+				endTransaction();
+				
+				//if internal user then also update inprogress Status and updatedDate in platinum database 
+				if(CommonUtils.isInternalUser(userDTO.getCompanyId())){
+					requestPlatinumConnection();
+					beginTransaction();
+					updateWorkFlowStatus(mappingCollection.getMappedDtos().get(0).getWorkFlowId(), CommonConstants.WF_IN_PROGRESS);
+					endTransaction();
+					releasePlatinumConnection();
+				}
+				
+			}else{
+				log.info("mappingCollection.getMappedDtos() Found Null");
+				result = false;
+			}
+		}catch(Exception e){
+			log.error(EXCEPTION,e);
+			rollBack();
+			throw new ProcessFailedException("updateWorkflowRecords Failed.");
+		}
+		return result;
+	}
+
+	/**
+	 * This method is used for WorkFlowRecordsCount from workFlowRecords table.
+	 * @param WorkflowRecordsMappingCollection This is the first paramter to getWorkFlowRecordsCount
+	 * @return WorkFlowRecordsCountDto 
+	 */
+	private WorkFlowRecordsCountDto getWorkFlowRecordsCount(WorkflowRecordsMappingCollection collection){
+		final String methodName = "getWorkFlowRecordsCount";
+		log.info("Inside "+methodName+" method of "+CLASSNAME);
+		WorkFlowRecordsCountDto countDto = new WorkFlowRecordsCountDto();
+		List<Long> existRecords = new ArrayList<Long>();
+		List<Long> nonexistRecords = new ArrayList<Long>();
+		List<Long> recordIdLst;
+		HashMap<String,Long> workFlowRecordsCountMap = new HashMap<>();
+		try{
+			if(collection.getMappedDtos() != null && !collection.getMappedDtos().isEmpty()){
+				beginTransaction();
+				Criteria workFlowCriteria = createCriteria(WorkFlowDomain.class);
+				workFlowCriteria.setProjection(Projections.property("recordId"));
+				recordIdLst = workFlowCriteria.list();
+				if(recordIdLst != null && !recordIdLst.isEmpty()){
+					for (WorkflowRecordsMappingDto mappingDto : collection.getMappedDtos()) {
+						if(recordIdLst.contains(mappingDto.getRecordId())){
+							existRecords.add(mappingDto.getRecordId());
+						}else{
+							nonexistRecords.add(mappingDto.getRecordId());
+						}
+					}
+					countDto.setExistRecords(existRecords);
+					countDto.setNonexistRecords(nonexistRecords);
+					workFlowRecordsCountMap.put("EXIST_RECORDS", (long) existRecords.size());
+					workFlowRecordsCountMap.put("NONEXIST_RECORDS", (long) nonexistRecords.size());
+				}else{
+					log.info("workFlowDomainLst Found Null");
+					workFlowRecordsCountMap.put("EXIST_RECORDS",0l);
+				}
+				endTransaction();
+			}else{
+				log.info("collection.getMappedDtos() Found Null");
+			}
+			countDto.setWorkFlowRecordsCountMap(workFlowRecordsCountMap);
+		}catch(Exception e){
+			log.error(EXCEPTION,e);
+		}
+		return countDto;
+	}
+
+
+	/**
+	 * This method is used for getWorkFlowMasterDomainById.
+	 * @param Id This is the first paramter to WorkflowMasterDomain ID
+	 * @return WorkFlowMasterDomain 
+	 */
+	@Override
+	public WorkFlowMasterDomain getWorkFlowMasterDomainById(long Id){
+		final String methodName = "getWorkFlowMasterDomainById";
+		log.info("Inside "+methodName+" method of "+CLASSNAME);
+		WorkFlowMasterDomain workFlowMasterDomain = null;
+		try{
+			if(Id != 0){
+				beginTransaction();
+				Criteria workFlowCriteria = createCriteria(WorkFlowMasterDomain.class);
+				workFlowCriteria.add(Restrictions.eq(WORKFLOW_ID, Id));
+				workFlowMasterDomain = (WorkFlowMasterDomain) workFlowCriteria.uniqueResult();
+				endTransaction();
+			}else{
+				log.info("workFlowMasterID found Null");
+			}
+		}catch(Exception e){
+			log.error(EXCEPTION,e);
+		}
+		return workFlowMasterDomain;
+	}
+
+	/**
+	 * This method is used for getWorkFlowMasterMap.
+	 * @param userEmail This is the first paramter to getWorkFlowMasterMap
+	 * @return WorkFlowMasterDto 
+	 */
+	@Override
+	public WorkFlowMasterDto getWorkFlowMasterMap(String userEmail){
+		final String methodName = "getWorkFlowMasterMap";
+		log.info("Inside "+methodName+" method of "+CLASSNAME);
+		WorkFlowMasterDto workFlowMasterDto = new WorkFlowMasterDto();
+		Map<String, String> workFlowMap = new TreeMap<String, String>();
+		long wfID = 0;
+	
+		List<WorkFlowMasterDto> wfDtolst = new ArrayList<>();
+		try{
+			beginTransaction();
+			IUserDao iUserDao = DaoManager.USER.getDao(userEmail,IUserDao.class);
+			UserDTO userDTO = iUserDao.getUser(userEmail, true);
+			Long userID = userDTO.getId();
+			String roleType = userDTO.getUserRole().getType();
+			ITicketMaintenanceDao dao = DaoManager.TICKETMAINTENANCEDAO.getDao(userEmail, ITicketMaintenanceDao.class);
+			if(roleType.equals(ADMIN) || roleType.equals(DATAANALYST) || roleType.equals(QAANALYST)){
+				Criteria workfloDetailsCriteria = createCriteria(WorkFlowDetailsDomain.class);
+				workfloDetailsCriteria.add(Restrictions.eq(ASSOCIATE_USERID, userID));
+				List<WorkFlowDetailsDomain> detailsDomainsLst = workfloDetailsCriteria.list();
+				if (detailsDomainsLst != null && !detailsDomainsLst.isEmpty()) {
+					WorkFlowMasterDto dto = null;
+					for (WorkFlowDetailsDomain workFlowDetailsDomain : detailsDomainsLst) {
+						dto = new WorkFlowMasterDto();
+						dto.setWorkFlowId(workFlowDetailsDomain.getWorkFlowMaster().getWorkFlowId());
+						dto.setWorkFlowName(workFlowDetailsDomain.getWorkFlowMaster().getWorkFlowName());
+						wfDtolst.add(dto);
+					}
+					endTransaction();
+					if (wfDtolst != null && !wfDtolst.isEmpty()) {
+						for (WorkFlowMasterDto workFlowMasterDtoo : wfDtolst) {
+							wfID = workFlowMasterDtoo.getWorkFlowId();
+							
+							//String WfIDandTicketID = String.valueOf(wfID) + "_"+ String.valueOf(ticketID) + "_"+ String.valueOf(batchID);
+							workFlowMap.put(workFlowMasterDtoo.getWorkFlowName(), String.valueOf(wfID));
+						}
+					}
+
+				} else {
+					log.info("detailsDomainsLst Found Null");
+				}
+				
+			}else{
+				Criteria workfloCriteria = createCriteria(WorkFlowMasterDomain.class);
+				workfloCriteria.add(Restrictions.eq(USER_ID, userID));
+				List<WorkFlowMasterDomain> workFlowMasterList = workfloCriteria.list();
+				endTransaction();
+				if(workFlowMasterList != null && !workFlowMasterList.isEmpty()){
+					List<WorkFlowMasterDto> workFlowMasterDtoList = getDomainToDto(workFlowMasterList);
+					for (WorkFlowMasterDto wfMasterDto : workFlowMasterDtoList) {
+						 wfID = wfMasterDto.getWorkFlowId();
+						//String WfIDandTicketID = String.valueOf(wfID)+"_"+String.valueOf(ticketID)+"_"+String.valueOf(batchID);
+						workFlowMap.put(wfMasterDto.getWorkFlowName(),String.valueOf(wfID));
+					}
+				}else{
+					log.info("workFlowMasterList Found Null");
+				}
+			}
+			workFlowMasterDto.setWorkFlowMasterMap((TreeMap<String, String>) workFlowMap);
+		}catch(Exception e){
+			log.error(EXCEPTION,e);
+		}
+		return workFlowMasterDto;
+	}
+	
+	/**
+	 * This method is used for getWorkFlowMasterMap.
+	 * @param userEmail This is the first paramter to getWorkFlowMasterMap
+	 * @return WorkFlowMasterDto 
+	 */
+	@Override
+	public WorkFlowMasterDto getWorkFlowMasterMapForDropDown(String userEmail,Long serviceId){
+		final String methodName = "getWorkFlowMasterMapForDropDown";
+		log.info("Inside "+methodName+" method of "+CLASSNAME);
+		WorkFlowMasterDto workFlowMasterDto = new WorkFlowMasterDto();
+		Map<String, Long> workFlowMap = new HashMap<String, Long>();
+		List<WorkFlowMasterDto> wfDtolst = new ArrayList<>();
+		try{
+			beginTransaction();
+			IUserDao iUserDao = DaoManager.USER.getDao(userEmail,IUserDao.class);
+			UserDTO userDTO = iUserDao.getUser(userEmail, true);
+			Long userID = userDTO.getId();
+			String roleType = userDTO.getUserRole().getType();
+			if(roleType.equals(ADMIN) || roleType.equals(DATAANALYST) || roleType.equals(QAANALYST)){
+				Criteria workfloDetailsCriteria = createCriteria(WorkFlowDetailsDomain.class);
+				workfloDetailsCriteria.add(Restrictions.eq(ASSOCIATE_USERID, userID));
+				List<WorkFlowDetailsDomain> detailsDomainsLst = workfloDetailsCriteria.list();
+				if (detailsDomainsLst != null && !detailsDomainsLst.isEmpty()) {
+					WorkFlowMasterDto dto = null;
+					for (WorkFlowDetailsDomain workFlowDetailsDomain : detailsDomainsLst) {
+						dto = new WorkFlowMasterDto();
+						dto.setWorkFlowId(workFlowDetailsDomain.getWorkFlowMaster().getWorkFlowId());
+						dto.setWorkFlowName(workFlowDetailsDomain.getWorkFlowMaster().getWorkFlowName());
+						wfDtolst.add(dto);
+					}
+					endTransaction();
+					if (wfDtolst != null && !wfDtolst.isEmpty()) {
+						for (WorkFlowMasterDto workFlowMasterDtoo : wfDtolst) {
+							workFlowMap.put(workFlowMasterDtoo.getWorkFlowName(), workFlowMasterDto.getWorkFlowId());
+						}
+					}
+				} else {
+					log.info("detailsDomainsLst Found Null");
+				}
+			}else{
+				
+				// in super case
+				Criteria workfloCriteria = createCriteria(WorkFlowMasterDomain.class);
+				workfloCriteria.add(Restrictions.eq(USER_ID, userID));
+				List<WorkFlowMasterDomain> workFlowMasterList = workfloCriteria.list();
+				endTransaction();
+				if(workFlowMasterList != null && !workFlowMasterList.isEmpty()){
+					WorkFlowSearchGridDto dto = null;
+					ITicketMaintenanceDao dao = DaoManager.TICKETMAINTENANCEDAO.getDao(userEmail, ITicketMaintenanceDao.class);
+					for (WorkFlowMasterDomain wfMasterDto : workFlowMasterList) {
+						if(serviceId.equals(wfMasterDto.getTemplateServiceMasterDomain().getServiceId())){
+							 if(!CommonUtils.isInternalUser(userDTO.getCompanyId())){
+	                            		WorkFlowBatchDomain batchDomain = getBatchIDbyWorkFlowID(wfMasterDto.getWorkFlowId());
+	                            		if(batchDomain == null){
+	                            			  workFlowMap.put(wfMasterDto.getWorkFlowName(), wfMasterDto.getWorkFlowId());
+	                            		}else{
+	                            			dto = getWorkFlowStatusAndUpdatedDateByWorkFlowId(userEmail, wfMasterDto.getWorkFlowId());
+	                            			//changes for LP-1049 - Workflow re usability: Currently for each new project, user is asked to create a new workflow if existing workflow is in progress state.
+	                                        //if(dto != null && !dto.getWorkFlowStatus().isEmpty() && dto.getWorkFlowStatus()!=null && !dto.getWorkFlowStatus().equalsIgnoreCase(CommonConstants.WF_IN_PROGRESS)){
+	                                        	if(dto != null && !dto.getWorkFlowStatus().isEmpty() && dto.getWorkFlowStatus()!=null){
+	                                               workFlowMap.put(wfMasterDto.getWorkFlowName(), wfMasterDto.getWorkFlowId());
+	                                        }
+	                            		}
+	                            }else{
+	                                   TicketDto ticketDto = dao.getLatestTicketByWorkFlowId(wfMasterDto.getWorkFlowId());
+	                                   if(ticketDto == null){
+	                                	   workFlowMap.put(wfMasterDto.getWorkFlowName(), wfMasterDto.getWorkFlowId());
+	                                   }else if( (ticketDto !=null && ticketDto.getStatusId() != StatusConstants.INPROGRESS.getID())){
+	                                          workFlowMap.put(wfMasterDto.getWorkFlowName(), wfMasterDto.getWorkFlowId());
+	                                   }
+	                            }
+						}
+					}
+				}else{
+					log.info("workFlowMasterList Found Null");
+				}
+			}
+			workFlowMasterDto.setWorkFlowMasterMapDropDown((HashMap<String, Long>) workFlowMap);
+		}catch(Exception e){
+			log.error(EXCEPTION,e);
+		}
+		return workFlowMasterDto;
+	}
+	
+
+
+	/**
+	 * This method is used for getRoleWiseUserList.
+	 * @param userEmail This is the first paramter to getRoleWiseUserList
+	 * @return ClientDto 
+	 */
+	@Override
+	public ClientDto getRoleWiseUserList(String userEmail){
+		final String methodName = "getRoleWiseUserList";
+		log.info("Inside "+methodName+" method of "+CLASSNAME);
+		ClientDto clientDto = new ClientDto();
+		HashMap<String,WorkFlowUserDto> roleWiseUserMap = new HashMap<String,WorkFlowUserDto>();
+		List<WorkFlowUserDto> userDtoList = null;
+		WorkFlowUserDto userDTO = null;
+		try{
+			requestPlatinumConnection();
+			beginTransaction();
+			IUserDao iUserDao = DaoManager.USER.getDao(userEmail,IUserDao.class);
+			UserDTO userdto = iUserDao.getUser(userEmail, false);
+			Criteria userCriteria = createCriteria(UserDomain.class);
+			userCriteria.add(Restrictions.eq(COMPANY_ID, userdto.getCompanyId()));
+			userCriteria.add(Restrictions.ne(STATUSMASTER_ID, StatusConstants.INACTIVE.getID()));
+			List<UserDomain> userDomainList = userCriteria.list();
+			if(userDomainList != null && !userDomainList.isEmpty()){
+				for (UserDomain userDomain : userDomainList) {
+					if(userDomain.getUserRole() != null){
+						userDTO = new WorkFlowUserDto();
+						userDTO.setId(userDomain.getId());
+						userDTO.setUserName(userDomain.getFirstName()+" "+userDomain.getLastName());
+						if(roleWiseUserMap.containsKey(userDomain.getUserRole().getType())){
+							WorkFlowUserDto userDTO2 = roleWiseUserMap.get(userDomain.getUserRole().getType());
+							List<WorkFlowUserDto> list = userDTO2.getList();
+							list.add(userDTO);
+							userDTO2.setList(list);
+							roleWiseUserMap.put(userDomain.getUserRole().getType(),userDTO2);
+						}else{
+							WorkFlowUserDto userDTO1 = new WorkFlowUserDto();
+							userDtoList = new ArrayList<WorkFlowUserDto>();
+							userDtoList.add(userDTO);
+							userDTO1.setList(userDtoList);
+							roleWiseUserMap.put(userDomain.getUserRole().getType(),userDTO1);
+						}
+					}
+				}
+				clientDto.setRoleWiseUserMap(roleWiseUserMap);
+			}else{
+				log.info("userDomainList Found Null");
+			}
+		}catch(Exception e){
+			log.error(EXCEPTION,e);
+		}
+		return clientDto;
+
+	}
+
+	/**
+	 * This method is used for workFlowName is already exits or not.
+	 * @param workFlowName This is the first paramter to isWorkFlowNameExits
+	 * @return boolean 
+	 */
+	public boolean isWorkFlowNameExits(String workFlowName) throws DuplicateWorkFlowNameException{
+		final String methodName = "isWorkFlowNameExits";
+		log.info("Inside "+methodName+" method of "+CLASSNAME);
+		boolean result = false;
+		beginTransaction();
+		Criteria workFlowCriteria = createCriteria(WorkFlowMasterDomain.class);
+		workFlowCriteria.add(Restrictions.ilike(WORKFLOW_NAME,workFlowName));
+		WorkFlowMasterDomain workFlowMasterDomain = (WorkFlowMasterDomain) workFlowCriteria.uniqueResult();
+		if(workFlowMasterDomain != null){
+			result = true;
+		}
+		endTransaction();
+		return result;
+	}
+
+	/**
+	 * This method is used for getting workflow and details information.
+	 * @param workFlowID This is the first paramter to getWorkFlowMasterDataById
+	 * @return WorkFlowMasterDto 
+	 */
+	public WorkFlowMasterDto getWorkFlowMasterDataById(long workFlowID){
+		final String methodName = "getWorkFlowMasterDataById";
+		log.info("Inside "+methodName+" method of "+CLASSNAME);
+		WorkFlowMasterDto workFlowMasterDto = new WorkFlowMasterDto();
+		try{
+			if(workFlowID != 0){
+				WorkFlowMasterDomain domain = getWorkFlowMasterDomainById(workFlowID);
+				if(domain != null){
+					workFlowMasterDto = CommonUtils.convertObject(domain, WorkFlowMasterDto.class);
+					if(domain.getWorkFlowDetailsSet() != null && !domain.getWorkFlowDetailsSet().isEmpty()){
+						String[] attachedUser = new String[domain.getWorkFlowDetailsSet().size()];
+						int index = 0;
+						for (WorkFlowDetailsDomain workFlowDetailsDomain : domain.getWorkFlowDetailsSet()) {
+							attachedUser[index++] = String.valueOf(workFlowDetailsDomain.getAssociateUserId());
+						}
+						workFlowMasterDto.setAttachedUsers(attachedUser);
+					}
+				}else{
+					log.info("WorkFlowMasterDomain Found Null");
+				}
+			}else{
+				log.info("workFlowID Found 0");
+			}
+		}catch(Exception e){
+			log.error(EXCEPTION,e);
+		}
+		return workFlowMasterDto;
+	}
+	
+	public WorkFlowSearchGridDto getWorkFlowRecords(String userEmail,WorkFlowMasterDto workFlowMasterDto){
+		final String methodName = "getWorkFlowRecords";
+		log.info("Inside "+methodName+" method of "+CLASSNAME);
+		StringBuilder sqlQuery = new StringBuilder();
+		StringBuilder commonPoolDataQuery = new StringBuilder();
+		WorkFlowSearchGridDto workFlowSearchGridDto = null;
+		String statusUserIDIn = " and STATUS_USER in (";
+		String closeParameter = ")";
+		String appendTicketOrBatch = null;
+		String tableName = " WORKFLOW_RECORDS ";
+		
+		try{
+			if(workFlowMasterDto.getWorkFlowId() != null && workFlowMasterDto.getWorkFlowId() != 0){
+				WorkFlowMasterDomain wfDomain = getWorkFlowMasterDomainById(workFlowMasterDto.getWorkFlowId());
+				if(wfDomain != null){
+					workFlowSearchGridDto = getWorkFlowStatusAndUpdatedDateByWorkFlowId(userEmail, workFlowMasterDto.getWorkFlowId());
+					beginTransaction();
+					workFlowSearchGridDto.setWorkFlowId(wfDomain.getWorkFlowId());
+					workFlowSearchGridDto.setWorkFlowName(wfDomain.getWorkFlowName());
+					workFlowSearchGridDto.setWorkFlowLevel(wfDomain.getWorkFlowLevel());
+					workFlowSearchGridDto.setWorkServiceName(wfDomain.getTemplateServiceMasterDomain().getDescription());
+					workFlowSearchGridDto.setWorkFlowLevelMap(prepareWorkFlowLevel(wfDomain, userEmail));
+					workFlowSearchGridDto.setCommonPoolLevelInfo(getCommonPoolLevelInfo(wfDomain.getWorkFlowId()));
+					workFlowSearchGridDto.setDeliveredLevelInfo(getDeliveredLevelInfo(wfDomain.getWorkFlowId(),getAttachedUserWithSpecificRoles(wfDomain.getWorkFlowLevel(),wfDomain,userEmail, null),workFlowMasterDto.getTicketOrBatchID(),workFlowMasterDto.isIspremium(),workFlowMasterDto.getTicketOrBatchCommaSep()));
+					
+					commonPoolDataQuery.append(" SELECT DISTINCT ROWNUM AS serialno,'None'               AS assignuser,a.* FROM (SELECT wr.workflow_record_id AS workflowrecordid, cr.entityid                 AS id, TO_CHAR(cr.name)            AS name, TO_CHAR(cr.country)         AS country, cr.legalname                AS legalname, cr.domicilecntrydesc        AS domicilecountry, wr.tkt_id                   AS ticketid, s.description               AS status, wr.datecreated              AS addedtime, cr.serialno                 AS clientserialno, usrp.project_name           AS projectname, s.status_id                 AS status_id, wr.workflow_id              AS workflow_id FROM data_search cr, "+tableName+" wr, status s, user_projects usrp WHERE cr.template_id <> 2 AND cr.projectid      = wr.project_id AND cr.entityid       = wr.record_id AND wr.wf_status_id   = s.status_id AND usrp.project_id   = wr.project_id UNION SELECT wr.workflow_record_id AS workflowrecordid, cr.entityid                AS id, ( SELECT legalname FROM clientcounterparty WHERE entityid = cr.entityid ) AS name, ( SELECT domicilecntry FROM clientcounterparty WHERE entityid = cr.entityid ) AS country, ( SELECT legalname FROM counterparty_gold WHERE cdid = cr.cdid ) AS legalname, ( SELECT domicilecntry_desc FROM counterparty_gold WHERE cdid = cr.cdid )              AS domicilecountry, wr.tkt_id      AS ticketid, s.description  AS status, wr.datecreated AS addedtime, (SELECT agencyid FROM clientcounterpartyxref WHERE entityid = cr.entityid AND agencycode = 'HIER_ENR' )                 AS clientserialno, usrp.project_name AS projectname, s.status_id       AS status_id, wr.workflow_id    AS workflow_id FROM (SELECT * FROM (SELECT HME.*, ROW_NUMBER() OVER( PARTITION BY entityid ORDER BY matching_score DESC) AS RK FROM hierarchy_match_enr HME ) WHERE RK=1 ) cr, "+tableName+" wr, status s, user_projects usrp WHERE cr.projectid  = wr.project_id AND cr.entityid     = wr.record_id AND wr.wf_status_id = s.status_id AND usrp.project_id = wr.project_id ) a WHERE workflow_id = :workFlowID AND status_id     = :wfStatusID ORDER BY clientserialno ");
+					
+					String roleAction = workFlowMasterDto.getRoleAction();
+					long wfStatusID = getStatusIDByName(roleAction);
+					String roleLevel = workFlowMasterDto.getRoleLevel();
+					
+					if(roleAction.equalsIgnoreCase(REC_ALLOCATED) && roleLevel.equalsIgnoreCase(COMMON_POOL)){
+						
+						log.info("SqlQuery --> " +commonPoolDataQuery.toString());
+						List<WorkFlowGridData> workFlowLst = hibernatePersistenceManager.createSQLQuery(commonPoolDataQuery.toString())
+								.addScalar("serialNo", StandardBasicTypes.LONG)
+								.addScalar("assignUser", StandardBasicTypes.STRING)
+								.addScalar("workFlowRecordID", StandardBasicTypes.LONG)
+								.addScalar("id", StandardBasicTypes.STRING)
+								.addScalar("name", StandardBasicTypes.STRING)
+								.addScalar("country", StandardBasicTypes.STRING)
+								.addScalar("status", StandardBasicTypes.STRING)
+								.addScalar("addedTime", StandardBasicTypes.TIMESTAMP)
+								.addScalar("ticketID", StandardBasicTypes.LONG)
+								.addScalar("projectName", StandardBasicTypes.STRING)//Fetching Project Name, LP-740
+								.setLong("wfStatusID",wfStatusID).setLong("workFlowID", workFlowMasterDto.getWorkFlowId()).setResultTransformer(Transformers.aliasToBean(WorkFlowGridData.class)).list();
+						if(workFlowLst != null && !workFlowLst.isEmpty()){
+							workFlowSearchGridDto.setWorkFlowGridDataLst(workFlowLst);
+						}
+					}else{
+						
+						if(roleAction.equalsIgnoreCase(REC_APPROVED) && roleLevel.equals(QAANALYST)){
+							tableName = " WORKFLOW_RECORDS_AUD ";
+						}
+						sqlQuery.append(" SELECT DISTINCT ROWNUM AS serialno,a.* FROM (SELECT ui.first_name || ' ' || ui.last_name       AS assignuser, wr.workflow_record_id AS workflowrecordid, cr.entityid           AS id, TO_CHAR(cr.name)      AS name, TO_CHAR(cr.country)   AS country,cr.legalname          AS legalname,cr.domicilecntrydesc  AS domicilecountry,wr.tkt_id             AS ticketid,s.description         AS status,wr.datemodified        AS addedtime,cr.serialno           AS clientserialno,usrp.project_name     AS projectname,s.status_id           AS status_id,wr.workflow_id        AS workflow_id,wr.status_user        AS status_user,wr.batch_id           AS batch_id FROM data_search cr, "+tableName+" wr,status s,user_projects usrp,user_info ui WHERE cr.template_id <> 2 AND cr.projectid      = wr.project_id AND cr.entityid       = wr.record_id AND wr.wf_status_id   = s.status_id AND usrp.project_id   = wr.project_id AND wr.status_user    = ui.user_id UNION SELECT ui.first_name || ' ' || ui.last_name       AS assignuser, wr.workflow_record_id AS workflowrecordid, cr.entityid           AS id, ( SELECT legalname FROM clientcounterparty WHERE entityid = cr.entityid ) AS name, ( SELECT domicilecntry FROM clientcounterparty WHERE entityid = cr.entityid ) AS country, ( SELECT legalname FROM counterparty_gold WHERE cdid = cr.cdid ) AS legalname, ( SELECT domicilecntry_desc FROM counterparty_gold WHERE cdid = cr.cdid )              AS domicilecountry, wr.tkt_id      AS ticketid, s.description  AS status, wr.datemodified AS addedtime, (SELECT agencyid FROM clientcounterpartyxref WHERE entityid = cr.entityid AND agencycode = 'HIER_ENR' )                 AS clientserialno, usrp.project_name AS projectname, s.status_id       AS status_id, wr.workflow_id    AS workflow_id, wr.status_user    AS status_user, wr.batch_id       AS batch_id FROM (SELECT * FROM (SELECT HME.*, ROW_NUMBER() OVER( PARTITION BY entityid ORDER BY matching_score DESC) AS RK FROM hierarchy_match_enr HME ) WHERE RK=1 ) cr, "+tableName+" wr, status s, user_projects usrp, user_info ui WHERE cr.projectid  = wr.project_id AND cr.entityid     = wr.record_id AND wr.wf_status_id = s.status_id AND usrp.project_id = wr.project_id AND wr.status_user  = ui.user_id ) a WHERE workflow_id = :workFlowID AND status_id     = :wfStatusID ");
+						
+						if(roleAction.equalsIgnoreCase(REC_APPROVED) && roleLevel.equals(QAANALYST)){
+							if(workFlowMasterDto.isIspremium()){
+								//appendTicketOrBatch = " and wr.TKT_ID in ( "+workFlowMasterDto.getTicketOrBatchCommaSep()+" ) ";
+								appendTicketOrBatch = " and ticketID in ( "+workFlowMasterDto.getTicketOrBatchCommaSep()+" ) ";
+							}else{
+								//appendTicketOrBatch = " and wr.BATCH_ID = "+workFlowMasterDto.getTicketOrBatchID();
+								appendTicketOrBatch = " and BATCH_ID = "+workFlowMasterDto.getTicketOrBatchID();
+							}
+							sqlQuery.append(appendTicketOrBatch);
+						}
+						if(workFlowMasterDto.getAllocatedCommaSeperateUser()!=null && !workFlowMasterDto.getAllocatedCommaSeperateUser().isEmpty()){
+							sqlQuery.append(statusUserIDIn).append(workFlowMasterDto.getAllocatedCommaSeperateUser()).append(closeParameter);
+						}
+						sqlQuery.append(" ORDER by clientSerialNo ");
+						log.info("SqlQuery --> " +sqlQuery.toString());
+						List<WorkFlowGridData> workFlowLst = hibernatePersistenceManager.createSQLQuery(sqlQuery.toString())
+								.addScalar("serialNo", StandardBasicTypes.LONG)
+								.addScalar("assignUser", StandardBasicTypes.STRING)
+								.addScalar("workFlowRecordID", StandardBasicTypes.LONG)
+								.addScalar("id", StandardBasicTypes.STRING)
+								.addScalar("name", StandardBasicTypes.STRING)
+								.addScalar("country", StandardBasicTypes.STRING)
+								.addScalar("status", StandardBasicTypes.STRING)
+								.addScalar("addedTime", StandardBasicTypes.TIMESTAMP)
+								.addScalar("ticketID", StandardBasicTypes.LONG)
+								.addScalar("projectName", StandardBasicTypes.STRING)//Fetching Project Name, LP-740
+								.setLong("wfStatusID",wfStatusID).setLong("workFlowID", workFlowMasterDto.getWorkFlowId()).setResultTransformer(Transformers.aliasToBean(WorkFlowGridData.class)).list();
+						if(workFlowLst != null && !workFlowLst.isEmpty()){
+							workFlowSearchGridDto.setWorkFlowGridDataLst(workFlowLst);
+						}
+					}
+					
+					endTransaction();
+					
+				}else{
+					log.info("wfDomain Found Null");
+				}
+			}else{
+				log.info("WorkFlowID Found 0");
+			}
+		}catch(Exception e){
+			log.error(EXCEPTION,e);
+		}
+		return workFlowSearchGridDto;
+	}
+	
+	@Override
+	public WorkFlowSearchGridDto getWorkFlowRecordsByAllocatedUser(String userEmail,WorkFlowMasterDto workFlowMasterDto){
+		final String methodName = "getWorkFlowRecordsByAllocatedUser";
+		log.info("Inside "+methodName+" method of "+CLASSNAME);
+		StringBuilder sqlQuery = new StringBuilder();
+		WorkFlowSearchGridDto workFlowSearchGridDto = new WorkFlowSearchGridDto();
+		String statusUserIDIn = " and status_User in (";
+		String closeParameter = ")";
+		String tableName = " WORKFLOW_RECORDS ";
+		String allocatedUserID = String.valueOf(workFlowMasterDto.getAllocatedUserID()); 
+				
+		try{
+			
+			sqlQuery.append(" SELECT DISTINCT ROWNUM AS serialno,a.* FROM (SELECT ui.first_name || ' ' || ui.last_name       AS assignuser, wr.workflow_record_id AS workflowrecordid, cr.entityid           AS id, TO_CHAR(cr.name)      AS name, TO_CHAR(cr.country)   AS country,cr.legalname          AS legalname,cr.domicilecntrydesc  AS domicilecountry,wr.tkt_id             AS ticketid,s.description         AS status,wr.datemodified        AS addedtime,cr.serialno           AS clientserialno,usrp.project_name     AS projectname,s.status_id           AS status_id,wr.workflow_id        AS workflow_id,wr.status_user        AS status_user,wr.batch_id           AS batch_id FROM data_search cr, "+tableName+" wr,status s,user_projects usrp,user_info ui WHERE cr.template_id <> 2 AND cr.projectid      = wr.project_id AND cr.entityid       = wr.record_id AND wr.wf_status_id   = s.status_id AND usrp.project_id   = wr.project_id AND wr.status_user    = ui.user_id UNION SELECT ui.first_name || ' ' || ui.last_name       AS assignuser, wr.workflow_record_id AS workflowrecordid, cr.entityid           AS id, ( SELECT legalname FROM clientcounterparty WHERE entityid = cr.entityid ) AS name, ( SELECT domicilecntry FROM clientcounterparty WHERE entityid = cr.entityid ) AS country, ( SELECT legalname FROM counterparty_gold WHERE cdid = cr.cdid ) AS legalname, ( SELECT domicilecntry_desc FROM counterparty_gold WHERE cdid = cr.cdid )              AS domicilecountry, wr.tkt_id      AS ticketid, s.description  AS status, wr.datemodified AS addedtime, (SELECT agencyid FROM clientcounterpartyxref WHERE entityid = cr.entityid AND agencycode = 'HIER_ENR' )                 AS clientserialno, usrp.project_name AS projectname, s.status_id       AS status_id, wr.workflow_id    AS workflow_id, wr.status_user    AS status_user, wr.batch_id       AS batch_id FROM (SELECT * FROM (SELECT HME.*, ROW_NUMBER() OVER( PARTITION BY entityid ORDER BY matching_score DESC) AS RK FROM hierarchy_match_enr HME ) WHERE RK=1 ) cr, "+tableName+" wr, status s, user_projects usrp, user_info ui WHERE cr.projectid  = wr.project_id AND cr.entityid     = wr.record_id AND wr.wf_status_id = s.status_id AND usrp.project_id = wr.project_id AND wr.status_user  = ui.user_id ) a WHERE workflow_id = :workFlowID AND status_id     = :wfStatusID ");
+			
+			sqlQuery.append(statusUserIDIn).append(allocatedUserID).append(closeParameter);
+			sqlQuery.append(" ORDER by clientSerialNo ");
+			log.info("SqlQuery --> " +sqlQuery.toString());
+			
+			List<WorkFlowGridData> workFlowLst = hibernatePersistenceManager.createSQLQuery(sqlQuery.toString())
+					.addScalar("serialNo", StandardBasicTypes.LONG)
+					.addScalar("assignUser", StandardBasicTypes.STRING)
+					.addScalar("workFlowRecordID", StandardBasicTypes.LONG)
+					.addScalar("id", StandardBasicTypes.STRING)
+					.addScalar("name", StandardBasicTypes.STRING)
+					.addScalar("country", StandardBasicTypes.STRING)
+					.addScalar("status", StandardBasicTypes.STRING)
+					.addScalar("addedTime", StandardBasicTypes.TIMESTAMP)
+					.addScalar("ticketID", StandardBasicTypes.LONG)
+					.addScalar("projectName", StandardBasicTypes.STRING)//Fetching Project Name, LP-740
+					.setLong("wfStatusID",StatusConstants.REC_LOCKED.getID().longValue()).setLong("workFlowID", workFlowMasterDto.getWorkFlowId()).setResultTransformer(Transformers.aliasToBean(WorkFlowGridData.class)).list();
+			if(workFlowLst != null && !workFlowLst.isEmpty()){
+				workFlowSearchGridDto.setWorkFlowGridDataLst(workFlowLst);
+			}
+			
+		}catch(Exception e){
+			log.error(EXCEPTION,e);
+		}
+		
+		return workFlowSearchGridDto;
+	}
+
+
+	private WorkFlowLevelDto getDeliveredLevelInfo(long workFlowId,String attachedUser,Long batchId,boolean ispremium,String commaSepTik) {
+		final String methodName = "getDeliveredLevelInfo";
+		log.info("Inside "+methodName+" method of "+CLASSNAME);
+		WorkFlowLevelDto workFlowLevelDto = new WorkFlowLevelDto();
+		StringBuilder sqlQuery = new StringBuilder();
+		try{
+			String countQuery = " (select count(*) as ";
+			String individualPoolTotalCount = "individualPoolTotalCount";
+			String recApproved = " and WF_STATUS_ID = (select STATUS_ID from status where status = 'REC_APPROVED') ";
+			String statusUserIn = " and STATUS_USER in (";
+			String closeParameter = "))";
+			StringBuffer fromQueryDelivered = new StringBuffer();
+			
+			if(batchId != null && batchId !=0L){
+				fromQueryDelivered.append(" from WORKFLOW_RECORDS_AUD where WORKFLOW_ID = :workFlOWID and BATCH_ID in ( "+batchId +" ) ");
+			}else{
+				if(null != commaSepTik){
+					fromQueryDelivered.append(" from WORKFLOW_RECORDS_AUD where WORKFLOW_ID = :workFlOWID and TKT_ID in ( "+commaSepTik+" )"); 
+				}
+			}
+			
+			sqlQuery.append(countQuery).append(individualPoolTotalCount).append(fromQueryDelivered).append(recApproved).append(statusUserIn).append(attachedUser).append(closeParameter);
+			
+			log.info("SqlQuery with Records --> " +sqlQuery.toString());
+			workFlowLevelDto  = (WorkFlowLevelDto) hibernatePersistenceManager.createSQLQuery(sqlQuery.toString())
+					.addScalar(individualPoolTotalCount,StandardBasicTypes.LONG)
+					.setLong("workFlOWID", workFlowId)
+					//	.setLong("tktOrBatchID", tktOrBatchID)
+					//	.setParameter("tktOrBatchID", batchId)
+					.setResultTransformer(Transformers.aliasToBean(WorkFlowLevelDto.class)).uniqueResult();
+			workFlowLevelDto.setCommaseperatedAllocatedUser(attachedUser);
+		}catch(Exception e){
+			log.error(EXCEPTION,e);
+		}
+		return workFlowLevelDto;
+	}
+
+	private WorkFlowLevelDto getCommonPoolLevelInfo(long workFlowId) {
+		final String methodName = "getCommonPoolLevelInfo";
+		log.info("Inside "+methodName+" method of "+CLASSNAME);
+		WorkFlowLevelDto workFlowLevelDto = new WorkFlowLevelDto();
+		StringBuilder sqlQuery = new StringBuilder();
+		try{
+			String countQuery = " (select count(*) as ";
+			String fromQuery = " from WORKFLOW_RECORDS where WORKFLOW_ID = :workFlOWID";
+			String recAllocated = " and WF_STATUS_ID = (select STATUS_ID from status where status = 'REC_ALLOCATED')) ";
+			String individualPoolTotalCount = "individualPoolTotalCount";
+			sqlQuery.append(countQuery).append(individualPoolTotalCount).append(fromQuery).append(recAllocated);
+			log.info("SqlQuery with Records --> " +sqlQuery.toString());
+			workFlowLevelDto  = (WorkFlowLevelDto) hibernatePersistenceManager.createSQLQuery(sqlQuery.toString())
+					.addScalar(individualPoolTotalCount,StandardBasicTypes.LONG)
+					.setLong("workFlOWID", workFlowId)
+					.setResultTransformer(Transformers.aliasToBean(WorkFlowLevelDto.class)).uniqueResult();
+		}catch(Exception e){
+			log.error(EXCEPTION,e);
+		}
+		return workFlowLevelDto;
+	}
+
+	private TreeMap<Long,WorkFlowLevelDto> prepareWorkFlowLevel(WorkFlowMasterDomain wfMasterDomain,String userEmail){
+		final String methodName = "prepareWorkFlowLevel";
+		log.info("Inside "+methodName+" method of "+CLASSNAME);
+		WorkFlowLevelDto workFlowLevelDto = null;
+		Map<Long,WorkFlowLevelDto> workFlowLevelMap = new TreeMap<>();
+		try{
+			if(!wfMasterDomain.getWorkFlowLevel().equals(0)){
+				for (long level = 1; level <= wfMasterDomain.getWorkFlowLevel(); level++) {
+					workFlowLevelDto = new WorkFlowLevelDto();
+					getRolesDto(level,workFlowLevelDto);
+					String allocatedUser = getAttachedUserWithSpecificRoles(level,wfMasterDomain, userEmail, workFlowLevelDto);
+					workFlowLevelDto.setCommaseperatedAllocatedUser(allocatedUser);
+					workFlowLevelDto.setAllocatedUserList(getAllocatedUserList(wfMasterDomain.getWorkFlowId(), allocatedUser));
+					getRolesindividualApprovedRejectedCount(allocatedUser,wfMasterDomain.getWorkFlowId(),workFlowLevelDto);
+					/*if(level == wfMasterDomain.getWorkFlowLevel() ){
+						workFlowLevelDto.setSubmittedPoolFlag("N");
+						workFlowLevelDto.setRejectedPoolFlag("N");
+					}*/
+					String[] actionFlags = getActionForLevels(level, wfMasterDomain.getWorkFlowLevel()).split(",");
+					workFlowLevelDto.setSubmittedPoolFlag(actionFlags[0]);
+					workFlowLevelDto.setRejectedPoolFlag(actionFlags[1]);
+					
+					workFlowLevelMap.put(level,workFlowLevelDto);
+				}
+			}else{
+				log.info("WorkFlowLevel Found 0");
+			}
+		}catch(Exception e){
+			log.error(EXCEPTION,e);
+		}
+		return (TreeMap<Long, WorkFlowLevelDto>) workFlowLevelMap;
+	}
+	
+	
+	private String getActionForLevels(long level ,long workflowLevel){
+		
+		String submittedChar = "N";
+		String rejeectedChar = "N";
+		
+		//Left end
+		if(level==1 && workflowLevel==1){
+			submittedChar = "N";
+			rejeectedChar = "N";
+		}else if(level==1 && workflowLevel>1){
+			submittedChar = "Y";
+			rejeectedChar = "N";
+		}
+		
+		//Middle
+		if(level >1 && level < workflowLevel){
+			submittedChar = "Y";
+			rejeectedChar = "Y";
+		}
+		
+		
+		//Right end
+		if(level > 1 && level == workflowLevel){
+			submittedChar = "N";
+			rejeectedChar = "Y";
+		}
+		
+			
+		return submittedChar.concat(",").concat(rejeectedChar);
+	}
+	
+	
+	private void getRolesindividualApprovedRejectedCount(String allocatedUser,long workFlowId, WorkFlowLevelDto workFlowLevelDto) {
+		final String methodName = "getRolesindividualApprovedRejectedCount";
+		log.info("Inside "+methodName+" method of "+CLASSNAME);
+		StringBuilder sqlQuery = new StringBuilder();
+		try{
+			String fromQuery = " from WORKFLOW_RECORDS where WORKFLOW_ID = :workFlOWID";
+			String countQuery = " (select count(*) as ";
+			String recLocked = " and WF_STATUS_ID = (select STATUS_ID from status where status = 'REC_LOCKED') ";
+			String recApproved = " and WF_STATUS_ID = (select STATUS_ID from status where status = 'REC_APPROVED') ";
+			String recRejected = " and WF_STATUS_ID = (select STATUS_ID from status where status = 'REC_REJECTED') ";
+			String statusUserIn = " and STATUS_USER in (";
+			String individualPoolTotalCount = "individualPoolTotalCount";
+			String approvedTotalCount = "approvedTotalCount";
+			String rejectedTotalCount = "rejectedTotalCount";
+			
+			sqlQuery.append(" select * from ")
+					.append(countQuery).append(individualPoolTotalCount).append(fromQuery).append(recLocked).append(statusUserIn).append(allocatedUser).append(")), ")
+					.append(countQuery).append(approvedTotalCount).append(fromQuery).append(recApproved).append(statusUserIn).append(allocatedUser).append(")), ")
+					.append(countQuery).append(rejectedTotalCount).append(fromQuery).append(recRejected).append(statusUserIn).append(allocatedUser).append(")) ");
+			log.info("SqlQuery with Records --> " +sqlQuery.toString());
+			WorkFlowLevelDto workFlowLevelDtoDb  = (WorkFlowLevelDto) hibernatePersistenceManager.createSQLQuery(sqlQuery.toString())
+					.addScalar(individualPoolTotalCount,StandardBasicTypes.LONG)
+					.addScalar(approvedTotalCount,StandardBasicTypes.LONG)
+					.addScalar(rejectedTotalCount,StandardBasicTypes.LONG)
+					.setLong("workFlOWID", workFlowId)
+					.setResultTransformer(Transformers.aliasToBean(WorkFlowLevelDto.class)).uniqueResult();
+			if(workFlowLevelDtoDb != null){
+				workFlowLevelDto.setIndividualPoolTotalCount(workFlowLevelDtoDb.getIndividualPoolTotalCount());
+				workFlowLevelDto.setApprovedTotalCount(workFlowLevelDtoDb.getApprovedTotalCount());
+				workFlowLevelDto.setRejectedTotalCount(workFlowLevelDtoDb.getRejectedTotalCount());
+			}
+		}catch(Exception e){
+			log.error(EXCEPTION,e);
+		}
+	}
+
+	
+
+	private void getRolesDto(long roleLevel, WorkFlowLevelDto workFlowLevelDto) {
+		final String methodName = "getRolesDto";
+		log.info("Inside "+methodName+" method of "+CLASSNAME);
+		try{
+			Criteria rolesCriteria = createCriteria(RolesDomain.class);
+			rolesCriteria.add(Restrictions.eq("roleLevel",roleLevel));
+			rolesCriteria.add(Restrictions.ne("type",EXSUPER));
+			
+			RolesDomain rolesDomain = (RolesDomain) rolesCriteria.uniqueResult();
+			if(rolesDomain != null){
+				workFlowLevelDto.setRolesDto(CommonUtils.convertObject(rolesDomain, RolesDto.class));
+			}else{
+				log.info("rolesDomain Domain Found Null");
+			}
+		}catch(Exception e){
+			log.error(EXCEPTION,e);
+		}
+		
+	}
+	
+	private List<WorkFlowUserDto> getAllocatedUserList(long workFlowID,String userIDString){
+		final String methodName = "getAllocatedUserList";
+		log.info("Inside "+methodName+" method of "+CLASSNAME);
+		String statusUserIDIn = " and USERID in (";
+		String closeParameter = ")";
+		List<WorkFlowUserDto> workFlowUserDtos = null;
+		try{
+			StringBuilder sqlQuery = new StringBuilder();
+			
+			sqlQuery.append(" select b.USERID as id,count(a.STATUS_USER) as count,(c.FIRST_NAME ||' '||c.LAST_NAME) as userName, d.ROLE_ID as roleID,d.TYPE as roleType  from  ")
+			.append(" (select status_user,workflow_id from WORKFLOW_RECORDS where WF_STATUS_ID = (select STATUS_ID from status where status = 'REC_LOCKED')) a, ")
+			.append(" (select userid,wf_id from WORKFLOW_DETAILS where WF_ID = :workFlowID ").append(statusUserIDIn).append(userIDString).append(closeParameter).append(" )b, ")
+			.append(" (select user_id,first_name,last_name from user_info) c, (select ROLE_ID,TYPE from ROLES)d, ( select USER_ID,role_id from USER_ROLES)e ")
+			.append(" where a.workflow_id(+)=b.wf_id ")
+			.append(" and b.userid=a.status_user(+) ")
+			.append(" and c.user_id=b.userid And d.role_id = e.role_id  And e.USER_ID = c.USER_ID ")
+			.append(" group by b.USERID,(c.FIRST_NAME ||' '||c.LAST_NAME) , d.role_id,d.TYPE ");
+			
+			log.info("SqlQuery getAllocatedUserList --> " +sqlQuery.toString());
+			workFlowUserDtos = (List<WorkFlowUserDto>) hibernatePersistenceManager.createSQLQuery(sqlQuery.toString())
+					.addScalar("id",StandardBasicTypes.LONG)
+					.addScalar("count",StandardBasicTypes.LONG)
+					.addScalar("userName",StandardBasicTypes.STRING)
+					.addScalar("roleID",StandardBasicTypes.LONG)
+					.addScalar("roleType",StandardBasicTypes.STRING)
+					.setLong("workFlowID", workFlowID).setResultTransformer(Transformers.aliasToBean(WorkFlowUserDto.class)).list();
+			
+		}catch(Exception e){
+			log.error(EXCEPTION,e);
+		}
+		return workFlowUserDtos;
+	}
+	
+	/*private WorkFlowSearchGridDto getWorkFlowRecordsCount(String analystUser,String qAUser,String adminUser,long workFlowID,Long batchId,boolean ispemium, String commaSepTik){
+		final String methodName = "getWorkFlowRecordsCount";
+		log.info("Inside "+methodName+" method of "+CLASSNAME);
+		WorkFlowSearchGridDto dto = new WorkFlowSearchGridDto();
+		dto.setWorkFlowGridDataLst(new ArrayList<WorkFlowGridData>());
+		try{
+			StringBuilder sqlQuery = new StringBuilder();
+			String fromQuery = " from WORKFLOW_RECORDS where WORKFLOW_ID = :workFlOWID";
+			
+			String fromQueryDelivered = null;
+			if(batchId != null && batchId !=0L){
+				fromQueryDelivered = " from WORKFLOW_RECORDS_AUD where WORKFLOW_ID = :workFlOWID and BATCH_ID in ( "+batchId +" ) ";
+			}else{
+				fromQueryDelivered = " from WORKFLOW_RECORDS_AUD where WORKFLOW_ID = :workFlOWID and TKT_ID in ( "+commaSepTik+" ) ";
+			}
+			
+			String countQuery = " (select count(*) as ";
+			String recAllocated = " and WF_STATUS_ID = (select STATUS_ID from status where status = 'REC_ALLOCATED') ";
+			String recLocked = " and WF_STATUS_ID = (select STATUS_ID from status where status = 'REC_LOCKED') ";
+			String recApproved = " and WF_STATUS_ID = (select STATUS_ID from status where status = 'REC_APPROVED') ";
+			String recRejected = " and WF_STATUS_ID = (select STATUS_ID from status where status = 'REC_REJECTED') ";
+			String statusUserIn = " and STATUS_USER in (";
+			String commonPool = "commonPool";
+			String analystAllocation = "analystAllocation";
+			String adminAllocation = "adminAllocation";
+			String qaAllocation = "qaAllocation";
+			String deliveredAllocation = "deliveredAllocation";
+			String analystApprove = "analystApprove";
+			String adminApprove = "adminApprove";
+			String adminRejected = "adminRejected";
+			String qaRejected = "qaRejected";
+			String totalWfRecordCount = "totalWfRecordCount";
+			String lastUpdatedDate = "lastUpdatedDate";
+			sqlQuery.append(" select * from ")
+					.append(countQuery).append(commonPool).append(fromQuery).append(recAllocated).append(" ), ")
+					.append(countQuery).append(analystAllocation).append(fromQuery).append(recLocked).append(statusUserIn).append(analystUser).append(")), ")
+					.append(countQuery).append(adminAllocation).append(fromQuery).append(recLocked).append(statusUserIn).append(adminUser).append(")), ")
+					.append(countQuery).append(qaAllocation).append(fromQuery).append(recLocked).append(statusUserIn).append(qAUser).append(")), ")
+					.append(countQuery).append(deliveredAllocation).append(fromQueryDelivered).append(recApproved).append(statusUserIn).append(qAUser).append(")),")
+					.append(countQuery).append(analystApprove).append(fromQuery).append(recApproved).append(statusUserIn).append(analystUser).append(")), ")
+					.append(countQuery).append(adminApprove).append(fromQuery).append(recApproved).append(statusUserIn).append(adminUser).append(")), ")
+					.append(countQuery).append(adminRejected).append(fromQuery).append(recRejected).append(statusUserIn).append(adminUser).append(")), ")
+					.append(countQuery).append(qaRejected).append(fromQuery).append(recRejected).append(statusUserIn).append(qAUser).append(")), ")
+					.append(countQuery).append(totalWfRecordCount).append(fromQuery).append(" ), ")
+					.append(" (select max(DATEMODIFIED) as ").append(lastUpdatedDate).append(fromQuery).append(" ) ");
+			
+			log.info("SqlQuery with Records --> " +sqlQuery.toString());
+			dto  = (WorkFlowSearchGridDto) hibernatePersistenceManager.createSQLQuery(sqlQuery.toString())
+					.addScalar(commonPool,StandardBasicTypes.LONG)
+					.addScalar(analystAllocation,StandardBasicTypes.LONG)
+					.addScalar(adminAllocation,StandardBasicTypes.LONG)
+					.addScalar(qaAllocation,StandardBasicTypes.LONG)
+					.addScalar(deliveredAllocation,StandardBasicTypes.LONG)
+					.addScalar(analystApprove,StandardBasicTypes.LONG)
+					.addScalar(adminApprove,StandardBasicTypes.LONG)
+					.addScalar(adminRejected,StandardBasicTypes.LONG)
+					.addScalar(qaRejected,StandardBasicTypes.LONG)
+					.addScalar(totalWfRecordCount,StandardBasicTypes.LONG)
+					.addScalar(lastUpdatedDate,StandardBasicTypes.TIMESTAMP)
+					.setLong("workFlOWID", workFlowID)
+				//	.setLong("tktOrBatchID", tktOrBatchID)
+				//	.setParameter("tktOrBatchID", batchId)
+					.setResultTransformer(Transformers.aliasToBean(WorkFlowSearchGridDto.class)).uniqueResult();
+			
+			dto.setTotalWfRecordCount(
+					(dto.getCommonPool()+dto.getAnalystAllocation()+dto.getAdminAllocation()+dto.getQaAllocation()+dto.getAnalystApprove()+dto.getAdminApprove()+dto.getAdminRejected()+dto.getQaRejected()+dto.getDeliveredAllocation())
+					);
+			
+			if(dto.getTotalWfRecordCount()==0){
+				dto.setWorkFlowStatus(CommonConstants.WF_NEW_FREE);
+			}else if(dto.getTotalWfRecordCount() == dto.getCommonPool()){
+				dto.setWorkFlowStatus(CommonConstants.WF_IDLE);
+			}else if(dto.getTotalWfRecordCount() == dto.getDeliveredAllocation()){
+				dto.setWorkFlowStatus(CommonConstants.WF_COMPLETED);
+			}else{
+				dto.setWorkFlowStatus(CommonConstants.WF_IN_PROGRESS);
+			}
+			
+		}catch(Exception e){
+			log.error(EXCEPTION,e);
+			rollBack();
+		}
+		return dto;
+	}*/
+	
+	private String getAttachedUserWithSpecificRoles(long level,WorkFlowMasterDomain masterDomain, String userEmail, WorkFlowLevelDto optionalObject) {
+		final String methodName = "getAttachedUserWithWorkFlow";
+		log.info("Inside " + methodName + " method of " + CLASSNAME);
+		List<String> userList = new ArrayList<>();
+		String attachedUser = null;
+		try {
+			Set<WorkFlowDetailsDomain> workFlowDetailsSet = masterDomain.getWorkFlowDetailsSet();
+			if (workFlowDetailsSet != null && !workFlowDetailsSet.isEmpty()) {
+				IUserDao iUserDao = DaoManager.USER.getDao(userEmail,IUserDao.class);
+				for (WorkFlowDetailsDomain workFlowDetailsDomain : workFlowDetailsSet) {
+					UserDomain userDomain = iUserDao.userDomainById(workFlowDetailsDomain.getAssociateUserId());
+					if (userDomain.getUserRole().getRoleLevel().equals(level)) {
+						userList.add(String.valueOf(workFlowDetailsDomain.getAssociateUserId()));
+					}
+					if(optionalObject!= null &&  userDomain.getUserRole().getType().equals(RolesEnum.EXSUPER.getRoleTypeString())){
+						optionalObject.setIsSuperInWorkflow("Y");
+					}
+				}
+				attachedUser = org.springframework.util.StringUtils.arrayToCommaDelimitedString(userList.toArray());
+			}
+		} catch (Exception e) {
+			log.error(EXCEPTION, e);
+		}
+		return attachedUser;
+	}
+	
+	private List<Long> getAttachedUserWithSpecificRolesList(long level,WorkFlowMasterDomain masterDomain, String userEmail, WorkFlowLevelDto optionalObject) {
+		final String methodName = "getAttachedUserWithWorkFlow";
+		log.info("Inside " + methodName + " method of " + CLASSNAME);
+		List<Long> userList = new ArrayList<>();
+		try {
+			Set<WorkFlowDetailsDomain> workFlowDetailsSet = masterDomain.getWorkFlowDetailsSet();
+			if (workFlowDetailsSet != null && !workFlowDetailsSet.isEmpty()) {
+				IUserDao iUserDao = DaoManager.USER.getDao(userEmail,IUserDao.class);
+				for (WorkFlowDetailsDomain workFlowDetailsDomain : workFlowDetailsSet) {
+					UserDomain userDomain = iUserDao.userDomainById(workFlowDetailsDomain.getAssociateUserId());
+					if (userDomain.getUserRole().getRoleLevel().equals(level)) {
+						userList.add(workFlowDetailsDomain.getAssociateUserId());
+					}
+					if(optionalObject!= null &&  userDomain.getUserRole().getType().equals(RolesEnum.EXSUPER.getRoleTypeString())){
+						optionalObject.setIsSuperInWorkflow("Y");
+					}
+				}
+			}
+		} catch (Exception e) {
+			log.error(EXCEPTION, e);
+		}
+		return userList;
+	}
+	
+	private Map<String, String> getAttachedUserWithWorkFlow(long workFlowID,IUserDao iUserDao){
+		final String methodName = "getAttachedUserWithWorkFlow";
+		log.info("Inside "+methodName+" method of "+CLASSNAME);
+		Map<String, String> map = new HashMap<>();
+		List<String> adminUser = new ArrayList<>();
+		List<String> analystUser = new ArrayList<>();
+		List<String> qAUser = new ArrayList<>();
+		try{
+			if(workFlowID != 0){
+				Criteria workFlowCriteria = createCriteria(WorkFlowMasterDomain.class);
+				workFlowCriteria.add(Restrictions.eq("workFlowId",workFlowID));
+				WorkFlowMasterDomain wfDomain = (WorkFlowMasterDomain) workFlowCriteria.uniqueResult();
+				if(wfDomain != null){
+					Set<WorkFlowDetailsDomain> workFlowDetailsSet = wfDomain.getWorkFlowDetailsSet();
+					if(workFlowDetailsSet != null && !workFlowDetailsSet.isEmpty()){
+						for (WorkFlowDetailsDomain workFlowDetailsDomain : workFlowDetailsSet) {
+							UserDomain userDomain = iUserDao.userDomainById(workFlowDetailsDomain.getAssociateUserId());
+							if(userDomain.getUserRole().getType().equals(DATAANALYST)){
+								analystUser.add(String.valueOf(workFlowDetailsDomain.getAssociateUserId()));
+							}else if(userDomain.getUserRole().getType().equals(ADMIN)){
+								adminUser.add(String.valueOf(workFlowDetailsDomain.getAssociateUserId()));
+							}else if(userDomain.getUserRole().getType().equals(QAANALYST)){
+								qAUser.add(String.valueOf(workFlowDetailsDomain.getAssociateUserId()));
+							}
+						}
+						map.put(DATAANALYST,org.springframework.util.StringUtils.arrayToCommaDelimitedString(analystUser.toArray()));
+						map.put(ADMIN,org.springframework.util.StringUtils.arrayToCommaDelimitedString(adminUser.toArray()));
+						map.put(QAANALYST,org.springframework.util.StringUtils.arrayToCommaDelimitedString(qAUser.toArray()));
+					}
+				}
+			}else{
+				log.info("workFlowID Found 0");
+			}
+		}catch(Exception e){
+		log.error(EXCEPTION,e);
+		}
+		return map;
+	}
+	
+	@Override
+	//public WorkFlowSearchGridDto getWorkFlowStatusAndUpdatedDateByWorkFlowId(String userEmail,long workFlowID,long ticketORBatchID,boolean ispemium) throws ProcessFailedException{
+		public WorkFlowSearchGridDto getWorkFlowStatusAndUpdatedDateByWorkFlowId(String userEmail,long workFlowID) throws ProcessFailedException{
+		final String methodName = "getWorkFlowStatusAndUpdatedDateByWorkFlowId";
+		log.info("Inside "+methodName+" method of "+CLASSNAME);
+		WorkFlowSearchGridDto dto = new WorkFlowSearchGridDto();
+		try{
+			if(workFlowID != 0){
+				beginTransaction();
+				
+				/*IUserDao iUserDao = DaoManager.USER.getDao(userEmail,IUserDao.class);
+				Map<String, String> attachedUserWithWorkFlow = getAttachedUserWithWorkFlow(workFlowID, iUserDao);
+				String analystUser = attachedUserWithWorkFlow.get(DATAANALYST);
+				String adminUser = attachedUserWithWorkFlow.get(ADMIN);
+				String qAUser = attachedUserWithWorkFlow.get(QAANALYST);*/
+				//WorkFlowSearchGridDto workFlowSearchGridDto = getWorkFlowRecordsCount(analystUser, qAUser, adminUser,workFlowID,ticketORBatchID,ispemium);
+				
+				Criteria wfStatusCriteria = createCriteria(WorkFlowStatusDomain.class);
+				wfStatusCriteria.add(Restrictions.eq(WORKFLOW_ID,workFlowID));
+				WorkFlowStatusDomain workFlowStatusDomain = (WorkFlowStatusDomain) wfStatusCriteria.uniqueResult();
+				if(workFlowStatusDomain != null){
+					dto.setWorkFlowStatus(workFlowStatusDomain.getWorkFlowStatus());
+					dto.setLastUpdatedDate(workFlowStatusDomain.getDateModified());
+					dto.setWorkFlowStatusID(workFlowStatusDomain.getWorkFlowStatusId());
+				}
+			}else{
+				log.info("workFlowID Found 0");
+				throw new ProcessFailedException(" workFlowID Found 0 ");
+			}
+			endTransaction();
+		}catch(Exception e){
+			log.error(EXCEPTION,e);
+			throw new ProcessFailedException("getWorkFlowStatusAndUpdatedDateByWorkFlowId Failed.");
+		}
+		return dto;
+	}
+	
+	
+	private long getStatusIDByName(String statusName){
+		final String methodName = "getAttachedUserWithWorkFlow";
+		log.info("Inside "+methodName+" method of "+CLASSNAME);
+		long statusID = 0;
+		if(statusName != null && !statusName.isEmpty()){
+			Criteria statusCriteria = createCriteria(StatusDomain.class);
+			statusCriteria.add(Restrictions.eq("status",statusName));
+			StatusDomain statusDomain = (StatusDomain) statusCriteria.uniqueResult();
+			statusID = statusDomain.getId();
+		}else{
+			log.info("statusName Found Null");
+		}
+		return statusID;
+		
+	}
+
+	@Override
+	public List<Long> getAssociatedWorkflowsForUser(Long userId){
+		List<Long> associatedWf = new ArrayList<Long>();
+		try{
+			beginTransaction();
+			Criteria workFlowCriteria = createCriteria(WorkFlowDetailsDomain.class);
+			workFlowCriteria.add(Restrictions.eq(ASSOCIATE_USERID,userId));
+			List<WorkFlowDetailsDomain> result = workFlowCriteria.list();
+			for (WorkFlowDetailsDomain wfDomain : result) {
+				associatedWf.add(wfDomain.getWorkFlowMaster().getWorkFlowId());
+			}
+			endTransaction();
+		}catch(Exception e){
+			log.error(EXCEPTION,e);
+		}
+		return associatedWf;
+
+	}
+
+	/**
+	 * This method is used for getting workflowRecord count by ProjectID.
+	 * @param projectID This is the first paramter to isRecordsExitsByProjectID method
+	 * @return boolean : if count >0 then true or false. 
+	 */
+	@Override
+	public boolean isRecordsExitsByProjectID(long projectID) {
+		boolean result = false;
+		beginTransaction();
+		Criteria criteria = hibernatePersistenceManager.createCriteria(WorkFlowDomain.class);
+		criteria.add(Restrictions.eq("projectId",projectID));
+		criteria.setProjection(Projections.rowCount());
+		Long count = (Long) criteria.uniqueResult();
+		if(count>0){
+			result = true;
+		}else{
+			result = false;
+		}
+		endTransaction();
+		return result;
+	}
+	
+	/**
+	 * This function checks is user is associated with any workflow or not
+	 * @param userId
+	 * @return boolean
+	 */
+	@Override
+	public boolean isUserAssociatedWithWorkflow(Long userId){
+		boolean result = false;
+		try{
+			//requestPlatinumConnection();releasePlatinumConnection();	//TODO: To remove this line. Adding to remove null pointer exception
+			beginTransaction();
+			Criteria workFlowCriteria = createCriteria(WorkFlowDetailsDomain.class);
+			workFlowCriteria.add(Restrictions.eq(ASSOCIATE_USERID,userId));
+			List<WorkFlowDetailsDomain> wfList = workFlowCriteria.list();
+			if(null != wfList && !wfList.isEmpty()){
+				result = true;
+			}
+			endTransaction();
+		}catch(Exception e){
+			log.error(EXCEPTION,e);
+		}
+		return result;
+
+	}
+	
+	private List<WorkFlowMasterDto> getDomainToDto(List<WorkFlowMasterDomain> workFlowMasterDomainLst){
+		final String methodName = "getDomainToDto";
+		log.info("Inside "+methodName+" method of "+CLASSNAME);
+		List<WorkFlowMasterDto> lsDtos = new ArrayList<>();
+		WorkFlowMasterDto dto;
+		if(workFlowMasterDomainLst != null && !workFlowMasterDomainLst.isEmpty()){
+			for (WorkFlowMasterDomain workFlowMasterDomain : workFlowMasterDomainLst) {
+				dto = new WorkFlowMasterDto();
+				dto.setWorkFlowId(workFlowMasterDomain.getWorkFlowId());
+				dto.setWorkFlowName(workFlowMasterDomain.getWorkFlowName());
+				lsDtos.add(dto);
+			}
+		}
+		return lsDtos;
+	}
+	
+	@Override
+	public void updateWorkFlowStatus(long wf_id, String wf_status) {
+		final String methodName = "updateWorkFlowStatus";
+		log.info("Inside " + methodName + " method of " + CLASSNAME);
+		WorkFlowStatusDomain workFlowStatusDomain = null;
+		if(wf_id != 0 && wf_status!= null && !wf_status.isEmpty()){
+			try {
+				if (wf_status.equals(CommonConstants.WF_NEW_FREE)){
+					workFlowStatusDomain = new WorkFlowStatusDomain();
+					workFlowStatusDomain.setWorkFlowId(wf_id);
+					workFlowStatusDomain.setWorkFlowStatus(CommonConstants.WF_NEW_FREE);
+					hibernatePersistenceManager.saveOrUpdate(workFlowStatusDomain);
+				}else{
+					Criteria workFlowStatusCriteria = createCriteria(WorkFlowStatusDomain.class);
+					workFlowStatusCriteria.add(Restrictions.eq(WORKFLOW_ID, wf_id));
+					workFlowStatusDomain = (WorkFlowStatusDomain) workFlowStatusCriteria.uniqueResult();
+					if(workFlowStatusDomain != null){
+						workFlowStatusDomain.setWorkFlowStatus(wf_status);
+						//changes for LP-1049 /1346/1341 - Workflow re usability: Currently for each new project, user is asked to create a new workflow if existing workflow is in progress state.
+						workFlowStatusDomain.setDateModified(new Timestamp(new Date().getTime()));
+						hibernatePersistenceManager.saveOrUpdate(workFlowStatusDomain);
+					}
+				}
+			}catch(Exception e) {
+				log.error(EXCEPTION,e);
+				rollBack();
+			}
+		}else{
+			log.info("wf_id Found Zero or wf_status founf Empty");
+		}
+	}
+	
+	/**
+	 * This method is used for getting saveWorkFlowRecordsWithTicket it will created ticket and mapping ticket entry in the workflow_records table
+	 * @param WorkflowRecordsMappingCollection  This is the first parameter to saveWorkFlowRecordsWithTicket method
+	 * @param userDTO for getting client id
+	 * @param countDto return type
+	 * @return WorkFlowRecordsCountDto 
+	 */
+	private WorkFlowRecordsCountDto saveWorkFlowRecordsWithTicket(WorkflowRecordsMappingCollection mappingCollection, UserDTO userDTO, WorkFlowRecordsCountDto countDto,String description) throws ObjectNotSupportedException, EmailException {
+		final String methodName = "saveWorkFlowRecordsWithTicket";
+		log.info("Inside " + methodName + " method of " + CLASSNAME);
+		Criteria criteria = null;
+		Long existRecords = 0l;
+		TicketDomain ticketDomain = null;
+		long recordCount = 0;
+		CompanyDomain companyDomain = null;
+		StatusDomain statusDomain = null;
+		TemplateServiceMasterDomain templateServiceMasterDomain = null;
+		ProjectTemplateMasterDomain projectTemplateMasterDomain = null;
+		//long wofID = mappingCollection.getMappedDtos().get(0).getWorkFlowId();
+		
+		if(countDto.getWorkFlowRecordsCountMap().containsKey("EXIST_RECORDS")){
+			existRecords = countDto.getWorkFlowRecordsCountMap().get("EXIST_RECORDS");
+		}
+		
+		if(existRecords>0 && !mappingCollection.isProcess()){
+			countDto.setProcess(false);
+			return countDto;
+		}else if(existRecords>0 && mappingCollection.isProcess()){
+			List<Long> existDBRecords = countDto.getExistRecords();
+
+			requestPlatinumConnection();
+			beginTransaction();
+			
+			criteria = createCriteria(CompanyDomain.class);
+			criteria.add(Restrictions.eq("id",userDTO.getCompanyId()));
+			companyDomain = (CompanyDomain) criteria.uniqueResult();
+			
+			criteria = createCriteria(StatusDomain.class);
+			criteria.add(Restrictions.eq("id",StatusConstants.OPEN.getID()));
+			statusDomain = (StatusDomain) criteria.uniqueResult();
+			
+			criteria = createCriteria(ProjectTemplateMasterDomain.class);
+			criteria.add(Restrictions.eq("templateId",mappingCollection.getTemplateId()));
+			projectTemplateMasterDomain = (ProjectTemplateMasterDomain) criteria.uniqueResult();
+			
+			criteria = createCriteria(TemplateServiceMasterDomain.class);
+			criteria.add(Restrictions.eq("serviceId",mappingCollection.getServiceId()));
+			templateServiceMasterDomain = (TemplateServiceMasterDomain) criteria.uniqueResult();
+			
+			ticketDomain = new TicketDomain();
+			ticketDomain.setCompanyDomain(companyDomain);
+			ticketDomain.setStatusMaster(statusDomain);
+			ticketDomain.setTemplateMasterDomain(projectTemplateMasterDomain);
+			ticketDomain.setTemplateServiceMasterDomain(templateServiceMasterDomain);
+			ticketDomain.setUserCreated(String.valueOf(userDTO.getId()));
+			ticketDomain.setDateCreated(new Timestamp(new Date().getTime()));
+			ticketDomain.setTicketDesc(description);
+			ticketDomain = (TicketDomain) hibernatePersistenceManager.saveOrUpdate(ticketDomain);
+			countDto.setTicketID(ticketDomain.getTicketId());
+			countDto.setTicketStatusID(ticketDomain.getStatusMaster().getId());
+			
+			endTransaction();
+			releasePlatinumConnection();
+			
+			beginTransaction();
+			
+			for (WorkflowRecordsMappingDto mappingDto : mappingCollection.getMappedDtos()) {
+				if(existDBRecords.contains(mappingDto.getRecordId())){
+					continue;
+				}
+				WorkFlowDomain workFlowDomain = CommonUtils.convertObject(mappingDto, WorkFlowDomain.class);
+				workFlowDomain.setDateCreated(new Timestamp(new Date().getTime()));
+				workFlowDomain.setUserIdCreated(userDTO.getId());
+				workFlowDomain.setStatusUserId(userDTO.getId());
+				workFlowDomain.setNextRoleId(RolesEnum.DATAANALYST.getRoleId());
+				workFlowDomain.setTicketId(ticketDomain.getTicketId());
+				workFlowDomain.setWorkFlowId(null);
+				workFlowDomain.setComments(null);
+				hibernatePersistenceManager.saveOrUpdate(workFlowDomain);
+				recordCount++;
+			}
+			countDto.setProcess(true);
+			countDto.setRecordAssignCount(recordCount);
+			
+			endTransaction();
+			
+			requestPlatinumConnection();
+			beginTransaction();
+			
+			criteria = hibernatePersistenceManager.createCriteria(TicketDomain.class);
+			criteria.add(Restrictions.eq("ticketId", ticketDomain.getTicketId()));
+			TicketDomain domain = (TicketDomain) criteria.uniqueResult();
+			domain.setRecords(recordCount);
+			hibernatePersistenceManager.saveOrUpdate(domain);
+			
+			endTransaction();
+			releasePlatinumConnection();
+			
+			ITicketMaintenanceDao ticketdao = DaoManager.TICKETMAINTENANCEDAO.getDao(domain.getCompanyDomain().getId(), ITicketMaintenanceDao.class);
+			ticketdao.populateGanttTables(domain.getTicketId(),GanttConstant.TICKET_ID.getValue());
+			
+		}else{
+			
+			requestPlatinumConnection();
+			beginTransaction();
+			
+			criteria = createCriteria(CompanyDomain.class);
+			criteria.add(Restrictions.eq("id",userDTO.getCompanyId()));
+			companyDomain = (CompanyDomain) criteria.uniqueResult();
+			
+			criteria = createCriteria(StatusDomain.class);
+			criteria.add(Restrictions.eq("id",StatusConstants.OPEN.getID()));
+			statusDomain = (StatusDomain) criteria.uniqueResult();
+			
+			criteria = createCriteria(ProjectTemplateMasterDomain.class);
+			criteria.add(Restrictions.eq("templateId",mappingCollection.getTemplateId()));
+			projectTemplateMasterDomain = (ProjectTemplateMasterDomain) criteria.uniqueResult();
+			
+			criteria = createCriteria(TemplateServiceMasterDomain.class);
+			criteria.add(Restrictions.eq("serviceId",mappingCollection.getServiceId()));
+			templateServiceMasterDomain = (TemplateServiceMasterDomain) criteria.uniqueResult();
+			
+			ticketDomain = new TicketDomain();
+			ticketDomain.setCompanyDomain(companyDomain);
+			ticketDomain.setStatusMaster(statusDomain);
+			ticketDomain.setTemplateMasterDomain(projectTemplateMasterDomain);
+			ticketDomain.setTemplateServiceMasterDomain(templateServiceMasterDomain);
+			ticketDomain.setRecords(mappingCollection.getMappedDtos().size());
+			ticketDomain.setUserCreated(String.valueOf(userDTO.getId()));
+			ticketDomain.setDateCreated(new Timestamp(new Date().getTime()));
+			ticketDomain.setTicketDesc(description);
+			ticketDomain = (TicketDomain) hibernatePersistenceManager.saveOrUpdate(ticketDomain);
+			countDto.setTicketID(ticketDomain.getTicketId());
+			countDto.setTicketStatusID(ticketDomain.getStatusMaster().getId());
+			
+			endTransaction();
+			releasePlatinumConnection();
+			
+			beginTransaction();
+			
+			for (WorkflowRecordsMappingDto mappingDto : mappingCollection.getMappedDtos()) {
+				WorkFlowDomain workFlowDomain = CommonUtils.convertObject(mappingDto, WorkFlowDomain.class);
+				workFlowDomain.setUserIdCreated(userDTO.getId());
+				workFlowDomain.setDateCreated(new Timestamp(new Date().getTime()));
+				workFlowDomain.setStatusUserId(userDTO.getId());
+				workFlowDomain.setNextRoleId(RolesEnum.DATAANALYST.getRoleId());
+				workFlowDomain.setTicketId(ticketDomain.getTicketId());
+				workFlowDomain.setWorkFlowId(null);
+				workFlowDomain.setComments(null);
+				hibernatePersistenceManager.saveOrUpdate(workFlowDomain);
+			}
+			countDto.setProcess(true);
+			countDto.setRecordAssignCount((long) mappingCollection.getMappedDtos().size());
+		
+			endTransaction();
+			
+			ITicketMaintenanceDao ticketdao = DaoManager.TICKETMAINTENANCEDAO.getDao(ticketDomain.getCompanyDomain().getId(), ITicketMaintenanceDao.class);
+			ticketdao.populateGanttTables(ticketDomain.getTicketId(),GanttConstant.TICKET_ID.getValue());
+		}
+		return countDto;
+	}
+	
+	/**
+	 * This method is used for addAllWorkFlowRecordsToTicket for all workflow records will be associate with new ticket.
+	 * @param userEmail  This is the first parameter for client id
+	 * @param workFlowID for getting workflow records
+	 * @return boolean
+	 */
+	@Override
+	public String addAllWorkFlowRecordsToTicket(String userEmail,long workFlowID,String desc) throws ProcessFailedException {
+		final String methodName = "addAllWorkFlowRecordsToTicket";
+		log.info("Inside " + methodName + " method of " + CLASSNAME);
+		String result = CommonConstants.WF_TICKET_FAIL;
+		TicketDomain ticketDomain = null;
+		Criteria criteria = null;
+		List<WorkFlowDomain> workFlowDomainLst = null;
+		UserDTO userDTO = null;
+		CompanyDomain companyDomain = null;
+		StatusDomain statusDomain = null;
+		TemplateServiceMasterDomain templateServiceMasterDomain = null;
+		try {
+			if (workFlowID != 0){
+		
+				IUserDao iUserDao = DaoManager.USER.getDao(userEmail,IUserDao.class);
+				userDTO = iUserDao.getUser(userEmail,false);
+				
+				WorkFlowMasterDomain domain = getWorkFlowMasterDomainById(workFlowID);
+				
+				beginTransaction();
+				
+				criteria = createCriteria(WorkFlowDomain.class);
+				criteria.add(Restrictions.eq(WORKFLOW_ID, workFlowID));
+				workFlowDomainLst = criteria.list();
+				
+				endTransaction();
+				
+				if(workFlowDomainLst != null && !workFlowDomainLst.isEmpty() && domain != null){
+					requestPlatinumConnection();
+					beginTransaction();
+					
+					criteria = createCriteria(CompanyDomain.class);
+					criteria.add(Restrictions.eq("id",userDTO.getCompanyId()));
+					companyDomain = (CompanyDomain) criteria.uniqueResult();
+					
+					criteria = createCriteria(StatusDomain.class);
+					criteria.add(Restrictions.eq("id",StatusConstants.OPEN.getID()));
+					statusDomain = (StatusDomain) criteria.uniqueResult();
+					
+					criteria = createCriteria(TemplateServiceMasterDomain.class);
+					criteria.add(Restrictions.eq("serviceId",domain.getTemplateServiceMasterDomain().getServiceId()));
+					templateServiceMasterDomain = (TemplateServiceMasterDomain) criteria.uniqueResult();
+					
+					ticketDomain = new TicketDomain();
+					ticketDomain.setCompanyDomain(companyDomain);
+					ticketDomain.setStatusMaster(statusDomain);
+					ticketDomain.setTemplateServiceMasterDomain(templateServiceMasterDomain);
+					ticketDomain.setRecords(workFlowDomainLst.size());
+					ticketDomain.setUserCreated(String.valueOf(userDTO.getId()));
+					ticketDomain.setDateCreated(new Timestamp(new Date().getTime()));
+					ticketDomain.setTicketDesc(desc);
+					ticketDomain = (TicketDomain) hibernatePersistenceManager.saveOrUpdate(ticketDomain);
+					
+					endTransaction();
+					releasePlatinumConnection();
+					
+					beginTransaction();
+					
+					for (WorkFlowDomain workFlowDomain : workFlowDomainLst) {
+						workFlowDomain.setWorkFlowId(null);
+						workFlowDomain.setWorkflowStatusId(StatusConstants.REC_ALLOCATED.getID().longValue());
+						workFlowDomain.setUserIdModified(0l);
+						workFlowDomain.setDateModified(new Timestamp(new Date().getTime()));
+						workFlowDomain.setStatusUserId(userDTO.getId());
+						workFlowDomain.setTicketId(ticketDomain.getTicketId());
+						workFlowDomain.setNextRoleId(RolesEnum.DATAANALYST.getRoleId());
+						workFlowDomain.setComments(null);
+						workFlowDomain.setBatchID(null);
+						hibernatePersistenceManager.saveOrUpdate(workFlowDomain);
+					}
+					
+					//LP-644 if we delete batch id then there is no way to get or watch workflow delived records and count.
+					/*Criteria workFlowCriteriaBatch = createCriteria(WorkFlowBatchDomain.class);
+					workFlowCriteriaBatch.add(Restrictions.eq(WORKFLOW_ID, workFlowID));
+					WorkFlowBatchDomain workFlowBatchDomain = (WorkFlowBatchDomain) workFlowCriteriaBatch.uniqueResult();
+					if(workFlowBatchDomain != null){
+						hibernatePersistenceManager.delete(workFlowBatchDomain);
+					}*/
+					
+					Criteria workFlowStatus = createCriteria(WorkFlowStatusDomain.class);
+					workFlowStatus.add(Restrictions.eq(WORKFLOW_ID, workFlowID));
+					WorkFlowStatusDomain workFlowStatusDomain = (WorkFlowStatusDomain) workFlowStatus.uniqueResult();
+					if(workFlowStatusDomain != null){
+						workFlowStatusDomain.setWorkFlowStatus(CommonConstants.WF_NEW_FREE);
+						workFlowStatusDomain.setDateModified(null);
+						hibernatePersistenceManager.saveOrUpdate(workFlowStatusDomain);
+					}
+					
+					endTransaction();
+					
+					ITicketMaintenanceDao ticketdao = DaoManager.TICKETMAINTENANCEDAO.getDao(ticketDomain.getCompanyDomain().getId(), ITicketMaintenanceDao.class);
+					ticketdao.populateGanttTables(ticketDomain.getTicketId(),GanttConstant.TICKET_ID.getValue());
+				
+					WorkFlowMasterDto workFlowMasterDto = getWorkFlowMasterDataById(workFlowID);
+					//Sending Email to workflow all users
+					if(workFlowMasterDto != null && workFlowMasterDto.getAttachedUsers()!=null && workFlowMasterDto.getAttachedUsers().length>0){
+						requestPlatinumConnection();
+						beginTransaction();
+						
+						Criteria userCriteria = hibernatePersistenceManager.createCriteria(UserDomain.class);
+						userCriteria.add(Restrictions.in("id",getListfromStringArray(workFlowMasterDto.getAttachedUsers())));
+						List<UserDomain> userDomainLst = userCriteria.list();
+						
+						endTransaction();
+						releasePlatinumConnection();
+						
+						if(userDomainLst != null && !userDomainLst.isEmpty()){
+							String emailBody = MessageUtils.getMessage(MessageKeyConstants.WORKFLOW_TRANSFER_TICKET_SUCCESS.getKey(),workFlowMasterDto.getWorkFlowName(),ticketDomain.getTicketId().toString());
+							for (UserDomain userDomain : userDomainLst) {
+								 userDTO = CommonUtils.convertObject(userDomain, UserDTO.class);
+								 SendMail.sendMail(EmailEvent.WORKFLOWRECORDSTOTICKETSUCCESS.getEvent(),userDTO.getEmail(),userDTO.getEmail(), emailBody, null,userDTO);
+							}
+						}
+					}
+					//result = CommonConstants.WF_TICKET_SUCCESS;
+					result = ticketDomain.getTicketId()==null ? "": ticketDomain.getTicketId().toString();
+				}else{
+					log.info("workFlowDomainLst Found Empty");
+					result = CommonConstants.WF_TICKET_NO_DATA_AVAILABLE;
+				}
+			}else{
+				log.info("workFlowID Found 0");
+			}
+		} catch (Exception e) {
+			result = CommonConstants.WF_TICKET_FAIL;
+			log.error(EXCEPTION, e);
+			rollBack();
+		}
+		return result;
+	}
+	
+	
+	/**
+	 * This method is used for updateWorkflowRecords.
+	 * @param userEmail This is the first paramter to updateWorkflowRecords
+	 * @param WorkflowRecordsMappingCollection  This is the second parameter to updateWorkflowRecords method
+	 * @return boolean 
+	 */
+	@Override
+	public String workFlowRecordsByPass(String userEmail,WorkflowRecordsMappingCollection mappingCollection) throws ProcessFailedException{
+		final String methodName = "workFlowRecordsByPass";
+		log.info("Inside "+methodName+" method of "+CLASSNAME);
+		String result = CommonConstants.WF_BYPASS_FAIL;
+		try{
+			if(mappingCollection.getMappedDtos() != null && !mappingCollection.getMappedDtos().isEmpty()){
+				WorkFlowMasterDomain domain = getWorkFlowMasterDomainById(mappingCollection.getMappedDtos().get(0).getWorkFlowId());
+				beginTransaction();
+
+				IUserDao iUserDao = DaoManager.USER.getDao(userEmail,IUserDao.class);
+				UserDTO userDTO = iUserDao.getUser(userEmail,false);
+				//Long userID =  iUserDao.getUserID(userEmail);
+				Criteria workFlowRecordCriteria = null;
+			
+				for (WorkflowRecordsMappingDto mappingDto : mappingCollection.getMappedDtos()) {
+					workFlowRecordCriteria = createCriteria(WorkFlowDomain.class); 
+					workFlowRecordCriteria.add(Restrictions.eq(WORKFLOW_RECORD_ID, mappingDto.getWorkFlowRecordId()));
+					WorkFlowDomain workFlowDomain = (WorkFlowDomain) workFlowRecordCriteria.uniqueResult();
+					if(workFlowDomain != null){
+						workFlowDomain.setUserIdModified(mappingCollection.getWfBypassUserID());
+						workFlowDomain.setStatusUserId(mappingCollection.getWfBypassUserID());
+						workFlowDomain.setDateModified(new Timestamp(new Date().getTime()));
+						hibernatePersistenceManager.saveOrUpdate(workFlowDomain);
+					}
+				}
+				updateWorkFlowStatus(mappingCollection.getMappedDtos().get(0).getWorkFlowId(),CommonConstants.WF_IN_PROGRESS);
+				result = CommonConstants.WF_BYPASS_SUCCESS;
+				endTransaction();
+				
+				UserDomain domainFrom = iUserDao.userDomainById(mappingCollection.getWfBypassFromUserID());
+				UserDomain domainTO = iUserDao.userDomainById(mappingCollection.getWfBypassUserID());
+				
+				String emailBody = MessageUtils.getMessage(MessageKeyConstants.WORKFLOW_BYPASS_SUCCESS.getKey(),domainTO.getFirstName(),String.valueOf(mappingCollection.getMappedDtos().size()),domain.getWorkFlowName(),userDTO.getFirstName());
+			    SendMail.sendMail(EmailEvent.WORKFLOWBYPASSSUCCESS.getEvent(),domainTO.getEmail(),domainFrom.getEmail()+","+userDTO.getEmail(), emailBody, null,userDTO);
+				
+			}else{
+				log.info("mappingCollection.getMappedDtos() Found Null");
+				result = CommonConstants.WF_BYPASS_FAIL;
+			}
+		}catch(Exception e){
+			result = CommonConstants.WF_BYPASS_FAIL;
+			log.error(EXCEPTION,e);
+			rollBack();
+			throw new ProcessFailedException("workFlowRecordsByPass Process Failed.");
+		}
+		return result;
+	}
+	
+	@Override
+	public List<WorkFlowMasterDomain> getWorkFlowMaster(){
+		List<WorkFlowMasterDomain> workFlowMasterList = null;
+		StringBuilder sqlQuery = new StringBuilder();
+		try{
+			beginTransaction();
+			sqlQuery.append("SELECT WF_ID as \"workFlowId\", WF_NAME as \"workFlowName\", WF_LEVEL as \"workFlowLevel\" FROM WORKFLOW_MASTER");
+			workFlowMasterList = hibernatePersistenceManager.createSQLQuery(sqlQuery.toString())
+				  .addScalar("workFlowId",StandardBasicTypes.LONG)
+				  .addScalar("workFlowName",StandardBasicTypes.STRING)
+				  .addScalar("workFlowLevel",StandardBasicTypes.LONG)
+				  .setResultTransformer(Transformers.aliasToBean(WorkFlowMasterDomain.class)).list();
+			endTransaction();
+		}catch(Exception e){
+			log.error(EXCEPTION,e);
+		}
+		return workFlowMasterList;
+	}
+	
+	
+	private List<Long> getListfromStringArray(String[] stringArray){
+		List<Long> list = new ArrayList<>();
+		if(stringArray.length>0){
+			for (int i = 0; i < stringArray.length; i++) {
+				list.add(Long.parseLong(stringArray[i]));
+			}
+		}
+		return list;
+		
+	}
+
+	@Override
+	public WorkFlowMasterDto getavailableWorkFlowList(String userEmail, long clientId,Long serviceId) {
+		final String methodName = "getavailableWorkFlowList";
+		log.info("Inside "+methodName+" method of "+CLASSNAME);
+		WorkFlowMasterDto workFlowMasterDto = new WorkFlowMasterDto();
+		Map<String, Long> workFlowMap = new HashMap<String, Long>();
+		
+		try{
+			beginTransaction();
+			IUserDao iUserDao = DaoManager.USER.getDao(userEmail,IUserDao.class);
+			UserDTO userDTO = iUserDao.getUser(userEmail, true);
+			Long userID = userDTO.getId();
+				
+				// in super case
+				Criteria workfloCriteria = createCriteria(WorkFlowMasterDomain.class);
+				workfloCriteria.add(Restrictions.eq(USER_ID, userID));
+				List<WorkFlowMasterDomain> workFlowMasterList = workfloCriteria.list();
+				endTransaction();
+				if(workFlowMasterList != null && !workFlowMasterList.isEmpty()){
+					ITicketMaintenanceDao dao = DaoManager.TICKETMAINTENANCEDAO.getDao(userEmail, ITicketMaintenanceDao.class);
+					//List<WorkFlowMasterDto> workFlowMasterDtoList = getDomainToDto(workFlowMasterList);
+					for (WorkFlowMasterDomain wfMasterDto : workFlowMasterList) {
+						if(serviceId.equals(wfMasterDto.getTemplateServiceMasterDomain().getServiceId())){
+							/* if(!CommonUtils.isInternalUser(userDTO.getCompanyId())){}
+                            else{*/
+                                   TicketDto ticketDto = dao.getLatestTicketByWorkFlowId(wfMasterDto.getWorkFlowId());
+                                   if(ticketDto == null){
+                                	   workFlowMap.put(wfMasterDto.getWorkFlowName(), wfMasterDto.getWorkFlowId());
+                                   }/*else if( (ticketDto !=null && ticketDto.getStatusId() != StatusConstants.INPROGRESS.getID())
+                                		   && clientId == ticketDto.getCompanyDomain().getId()){
+                                          workFlowMap.put(wfMasterDto.getWorkFlowName(), wfMasterDto.getWorkFlowId());
+                                   }*/
+                                   
+                                   else if( (ticketDto !=null) && clientId == ticketDto.getCompanyDomain().getId()){
+                                          workFlowMap.put(wfMasterDto.getWorkFlowName(), wfMasterDto.getWorkFlowId());
+                                   }
+                            //}
+						}
+					}
+				}else{
+					log.info("workFlowMasterList Found Null");
+				}
+			workFlowMasterDto.setWorkFlowMasterMapDropDown((HashMap<String, Long>) workFlowMap);
+		}catch(Exception e){
+			log.error(EXCEPTION,e);
+		}
+		return workFlowMasterDto;
+	}
+	
+	
+	@Override
+	public String addUserInWorkFlow(String userEmail,WorkFlowMasterDto masterDto) throws ProcessFailedException{
+		final String methodName = "addUserInWorkFlow";
+		log.info("Inside "+methodName+" method of "+CLASSNAME);
+		String result = CommonConstants.ADD_USER_WORKFLOW_FAIL;
+		WorkFlowDetailsDomain detailsDomain  = null;
+		try{
+			if(masterDto.getWorkFlowId() != 0){
+				WorkFlowMasterDomain domain = getWorkFlowMasterDomainById(masterDto.getWorkFlowId());
+				if(domain != null){
+					
+					if(masterDto.getAttachedUsers() != null && masterDto.getAttachedUsers().length>0){
+						beginTransaction();
+						for (String userID : masterDto.getAttachedUsers()) {
+							detailsDomain = new WorkFlowDetailsDomain();
+							detailsDomain.setWorkFlowMaster(domain);
+							detailsDomain.setAssociateUserId(Long.valueOf(userID));
+							detailsDomain.setDateCreated(new Timestamp(new Date().getTime()));
+							detailsDomain = (WorkFlowDetailsDomain)hibernatePersistenceManager.save(detailsDomain);
+							result = CommonConstants.ADD_USER_WORKFLOW_SUCCESS;
+						}
+						if(!masterDto.isWfStatusUpdate()){
+							updateWorkFlowStatus(masterDto.getWorkFlowId(),CommonConstants.WF_IN_PROGRESS);
+						}
+						endTransaction();
+					}else{
+						log.info("getAttachedUsers found 0 or Null");
+					}
+				}else{
+					log.info("workflowdomain found null");
+				}				
+			}else{
+				log.info("workflowID Found 0");
+			}
+		}catch(Exception e){
+			result = CommonConstants.ADD_USER_WORKFLOW_FAIL;
+			log.error(EXCEPTION,e);
+			rollBack();
+			throw new ProcessFailedException("addUserInWorkFlow Process Failed.");
+		}
+		return result;
+	}
+	
+	@Override
+	public WorkFlowSearchGridDto getWorkFlowInfoByProjectID(String userEmail,Long projectID,boolean isCallFromDashboard){
+		final String methodName = "getWorkFlowInfoByProjectID";
+		log.info("Inside "+methodName+" method of "+CLASSNAME);
+		WorkFlowSearchGridDto workFlowSearchGridDto = new WorkFlowSearchGridDto();
+		StringBuilder sqlQuery = null;
+		List<WorkFlowMasterDto> wfMasterDtosLst = new ArrayList<>();
+		String addToGoldCondition = "";
+		try{
+			if(projectID != 0){
+				
+				if(isCallFromDashboard){
+					IProjectDao prjDao = DaoManager.PROJECTDAO.getDao(getTenantEmail(),IProjectDao.class);
+					ProjectDTO prjDto = prjDao.getProjectDetailsById(projectID);
+					
+					if(CommonConstants.ENRICH == prjDto.getTemplateID() || CommonConstants.BUILD == prjDto.getTemplateID() || CommonConstants.CLIENT_HIERARCHY == prjDto.getTemplateID()){
+						addToGoldCondition = " AND ONDEMAND_1.FUNC_CHECK_SOURCE(RECORD_ID) = 'GOLD_EXECUTION' ";
+					}
+				}
+				
+				sqlQuery = new StringBuilder(" SELECT DISTINCT a.WORKFLOW_ID AS workFlowId,b.CURRENT_BATCH_ID AS batchID FROM WORKFLOW_RECORDS_AUD a, WORKFLOW_BATCH b,WORKFLOW_STATUS c WHERE PROJECT_ID = :projectID and (c.WF_STATUS = 'Completed' or c.WF_STATUS = 'New') and a.BATCH_ID = b.CURRENT_BATCH_ID and c.WF_ID =a.WORKFLOW_ID and a.WORKFLOW_ID = b.WF_ID AND a.BATCH_ID IS NOT NULL AND a.WORKFLOW_ID IS NOT NULL ")
+								     .append(" UNION ")
+								     .append(" SELECT DISTINCT a.WORKFLOW_ID AS workFlowId,b.CURRENT_BATCH_ID AS batchID FROM WORKFLOW_RECORDS a, WORKFLOW_BATCH b,WORKFLOW_STATUS c WHERE PROJECT_ID = :projectID and c.WF_STATUS <> 'Completed' and c.WF_ID =a.WORKFLOW_ID and a.WORKFLOW_ID = b.WF_ID AND a.BATCH_ID IS NOT NULL AND a.WORKFLOW_ID IS NOT NULL ");
+				
+				log.info("SqlQuery --> " +sqlQuery.toString());
+				List<WorkFlowMasterDto> workFlowIDLst = hibernatePersistenceManager.createSQLQuery(sqlQuery.toString())
+						.addScalar("workFlowId", StandardBasicTypes.LONG)
+						.addScalar("batchID", StandardBasicTypes.LONG)
+						.setLong("projectID",projectID).setResultTransformer(Transformers.aliasToBean(WorkFlowMasterDto.class)).list();
+				
+				if(workFlowIDLst != null && !workFlowIDLst.isEmpty()){
+					
+					for (WorkFlowMasterDto masterdto : workFlowIDLst) {
+						
+						// excluding case for WF records moved to Ticket in between.
+			
+					//	if(true){
+							
+						
+						
+						WorkFlowSearchGridDto gridDto =  getWorkFlowStatusAndUpdatedDateByWorkFlowId(userEmail, masterdto.getWorkFlowId());
+						
+						/*if(gridDto.getWorkFlowStatus().equalsIgnoreCase(CommonConstants.WF_NEW_FREE)){
+							continue;
+						}*/
+						WorkFlowMasterDomain workFlowDomain = getWorkFlowMasterDomainById(masterdto.getWorkFlowId());
+						if(workFlowDomain != null){
+							//String attachedUser = getAttachedUserWithSpecificRoles(workFlowDomain.getWorkFlowLevel(), workFlowDomain, userEmail, null);
+							
+							if(masterdto.getBatchID() != null && masterdto.getBatchID() !=0){
+								
+								String fromQuery = " from WORKFLOW_RECORDS where WORKFLOW_ID = :workFlOWID and PROJECT_ID = :projectID ";
+								String fromQueryDelivered = " from WORKFLOW_RECORDS_AUD where WORKFLOW_ID = :workFlOWID and BATCH_ID in ( "+masterdto.getBatchID() +" ) and PROJECT_ID = :projectID ";
+								String countQuery = " (select count(*) as ";
+								String totalCount = "totalCount"; 
+								String recordsInCommonPool = "recordsInCommonPool";
+								String deliveredCount = "deliveredCount";
+								String recAllocated = " and WF_STATUS_ID = (select STATUS_ID from status where status = 'REC_ALLOCATED') ";
+								String recApproved = " and WF_STATUS_ID = (select STATUS_ID from status where status = 'REC_APPROVED') ";
+								//String statusUserIn = " and STATUS_USER in (";
+								String nextRoleIdQuery = " and next_role_id = "+RolesEnum.EXSUPER.getRoleId()+" ";
+								String closeParameter = ")";
+								
+								sqlQuery = new StringBuilder(" select * from ")
+										   .append(countQuery).append(totalCount).append(fromQuery).append(addToGoldCondition).append(" ), ")
+										   .append(countQuery).append(recordsInCommonPool).append(fromQuery).append(addToGoldCondition).append(recAllocated).append(" ), ")
+										   .append(countQuery).append(deliveredCount).append(fromQueryDelivered).append(addToGoldCondition).append(recApproved).append(nextRoleIdQuery).append(closeParameter);
+								
+								log.info("SqlQuery with Records --> " +sqlQuery.toString());
+								
+								WorkFlowMasterDto dto  = (WorkFlowMasterDto) hibernatePersistenceManager.createSQLQuery(sqlQuery.toString())
+										.addScalar(totalCount,StandardBasicTypes.LONG)
+										.addScalar(recordsInCommonPool,StandardBasicTypes.LONG)
+										.addScalar(deliveredCount,StandardBasicTypes.LONG)
+										.setLong("workFlOWID", workFlowDomain.getWorkFlowId())
+										.setLong("projectID",projectID)
+										.setResultTransformer(Transformers.aliasToBean(WorkFlowMasterDto.class)).uniqueResult();
+								if(dto != null){
+									dto.setTotalCount(dto.getTotalCount()+dto.getDeliveredCount());
+									dto.setRecordsInProgressCount(dto.getTotalCount()-dto.getDeliveredCount()-dto.getRecordsInCommonPool());
+									dto.setWorkFlowId(workFlowDomain.getWorkFlowId());
+									dto.setWorkFlowName(workFlowDomain.getWorkFlowName());
+									dto.setWorkFlowLevel(workFlowDomain.getWorkFlowLevel());
+									if(gridDto != null){
+										dto.setWorkFlowStatus(gridDto.getWorkFlowStatus());
+										dto.setLastUpdatedDate(gridDto.getLastUpdatedDate());
+										dto.setWorkFlowStatusID(gridDto.getWorkFlowStatusID());
+									}
+									wfMasterDtosLst.add(dto);
+								}
+							}
+						}
+					}
+				}
+				if(!wfMasterDtosLst.isEmpty()){
+					workFlowSearchGridDto.setWorkFlowMasterDtosLst(wfMasterDtosLst);
+				}
+			}else{
+				log.info("projectID Found 0");
+			}
+		}catch(Exception e){
+			log.error(EXCEPTION,e);
+		}
+		return workFlowSearchGridDto;
+	}
+	
+	@Override
+	public List<Long> getWorkFlowDeliveredRecordIdsByWfId(String userEmail,WorkFlowMasterDto workFlowMasterDto, List<Long> ticketsList, Long projectId){
+		final String methodName = "getWorkFlowDeliveredRecordIdsByWfId";
+		log.info("Inside "+methodName+" method of "+CLASSNAME);
+		List<Long> cptyList = new ArrayList<>();
+		try{
+			WorkFlowMasterDomain wfDomain = getWorkFlowMasterDomainById(workFlowMasterDto.getWorkFlowId());
+			beginTransaction();
+			Criteria wfAud = createCriteria(WorkFlowAuditDomain.class);
+			wfAud.add(Restrictions.eq(WORKFLOW_ID, workFlowMasterDto.getWorkFlowId()));
+			wfAud.add(Restrictions.eq("workflowStatusId", 27L));
+
+			if(workFlowMasterDto.isIspremium()){
+				wfAud.add(Restrictions.in("ticketId", ticketsList));
+			}else{
+				wfAud.add(Restrictions.eq("batchID", workFlowMasterDto.getBatchID()));
+			}
+			
+			wfAud.add(Restrictions.eq("nextRoleId",RolesEnum.EXSUPER.getRoleId()));
+			
+			if(null != projectId){
+				wfAud.add(Restrictions.eq("projectId",projectId));
+			}
+				
+			List<WorkFlowAuditDomain> auditList = wfAud.list();	
+			if(null != auditList && !auditList.isEmpty()){
+				for (WorkFlowAuditDomain workFlowAuditDomain : auditList) {
+					cptyList.add(new Long(workFlowAuditDomain.getRecordId()));
+				}
+			}
+			
+			endTransaction();
+		}catch(Exception e){
+			log.error(EXCEPTION,e);
+		}
+		return cptyList;
+	}
+	
+	@SuppressWarnings("unchecked")
+	@Override
+	public List<WorkFlowMasterDto> getWorkflowListByProjectId(Long projectID, boolean selfServiced){
+		final String methodName = "getWorkflowListByProjectId";
+		log.info("Inside "+methodName+" method of "+CLASSNAME);
+		List<WorkFlowMasterDto> wfMasterDtosLst = new ArrayList<>();
+		StringBuilder sqlQuery = null;
+		try{
+			String tktorbatchQry = null;
+			if(selfServiced){
+				tktorbatchQry = "a.BATCH_ID";
+			}else{
+				tktorbatchQry = "a.TKT_ID";
+			}
+			sqlQuery = new StringBuilder(" SELECT DISTINCT a.WORKFLOW_ID AS workFlowId,a.BATCH_ID AS batchID,a.TKT_ID AS ticketOrBatchID FROM WORKFLOW_RECORDS_AUD a WHERE PROJECT_ID = :projectID AND ").append(tktorbatchQry).append(" IS NOT NULL AND a.WORKFLOW_ID IS NOT NULL ")
+									.append(" UNION ")
+									.append(" SELECT DISTINCT a.WORKFLOW_ID AS workFlowId,a.BATCH_ID AS batchID,a.TKT_ID AS ticketOrBatchID FROM WORKFLOW_RECORDS a WHERE PROJECT_ID = :projectID AND ").append(tktorbatchQry).append(" IS NOT NULL AND a.WORKFLOW_ID IS NOT NULL ");
+
+			log.info("SqlQuery --> " +sqlQuery.toString());
+			
+			wfMasterDtosLst = hibernatePersistenceManager.createSQLQuery(sqlQuery.toString())
+												.addScalar("workFlowId", StandardBasicTypes.LONG)
+												.addScalar("batchID", StandardBasicTypes.LONG)
+												.addScalar("ticketOrBatchID", StandardBasicTypes.LONG)
+												.setLong("projectID",projectID).setResultTransformer(Transformers.aliasToBean(WorkFlowMasterDto.class)).list();
+		}catch(Exception e){
+			log.error(EXCEPTION,e);
+		}
+		
+		return wfMasterDtosLst;
+	}
+	
+	@Override
+	public WorkFlowSearchGridDto getWorkFlowDetails(String userEmail){
+		final String methodName = "getWorkFlowDetails";
+		log.info("Inside "+methodName+" method of "+CLASSNAME);
+		WorkFlowSearchGridDto searchGridDto = new WorkFlowSearchGridDto();
+		StringBuilder sqlQuery = null;
+		try{
+			IUserDao iUserDao = DaoManager.USER.getDao(userEmail,IUserDao.class);
+			UserDTO userDTO = iUserDao.getUser(userEmail, true);
+			Long userID = userDTO.getId();
+			String workflowStatus = "("+StatusConstants.REC_LOCKED.getID()+","+StatusConstants.REC_APPROVED.getID()+","+StatusConstants.REC_REJECTED.getID()+")";
+			String roleType = userDTO.getUserRole().getType();
+			
+			//LP-1073 [SSBT] // LP -1089 - Records are not showing when user edit workflow in assigned stage.
+			//here recordsInProgressCount field use for if workflow is in assigned state and some record are in analysts,admin or QA's commmon pool or approved or rejected so workflow will not going to edit mode.
+			
+			
+			if(!CommonUtils.isInternalUser(userDTO.getCompanyId()) && roleType.equals(RolesEnum.EXSUPER.getRoleTypeString())){
+				
+				sqlQuery = new StringBuilder(" select (select COUNT(*) from WORKFLOW_RECORDS where WF_STATUS_ID in ").append(workflowStatus)
+						 .append(" and WORKFLOW_ID = a.WF_ID) + (select DISTINCT count(*) FROM WORKFLOW_RECORDS_AUD WA, WORKFLOW_BATCH WB WHERE WA.WORKFLOW_ID = a.WF_ID AND WA.BATCH_ID IS NOT NULL and WA.NEXT_ROLE_ID=10002  and WA.WF_STATUS_ID=27 AND WB.CURRENT_BATCH_ID = WA.BATCH_ID and WB.WF_ID =   WA.WORKFLOW_ID) as recordsInProgressCount, ROWNUM as serialNo, a.WF_ID as workFlowId,a.WF_NAME as workFlowName,a.WF_LEVEL as workFlowLevel,a.DATE_CREATED as dateCreated,b.WF_STATUS as workFlowStatus,b.WF_STATUS_ID as workFlowStatusID from WORKFLOW_MASTER a,WORKFLOW_STATUS b ")
+			             .append(" where a.WF_ID = b.WF_ID and a.USERID_CREATED = :userID ORDER by a.DATE_CREATED DESC ");
+				
+			}else if(!CommonUtils.isInternalUser(userDTO.getCompanyId()) && !roleType.equals(RolesEnum.EXSUPER.getRoleTypeString())){
+				
+				sqlQuery = new StringBuilder(" select (select COUNT(*) from WORKFLOW_RECORDS where WF_STATUS_ID in ").append(workflowStatus)
+						.append(" and WORKFLOW_ID = a.WF_ID) + (select DISTINCT count(*) FROM WORKFLOW_RECORDS_AUD WA, WORKFLOW_BATCH WB WHERE WA.WORKFLOW_ID = a.WF_ID AND WA.BATCH_ID IS NOT NULL and WA.NEXT_ROLE_ID=10002  and WA.WF_STATUS_ID=27 AND WB.CURRENT_BATCH_ID = WA.BATCH_ID and WB.WF_ID =   WA.WORKFLOW_ID) as recordsInProgressCount, ROWNUM as serialNo, a.WF_ID as workFlowId,a.WF_NAME as workFlowName,a.WF_LEVEL as workFlowLevel,a.DATE_CREATED as dateCreated,b.WF_STATUS as workFlowStatus,b.WF_STATUS_ID as workFlowStatusID from WORKFLOW_MASTER a,WORKFLOW_STATUS b,WORKFLOW_DETAILS c ")
+						.append(" where a.WF_ID = b.WF_ID and a.WF_ID = c.WF_ID and c.USERID = :userID ORDER by a.DATE_CREATED DESC ");
+				
+			}else if(CommonUtils.isInternalUser(userDTO.getCompanyId()) && roleType.equals(RolesEnum.INSUPER.getRoleTypeString())){
+				
+				sqlQuery = new StringBuilder(" select ROWNUM as recordsInProgressCount,ROWNUM as serialNo, a.WF_ID as workFlowId,a.WF_NAME as workFlowName,a.WF_LEVEL as workFlowLevel,a.DATE_CREATED as dateCreated,b.WF_STATUS as workFlowStatus,b.WF_STATUS_ID as workFlowStatusID from WORKFLOW_MASTER a,WORKFLOW_STATUS b ")
+			             .append(" where a.WF_ID = b.WF_ID and a.USERID_CREATED = :userID ORDER by a.DATE_CREATED DESC ");
+				
+			}else if(CommonUtils.isInternalUser(userDTO.getCompanyId()) && !roleType.equals(RolesEnum.INSUPER.getRoleTypeString())){
+				
+				sqlQuery = new StringBuilder(" select ROWNUM as recordsInProgressCount,ROWNUM as serialNo, a.WF_ID as workFlowId,a.WF_NAME as workFlowName,a.WF_LEVEL as workFlowLevel,a.DATE_CREATED as dateCreated,b.WF_STATUS as workFlowStatus,b.WF_STATUS_ID as workFlowStatusID from WORKFLOW_MASTER a,WORKFLOW_STATUS b,WORKFLOW_DETAILS c ")
+						.append(" where a.WF_ID = b.WF_ID and a.WF_ID = c.WF_ID and c.USERID = :userID ORDER by a.DATE_CREATED DESC ");
+				
+			}
+		
+				log.info("SqlQuery --> " +sqlQuery.toString());
+				@SuppressWarnings("unchecked")
+				List<WorkFlowMasterDto> masterDtos = hibernatePersistenceManager.createSQLQuery(sqlQuery.toString())
+													.addScalar("serialNo", StandardBasicTypes.LONG)
+													.addScalar("workFlowId", StandardBasicTypes.LONG)
+													.addScalar("workFlowName", StandardBasicTypes.STRING)
+													.addScalar("workFlowLevel", StandardBasicTypes.LONG)
+													.addScalar("dateCreated", StandardBasicTypes.DATE)
+													.addScalar("workFlowStatus", StandardBasicTypes.STRING)
+													.addScalar("workFlowStatusID", StandardBasicTypes.LONG)
+													.addScalar("recordsInProgressCount", StandardBasicTypes.LONG)
+													.setLong("userID",userID).setResultTransformer(Transformers.aliasToBean(WorkFlowMasterDto.class)).list();
+				
+				if(masterDtos != null && !masterDtos.isEmpty()){
+					searchGridDto.setWorkFlowMasterDtosLst(masterDtos);
+				}
+		}catch(Exception e){
+			log.error(EXCEPTION,e);
+		}
+		return searchGridDto;
+	}
+	
+	@Override
+	public Long getWorkflowInprogressCount(long workFlowID){
+		String workflowStatus = "("+StatusConstants.REC_LOCKED.getID()+","+StatusConstants.REC_APPROVED.getID()+","+StatusConstants.REC_REJECTED.getID()+")";
+		long totalRecords = ((BigDecimal) hibernatePersistenceManager
+				.createSQLQuery("select (select COUNT(*) from WORKFLOW_RECORDS where WF_STATUS_ID in "+workflowStatus+" and WORKFLOW_ID = :workflowId ) + (SELECT DISTINCT count(*) FROM WORKFLOW_RECORDS_AUD WA, TICKETS T WHERE WA.WORKFLOW_ID = :workflowId and WA.TKT_ID IS NOT NULL and WA.NEXT_ROLE_ID=10002  and WA.WF_STATUS_ID=27 and T.TKT_ID = WA.TKT_ID and T.WORKFLOW_CYCLE = 'N') as totalCount from dual "
+				).setLong("workflowId", workFlowID).uniqueResult()).longValue();
+		return totalRecords;
+	}
+
+	@Override
+	public TemplateServiceMasterDto getServiceNameByWorkFlowId(String userEmail, Long workFlowId) {
+		final String methodName = "getServiceNameByWorkFlowId";
+		log.info("Inside "+methodName+" method of "+CLASSNAME);
+		TemplateServiceMasterDto masterDto = new TemplateServiceMasterDto();
+		try{
+			if(workFlowId > 0){
+				beginTransaction();
+				Criteria workFlowCriteria = createCriteria(WorkFlowMasterDomain.class);
+				workFlowCriteria.add(Restrictions.eq("workFlowId",workFlowId));
+				WorkFlowMasterDomain wfDomain = (WorkFlowMasterDomain) workFlowCriteria.uniqueResult();
+				if(wfDomain != null){
+					TemplateServiceMasterDomain domain = wfDomain.getTemplateServiceMasterDomain();
+					masterDto = CommonUtils.convertObject(domain, TemplateServiceMasterDto.class);
+				}
+				endTransaction();
+			}else{
+				log.info("workFlowId Found 0");
+			}
+		}catch(Exception e){
+			log.error(EXCEPTION,e);
+		}
+		return masterDto;
+	}
+	
+	@Override
+	public List<Long> getProjectListByWorkflowId(Long wfId, boolean selfServiced){
+		final String methodName = "getProjectListByWorkflowId";
+		log.info("Inside "+methodName+" method of "+CLASSNAME);
+		List<Long> projectList = new ArrayList<>();
+		StringBuilder sqlQuery = null;
+		try{
+			String tktorbatchQry = null;
+			if(selfServiced){
+				sqlQuery = new StringBuilder(" SELECT DISTINCT PROJECT_ID AS projectId FROM WORKFLOW_RECORDS_AUD WA, WORKFLOW_BATCH WB WHERE WA.WORKFLOW_ID = :wfId ")
+				.append(" AND ")
+				.append(" WA.BATCH_ID IS NOT NULL ")
+				.append(" AND ")
+				.append(" WA.WORKFLOW_ID = :wfId and WA.NEXT_ROLE_ID=10002  and WA.WF_STATUS_ID=27 ")
+				.append(" AND ")
+				.append(" WB.CURRENT_BATCH_ID = WA.BATCH_ID  ")
+				.append(" AND ")
+				.append(" WB.WF_ID =   WA.WORKFLOW_ID ");
+			
+			
+			}else{
+				sqlQuery = new StringBuilder(" SELECT DISTINCT PROJECT_ID AS projectId FROM WORKFLOW_RECORDS_AUD WA, TICKETS T WHERE WA.WORKFLOW_ID = :wfId ")
+				.append(" AND ")
+				.append(" WA.TKT_ID IS NOT NULL ")
+				.append(" AND ")
+				.append(" WA.WORKFLOW_ID = :wfId and WA.NEXT_ROLE_ID=10002  and WA.WF_STATUS_ID=27 ")
+				.append(" AND ")
+				.append(" T.TKT_ID = WA.TKT_ID ")
+				.append(" AND ")
+				.append(" T.WORKFLOW_CYCLE = 'N' ");
+			}
+/*			sqlQuery = new StringBuilder(" SELECT DISTINCT PROJECT_ID AS projectId FROM WORKFLOW_RECORDS_AUD WHERE WORKFLOW_ID = :wfId AND ").append(tktorbatchQry).append(" IS NOT NULL")
+									.append(" and ").append(tktorbatchQry).append("=(select max(").append(tktorbatchQry).append(") from WORKFLOW_RECORDS_AUD where WORKFLOW_ID = :wfId)")
+									.append(" UNION ")
+									.append(" SELECT DISTINCT PROJECT_ID AS projectId FROM WORKFLOW_RECORDS WHERE WORKFLOW_ID = :wfId AND ").append(tktorbatchQry).append(" IS NOT NULL ")
+									.append(" and ").append(tktorbatchQry).append("=(select max(").append(tktorbatchQry).append(") from WORKFLOW_RECORDS where WORKFLOW_ID = :wfId)");
+*/
+			
+			
+			
+			
+			log.info("SqlQuery --> " +sqlQuery.toString());
+			
+			projectList = hibernatePersistenceManager.createSQLQuery(sqlQuery.toString()).addScalar("projectId", StandardBasicTypes.LONG).setLong("wfId",wfId).list();
+		}catch(Exception e){
+			log.error(EXCEPTION,e);
+		}
+		
+		return projectList;
+	}
+	
+	@Override
+	public List<Long> getWorkFlowDeliveredRecordIdsByWorkFlowId(Long workFlowId,boolean selfServiced){
+		final String methodName = "getWorkFlowDeliveredRecordIdsByProjectId";
+		log.info("Inside "+methodName+" method of "+CLASSNAME);
+		List<Long> deliveredRecordIds = new ArrayList<>();
+		StringBuilder sqlQuery = null;
+		try{
+			if(selfServiced){
+				sqlQuery = new StringBuilder(" SELECT DISTINCT WA.RECORD_ID as recordId FROM WORKFLOW_RECORDS_AUD WA, WORKFLOW_BATCH WB  ")
+				.append(" WHERE WA.WORKFLOW_ID = :workFlowId  ")
+				.append(" AND WA.BATCH_ID IS NOT NULL ")
+				.append(" and WA.NEXT_ROLE_ID=10002  and WA.WF_STATUS_ID=27 ")
+				.append(" AND WB.CURRENT_BATCH_ID = WA.BATCH_ID ")
+				.append(" and WB.WF_ID =   WA.WORKFLOW_ID ");
+			}else{
+				sqlQuery = new StringBuilder(" SELECT DISTINCT WA.RECORD_ID AS recordId FROM WORKFLOW_RECORDS_AUD WA, TICKETS T ")
+				.append(" WHERE WA.WORKFLOW_ID = :workFlowId  ")
+				.append(" and WA.TKT_ID IS NOT NULL ")
+				.append(" and WA.TKT_ID IS NOT NULL ")
+				.append(" and WA.NEXT_ROLE_ID=10002  and WA.WF_STATUS_ID=27 ")
+				.append(" and T.TKT_ID = WA.TKT_ID ")
+				.append(" and T.WORKFLOW_CYCLE = 'N' ");
+			}
+			log.info("SqlQuery --> " +sqlQuery.toString());
+			deliveredRecordIds = hibernatePersistenceManager.createSQLQuery(sqlQuery.toString()).addScalar("recordId", StandardBasicTypes.LONG).setLong("workFlowId",workFlowId).list();
+		}catch(Exception e){
+			log.error(EXCEPTION,e);
+		}
+		return deliveredRecordIds;
+	}
+	
+	@Override
+	public List<Long> getWorkFlowDeliveredRecordIdsByProjectId(Long projectId,boolean selfServiced){
+		final String methodName = "getWorkFlowDeliveredRecordIdsByProjectId";
+		log.info("Inside "+methodName+" method of "+CLASSNAME);
+		List<Long> deliveredRecordIds = new ArrayList<>();
+		StringBuilder sqlQuery = null;
+		try{
+			if(selfServiced){
+				sqlQuery = new StringBuilder(" SELECT DISTINCT WA.RECORD_ID as recordId FROM WORKFLOW_RECORDS_AUD WA, WORKFLOW_BATCH WB  ")
+				.append(" WHERE WA.PROJECT_ID = :projectId  ")
+				.append(" AND WA.BATCH_ID IS NOT NULL ")
+				.append(" and WA.NEXT_ROLE_ID=10002  and WA.WF_STATUS_ID=27 ")
+				//.append(" AND WB.CURRENT_BATCH_ID = WA.BATCH_ID ")
+				.append(" and WB.WF_ID =   WA.WORKFLOW_ID ");
+			}else{
+				sqlQuery = new StringBuilder(" SELECT DISTINCT WA.RECORD_ID AS recordId FROM WORKFLOW_RECORDS_AUD WA, TICKETS T ")
+				.append(" WHERE WA.PROJECT_ID = :projectId  ")
+				.append(" and WA.TKT_ID IS NOT NULL ")
+				.append(" and WA.TKT_ID IS NOT NULL ")
+				.append(" and WA.NEXT_ROLE_ID=10002  and WA.WF_STATUS_ID=27 ")
+				.append(" and T.TKT_ID = WA.TKT_ID ");
+				//.append(" and T.WORKFLOW_CYCLE = 'N' ");
+			}
+			log.info("SqlQuery --> " +sqlQuery.toString());
+			deliveredRecordIds = hibernatePersistenceManager.createSQLQuery(sqlQuery.toString()).addScalar("recordId", StandardBasicTypes.LONG).setLong("projectId",projectId).list();
+		}catch(Exception e){
+			log.error(EXCEPTION,e);
+		}
+		return deliveredRecordIds;
+	}
+	
+	@Override
+	public List<Long> getWorkFlowDeliveredRecordIdsByWorkFlowAndProjectId(Long projectId,Long workFlowId,boolean selfServiced){
+		final String methodName = "getWorkFlowDeliveredRecordIdsByWorkFlowAndProjectId";
+		log.info("Inside "+methodName+" method of "+CLASSNAME);
+		List<Long> deliveredRecordIds = new ArrayList<>();
+		StringBuilder sqlQuery = null;
+		try{
+			if(selfServiced){
+				sqlQuery = new StringBuilder(" SELECT DISTINCT WA.RECORD_ID as recordId FROM WORKFLOW_RECORDS_AUD WA, WORKFLOW_BATCH WB  ")
+				.append(" WHERE WA.PROJECT_ID = :projectId  ")
+				.append(" and WA.WORKFLOW_ID = :workFlowId  ")
+				.append(" AND WA.BATCH_ID IS NOT NULL ")
+				.append(" and WA.NEXT_ROLE_ID=10002  and WA.WF_STATUS_ID=27 ")
+				.append(" AND WB.CURRENT_BATCH_ID = WA.BATCH_ID ")
+				.append(" and WB.WF_ID =   WA.WORKFLOW_ID ");
+			}else{
+				sqlQuery = new StringBuilder(" SELECT DISTINCT WA.RECORD_ID AS recordId FROM WORKFLOW_RECORDS_AUD WA, TICKETS T ")
+				.append(" WHERE WA.PROJECT_ID = :projectId  ")
+				.append(" and WA.WORKFLOW_ID = :workFlowId  ")
+				.append(" and WA.TKT_ID IS NOT NULL ")
+				.append(" and WA.TKT_ID IS NOT NULL ")
+				.append(" and WA.NEXT_ROLE_ID=10002  and WA.WF_STATUS_ID=27 ")
+				.append(" and T.TKT_ID = WA.TKT_ID ")
+				.append(" and T.WORKFLOW_CYCLE = 'N' ");
+			}
+			log.info("SqlQuery --> " +sqlQuery.toString());
+			deliveredRecordIds = hibernatePersistenceManager.createSQLQuery(sqlQuery.toString()).addScalar("recordId", StandardBasicTypes.LONG).setLong("projectId",projectId).setLong("workFlowId", workFlowId).list();
+		}catch(Exception e){
+			log.error(EXCEPTION,e);
+		}
+		return deliveredRecordIds;
+	}
+	
+}

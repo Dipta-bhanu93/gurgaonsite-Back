@@ -1,0 +1,101 @@
+package com.dipta.project.utility.queue.jobcategory;
+
+import java.io.ByteArrayOutputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.sql.Timestamp;
+import java.text.SimpleDateFormat;
+
+import org.apache.poi.ss.usermodel.Workbook;
+
+import com.lei.domain.project.GeneratedReportsDomain;
+import com.lei.dto.common.FileReportDto;
+import com.lei.dto.workflow.ProjectDTO;
+import com.lei.exception.common.ProcessFailedException;
+import com.lei.maintenance.file.FileMaintenanceImpl;
+import com.lei.maintenance.file.IFileMaintenance;
+import com.lei.maintenance.project.IProjectMaintenance;
+import com.lei.maintenance.project.ProjectMaintenanceImpl;
+import com.lei.maintenance.user.IUserMaintenance;
+import com.lei.maintenance.user.UserMaintenanceImpl;
+import com.lei.maintenence.report.IReportsMaintenence;
+import com.lei.maintenence.report.ReportsMaintenenceImpl;
+import com.lei.report.ReportDataTable;
+import com.lei.service.files.FileDownloadService;
+import com.lei.utility.constants.CommonConstants;
+import com.lei.utility.constants.FileSourceConstants;
+import com.lei.utility.queue.CallableQueueJob;
+
+public class ProjectXrefCriticalRecordsReportGeneration extends CallableQueueJob<Long>{
+	
+	String feedType;
+	
+	public ProjectXrefCriticalRecordsReportGeneration(ReportDataTable reportDataTable, String feedType) {
+		super(reportDataTable);
+		this.feedType = feedType;
+	}
+	
+	@Override
+	public Long execute(Object[] userData) throws ProcessFailedException {
+		try{
+			ReportDataTable reportDataTable = (ReportDataTable)userData[0];
+			
+			long projectId = Long.valueOf(reportDataTable.getProjectId());
+
+			IUserMaintenance userMaintenance  = new UserMaintenanceImpl();
+			long userId =  userMaintenance.getUser(reportDataTable.getTenentEmail(), false).getId();
+
+			IProjectMaintenance projectMaintenance = new ProjectMaintenanceImpl();
+			ProjectDTO projectDetail = projectMaintenance.getProject(reportDataTable.getTenentEmail(), projectId);
+
+
+			IFileMaintenance fileMaintenance =new FileMaintenanceImpl();
+			
+			FileReportDto reportDto = reportDataTable.getFeedCriticalRecords().get(feedType);
+			reportDto.setReportName(feedType);
+			Workbook preparedWorkbook = getWorkbook(reportDto);
+			ByteArrayOutputStream baos = new ByteArrayOutputStream();
+			preparedWorkbook.write(baos);
+			byte[] data = baos.toByteArray();
+			
+			Long fileID = fileMaintenance.saveFile(reportDataTable.getTenentEmail(), getFileName(projectDetail.getProjectName(), projectDetail.getTemplateID(), reportDataTable.getExecutedOn(), feedType), data, FileSourceConstants.REPORT);
+			
+			IReportsMaintenence reportsMaintenence = new ReportsMaintenenceImpl();
+			GeneratedReportsDomain generatedReportsDomain=new GeneratedReportsDomain();
+			
+			generatedReportsDomain.setFileId(fileID);
+			generatedReportsDomain.setProjectId(projectId);
+			generatedReportsDomain.setUserId(userId);
+			generatedReportsDomain.setGeneratedDate(reportDataTable.getExecutedOn());
+			generatedReportsDomain.setExecutionId(reportDataTable.getExecutedId());
+			generatedReportsDomain.setBadRecordsFileFlag("Y");
+			if(reportsMaintenence.saveGeneratedReports(reportDataTable.getTenentEmail(), generatedReportsDomain)){
+				return fileID;
+			}else{
+				return 0L;
+			}
+			
+		}catch(Exception e){
+			throw new ProcessFailedException(e.getMessage());
+		}
+		
+	}
+	
+	private Workbook getWorkbook(FileReportDto requestedData) throws IOException{
+		FileDownloadService fds = new FileDownloadService();
+		return fds.createWorkBook(requestedData);
+	}
+	
+	private String getFileName(String projectName, long templateId,	Timestamp reportGenOn, String feedType){
+
+		if(templateId == 2){
+			return "BadRecords_"+CommonConstants.FILE_PREFIX_INSTISS + projectName + "_" + feedType + new SimpleDateFormat("_dd-MMM-yyyy_(HH-mm-ss").format(reportGenOn)+"Hrs).xlsx";
+		}else if(templateId == 3){
+			return "BadRecords_"+CommonConstants.FILE_PREFIX_XREF + projectName + "_" + feedType + new SimpleDateFormat("_dd-MMM-yyyy_(HH-mm-ss").format(reportGenOn)+"Hrs).xlsx";
+		}else{
+			return "BadRecords_"+CommonConstants.FILE_PREFIX_REFDATA + projectName + "_" + feedType + new SimpleDateFormat("_dd-MMM-yyyy_(HH-mm-ss").format(reportGenOn)+"Hrs).xlsx";
+		}
+
+	}
+
+}

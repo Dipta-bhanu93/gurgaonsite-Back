@@ -1,0 +1,339 @@
+
+package com.dipta.project.configuration;
+
+import java.util.Arrays;
+
+import javax.sql.DataSource;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.PropertySource;
+import org.springframework.context.annotation.PropertySources;
+import org.springframework.core.env.Environment;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.RememberMeAuthenticationProvider;
+import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
+import org.springframework.security.config.annotation.method.configuration.EnableGlobalMethodSecurity;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.authentication.rememberme.JdbcTokenRepositoryImpl;
+import org.springframework.security.web.authentication.rememberme.PersistentTokenBasedRememberMeServices;
+import org.springframework.security.web.authentication.rememberme.PersistentTokenRepository;
+import org.springframework.security.web.authentication.rememberme.RememberMeAuthenticationFilter;
+import org.springframework.security.web.csrf.CsrfFilter;
+import org.springframework.security.web.csrf.CsrfTokenRepository;
+import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+/**
+ * Spring configuration class used specifically for Spring 
+ * Security. 
+ * @author Vinay.Kumar1
+ * 
+ */
+@Configuration
+@EnableWebSecurity
+@EnableGlobalMethodSecurity(prePostEnabled = true)
+//@PropertySource("classpath:application.properties")
+
+@PropertySources({
+    @PropertySource("classpath:application.properties"),
+    @PropertySource("classpath:applicationclient.properties")
+})
+
+public class SecurityConfiguration extends WebSecurityConfigurerAdapter {
+	
+	@Autowired
+	private Environment env;
+	
+	private static String KEY;
+	private static int TOKEN_VALIDITY;
+
+	
+	
+	/**
+	 * The custom User Details service provided to Spring Security 
+	 * to fetch/lookup user details.
+	 */
+	
+	@Autowired
+	@Qualifier("codUserDetailsService")
+	UserDetailsService userDetailsService;
+
+	
+	
+	/**
+	 * The custom Success-Handler to handle successful authentication event.
+	 */
+	@Autowired
+	@Qualifier("codAuthenticationSuccessHandler")
+	CodAuthenticationSuccessHandler codAuthenticationSuccessHandler;
+
+	
+	
+	/**
+	 * The custom Success-Handler to handle failed authentication event.
+	 */
+	@Autowired
+	@Qualifier("codAuthenticationFailureHandler")
+	CodAuthenticationFailureHandler codAuthenticationFailureHandler;
+	
+	
+	
+	/**
+	 * The custom Success-Handler to handle successful Log-Out event.
+	 */
+	@Autowired
+	@Qualifier("codLogOutSuccessHandler")
+	CodLogOutSuccessHandler codLogOutSuccessHandler;
+	
+
+	
+	
+	/**
+	 * Method to provide Services - User-Details and Remember-Me to Spring Security Framework 
+	 * @param auth
+	 * @throws Exception
+	 */
+	@Autowired
+	public void configureGlobalSecurity(AuthenticationManagerBuilder auth) throws Exception {
+		auth.userDetailsService(userDetailsService).passwordEncoder(passwordEncoder());
+		
+		auth.authenticationProvider(rememberMeAuthenticationProvider());
+	}
+
+	
+	/**
+	 * Rest Entry Point to secure all Un-Authorised requests
+	 */
+	@Autowired
+	private RestAuthenticationEntryPoint restAuthenticationEntryPoint;
+
+	
+	
+	/**
+	 * Data-Source used by Remember-Me Service to generate/update/delete Tokens to database table PERSISTENT_LOGINS 
+	 * through a PersisitentTokenRepositoryImpl
+	 */
+	@Autowired
+	private DataSource dataSource;
+
+	
+	
+	
+	/**
+	 * Spring Security's core Authentication Manager
+	 */
+	@Bean(name = "authenticationManager")
+	@Override
+	public AuthenticationManager authenticationManagerBean() throws Exception {
+
+		return super.authenticationManagerBean();
+	}
+
+	
+	@Bean
+	public PasswordEncoder passwordEncoder(){
+		PasswordEncoder encoder = new BCryptPasswordEncoder();
+		return encoder;
+	}
+	
+	
+	/**
+	 * Spring Security's exposed method to provide all security 
+	 * configuration viz. - 
+	 * 1. URL request patterns, 
+	 * 2. Form login
+	 * 3. Success/failure handlers and
+	 * 4. Remember-me -  Authentication provider, Service and Persistent Token repository 
+	 * 5. CSRF filter and Csrf Token repository
+	 * 
+	 */
+	@Override
+	protected void configure(HttpSecurity http) throws Exception {
+
+	//http.addFilter(new UsernamePasswordAuthenticationFilter())
+	
+	http
+	.cors()
+	//.and().requiresChannel().anyRequest().requiresSecure()
+	.and()
+	.csrf() //.csrfTokenRepository(csrfTokenRepository()).and() 
+ 
+	.disable() 
+ 		 .exceptionHandling()
+	      .authenticationEntryPoint(restAuthenticationEntryPoint)
+	     
+	      .and()
+	     .authorizeRequests() 
+	     	  .antMatchers(env.getProperty("UI.INDEX_PAGE")).permitAll()
+		      .antMatchers(env.getProperty("UI.CDIONDEMAND")).permitAll()
+		      .antMatchers(env.getProperty("UI.HOME")).permitAll()
+	          .antMatchers(env.getProperty("UI.RESOURCES")).permitAll() 
+	          .antMatchers(env.getProperty("UI.SIGNUP")).permitAll() 
+	          .antMatchers(env.getProperty("UI.APP")).permitAll() 
+	          .antMatchers(env.getProperty("UI.VIEWS")).permitAll()
+	          .antMatchers(env.getProperty("UI.REGISTER")).permitAll()
+	          .antMatchers(env.getProperty("UI.APIREGISTER")).permitAll()
+	          .antMatchers(env.getProperty("UI.EXISTS")).permitAll()
+	          .antMatchers(env.getProperty("UI.ACTIVATE")).permitAll()
+	          .antMatchers(env.getProperty("UI.DOWNLOADPDF")).permitAll()
+	          .antMatchers(env.getProperty("UI.FORGETPASSWORD")).permitAll()
+	          .antMatchers(env.getProperty("UI.CONTACTUS")).permitAll()
+	          .antMatchers(env.getProperty("UI.ACTIVESESSION")).permitAll() 
+	          .antMatchers(env.getProperty("URL.LOGIN")).permitAll()
+	          .antMatchers(env.getProperty("UI.DIST")).permitAll()
+	          .antMatchers(env.getProperty("UI.APIREQ")).permitAll()
+	          .antMatchers(env.getProperty("UI.APIREQBYLEI")).permitAll()
+	          .antMatchers(env.getProperty("UI.APITOKENREQ")).permitAll()
+	          .antMatchers(env.getProperty("UI.APIREQBYCDID")).permitAll()
+	          
+	      
+	       /**
+           * URL Level security configuration for all modules ****************************
+           * For method level use @PreAuthorize("hasRole('MGR')") on each web service method
+           */
+	          
+
+
+	      .antMatchers(env.getProperty("URL.USERSCREATED")).access("hasAnyRole('ROLE_ADMIN', 'ROLE_DATAANALYST', 'ROLE_QAANALYST', 'ROLE_GUEST' , 'ROLE_EXSUPER', 'ROLE_INSUPER')")
+          .antMatchers(env.getProperty("URL.USERMAINTENANCE")).access("hasAnyRole('ROLE_ADMIN', 'ROLE_DATAANALYST', 'ROLE_QAANALYST', 'ROLE_GUEST' , 'ROLE_EXSUPER', 'ROLE_INSUPER')")
+          .antMatchers(env.getProperty("URL.PROJECT_SERVICE")).access("hasAnyRole('ROLE_ADMIN', 'ROLE_DATAANALYST', 'ROLE_QAANALYST', 'ROLE_GUEST' , 'ROLE_EXSUPER', 'ROLE_INSUPER')")
+          .antMatchers(env.getProperty("URL.REPORTS_SERVICE")).access("hasAnyRole('ROLE_ADMIN', 'ROLE_DATAANALYST', 'ROLE_QAANALYST', 'ROLE_GUEST' , 'ROLE_EXSUPER', 'ROLE_INSUPER')")
+     //     .antMatchers(env.getProperty("URL.UPLOADFILE")).access("hasAnyRole('ROLE_ADMIN', 'ROLE_DATAANALYST', 'ROLE_QAANALYST', 'ROLE_GUEST' , 'ROLE_EXSUPER', 'ROLE_INSUPER')")
+          .antMatchers(env.getProperty("URL.PROJECT_SERVICE")).access("hasAnyRole('ROLE_ADMIN', 'ROLE_DATAANALYST', 'ROLE_QAANALYST', 'ROLE_GUEST' , 'ROLE_EXSUPER', 'ROLE_INSUPER')")
+          .antMatchers(env.getProperty("URL.FILE_DOWNLOAD_SERVICE")).access("hasAnyRole('ROLE_ADMIN', 'ROLE_DATAANALYST', 'ROLE_QAANALYST', 'ROLE_GUEST' , 'ROLE_EXSUPER', 'ROLE_INSUPER')")
+          .antMatchers(env.getProperty("URL.CATALOGUE_FILE_UPLOAD")).access("hasAnyRole('ROLE_ADMIN', 'ROLE_DATAANALYST', 'ROLE_QAANALYST', 'ROLE_GUEST' , 'ROLE_EXSUPER', 'ROLE_INSUPER')")
+          .antMatchers(env.getProperty("URL.COMPANY_REGSTRN")).access("hasAnyRole('ROLE_ADMIN', 'ROLE_DATAANALYST', 'ROLE_QAANALYST', 'ROLE_GUEST' , 'ROLE_EXSUPER', 'ROLE_INSUPER')")
+          
+          .antMatchers(env.getProperty("URL.ACL_GET")).access("hasAnyRole('ROLE_ADMIN', 'ROLE_DATAANALYST', 'ROLE_QAANALYST', 'ROLE_GUEST' , 'ROLE_EXSUPER', 'ROLE_INSUPER')")
+          .antMatchers(env.getProperty("URL.ACL_SAVE")).access("hasAnyRole('ROLE_ADMIN', 'ROLE_DATAANALYST', 'ROLE_QAANALYST', 'ROLE_GUEST' , 'ROLE_EXSUPER', 'ROLE_INSUPER')")
+          .antMatchers(env.getProperty("URL.TICKET_CREATE")).access("hasAnyRole('ROLE_EXSUPER', 'ROLE_INSUPER','ROLE_ADMIN', 'ROLE_DATAANALYST', 'ROLE_QAANALYST')")
+          
+          /**
+           * Phase two starts
+           */
+          // dashboard widget - Sector summary
+          .antMatchers(env.getProperty("URL.SECTOR_SUMMARY")).access("hasAnyRole('ROLE_EXSUPER', 'ROLE_INSUPER','ROLE_ADMIN', 'ROLE_DATAANALYST', 'ROLE_QAANALYST')")
+          .antMatchers(env.getProperty("URL.NEWS")).access("hasAnyRole('ROLE_EXSUPER', 'ROLE_INSUPER','ROLE_ADMIN', 'ROLE_DATAANALYST', 'ROLE_QAANALYST')")
+          .antMatchers(env.getProperty("URL.DEDUPLICATION")).access("hasAnyRole('ROLE_EXSUPER', 'ROLE_INSUPER','ROLE_ADMIN', 'ROLE_DATAANALYST', 'ROLE_QAANALYST')")
+          .antMatchers(env.getProperty("URL.COMMANGOLD")).access("hasAnyRole('ROLE_EXSUPER', 'ROLE_INSUPER','ROLE_ADMIN', 'ROLE_DATAANALYST', 'ROLE_QAANALYST')")
+         .antMatchers(env.getProperty("URL.HIERARCHYMAINTENANCE")).access("hasAnyRole('ROLE_EXSUPER', 'ROLE_INSUPER','ROLE_ADMIN', 'ROLE_DATAANALYST', 'ROLE_QAANALYST')")
+          /**
+           * *****************************************************************************
+           */
+        
+         .anyRequest().authenticated() 
+         .and()
+         
+         /**
+          * add the CSRF filter - currently disabled (Line - 153) | as not logically needed for SPA + REST(with already enabled remember me service)
+          * as per ISSUE - https://github.com/spring-projects/spring-security/issues/3711
+          */
+         .addFilterAfter(new CoDCsrfHeaderFilter(), CsrfFilter.class)
+         
+         /**
+          * add form login
+          */
+	     	.formLogin() 
+	         .loginPage(env.getProperty("URL.HOME_PAGE")) 
+	         .loginProcessingUrl(env.getProperty("URL.LOGIN"))
+	         .usernameParameter("username")
+	         .passwordParameter("password")
+	         
+	         .successHandler(codAuthenticationSuccessHandler)
+	       
+	         .failureHandler(codAuthenticationFailureHandler)
+         
+         .and()
+         	.logout().logoutUrl(env.getProperty("URL.LOGOUT")).logoutSuccessHandler(codLogOutSuccessHandler)
+         
+         	/**
+         	 * add remember -me service
+         	 */
+         .and() 
+         	.rememberMe().rememberMeServices(rememberMeServices()); 
+	
+
+	}
+
+	@Bean
+	CorsConfigurationSource corsConfigurationSource() {
+		CorsConfiguration configuration = new CorsConfiguration();
+		//configuration.setAllowedOrigins(Arrays.asList(env.getProperty("CLIENT_IPS").split(",")));
+		configuration.setAllowedOrigins(Arrays.asList("*"));
+		configuration.setAllowedMethods(Arrays.asList("OPTIONS","POST", "GET",  "PUT", "DELETE"));
+		configuration.setAllowedHeaders(Arrays.asList("Origin", "Accept", "X-Requested-With", "Content-Type","Access-Control-Request-Method", "Access-Control-Request-Headers","Access-Control-Allow-Origin","g-recaptcha-response"));;
+		configuration.setAllowCredentials(true);
+		UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+		source.registerCorsConfiguration("/**", configuration);
+		return source;
+	}
+	
+	
+	/**
+	 * Returns remember me Authentication provider instance
+	 */
+	@Bean
+	public RememberMeAuthenticationProvider rememberMeAuthenticationProvider() {
+		return new RememberMeAuthenticationProvider(env.getProperty("SPRINGKEY"));
+
+	}
+	
+	
+	/**
+	 * Returns remember me Authentication filter instance
+	 */
+	@Bean
+	public RememberMeAuthenticationFilter rememberMeAuthenticationFilter() throws Exception {
+		return new RememberMeAuthenticationFilter(authenticationManagerBean(), rememberMeServices());
+	}
+	
+	
+
+	/**
+	 * Returns a persistent token based remember me service instance
+	 * @return
+	 */
+	@Bean(name = "CodRememberMeService")
+	public PersistentTokenBasedRememberMeServices rememberMeServices() {
+		PersistentTokenBasedRememberMeServices rememberMeServices = new PersistentTokenBasedRememberMeServices(env.getProperty("SPRINGKEY"), userDetailsService, persistentTokenRepository());
+		rememberMeServices.setAlwaysRemember(true);
+		rememberMeServices.setTokenValiditySeconds(Integer.parseInt(env.getProperty("TOKEN_VALIDITY")));
+		return rememberMeServices;
+	}
+
+	
+	/**
+	 * Persistent token repository to add/delete tokens in Database PERSISTENT_LOGINS(default) table. 
+	 * @return
+	 */
+	@Bean(name = "codPersistentTokenRepository")
+	public PersistentTokenRepository persistentTokenRepository() {
+		JdbcTokenRepositoryImpl db = new JdbcTokenRepositoryImpl();
+		db.setCreateTableOnStartup(false);
+		db.setDataSource(dataSource);
+
+		return db;
+	}
+
+	
+	/**
+	 * Returns Csrf Token Repository instance
+	 * @return
+	 */
+	private CsrfTokenRepository csrfTokenRepository() {
+		  HttpSessionCsrfTokenRepository repository = new HttpSessionCsrfTokenRepository();
+		  repository.setHeaderName("X-XSRF-TOKEN");
+		  return repository;
+	}
+
+}

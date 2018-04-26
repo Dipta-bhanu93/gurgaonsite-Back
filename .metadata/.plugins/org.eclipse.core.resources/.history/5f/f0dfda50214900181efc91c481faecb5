@@ -1,0 +1,135 @@
+package com.dipta.project.dto.common;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+
+import javax.xml.bind.annotation.XmlAccessType;
+import javax.xml.bind.annotation.XmlAccessorType;
+import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlRootElement;
+import javax.xml.bind.annotation.XmlSeeAlso;
+
+import lombok.Getter;
+import lombok.Setter;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonInclude.Include;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonRootName;
+import com.lei.dto.acl.AclDto;
+import com.lei.dto.company.CompanyDtoCollection;
+import com.lei.dto.company.ConfigSettingDto;
+import com.lei.dto.company.EntityStatusMasterDto;
+import com.lei.dto.company.GoldSearchGridDto;
+import com.lei.dto.company.SettingDto;
+import com.lei.dto.crossReference.EtlCreateMappingDto;
+import com.lei.dto.crossReference.EtlFeedMatchingDetailDto;
+import com.lei.dto.crossReference.EtlIDRuleDetailDto;
+import com.lei.dto.crossReference.EtlIDRuleMasterDto;
+import com.lei.dto.crossReference.EtlMatchMasterColumnsDto;
+import com.lei.dto.crossReference.EtlMatchingColumnDetailDto;
+import com.lei.dto.crossReference.EtlMatchingScoreDetailDto;
+import com.lei.dto.crossReference.EtlPrestageMapDto;
+import com.lei.dto.crossReference.EtlPrestageMasterDto;
+import com.lei.dto.crossReference.EtlStageFieldMapDto;
+import com.lei.dto.crossReference.EtlTransformMasterDto;
+import com.lei.dto.crossReference.FeedMasterDto;
+import com.lei.dto.crossReference.FeedMasterDtoCollection;
+import com.lei.dto.crossReference.FeedSetupDetailsDto;
+import com.lei.dto.crossReference.MappingCollection;
+import com.lei.dto.crossReference.ProjectFeedDto;
+import com.lei.dto.crossReference.ReplaceCategoryCollection;
+import com.lei.dto.crossReference.SourceTargetInfoDto;
+import com.lei.dto.crossReference.TransformationCollection;
+import com.lei.dto.customSearch.AdvanceSearchGridDto;
+import com.lei.dto.customSearch.CustomSearchGridDto;
+import com.lei.dto.customSearch.CustomerDetailDto;
+import com.lei.dto.dashboard.DashboardDto;
+import com.lei.dto.dashboard.GeoWidgetDtos;
+import com.lei.dto.dashboard.ProjectStatusCollectionDto;
+import com.lei.dto.dashboard.WorkItemDto;
+import com.lei.dto.dashboard.WorkItemNotificationDto;
+import com.lei.dto.dashboard.WorkItemTicketDto;
+import com.lei.dto.dashboard.WorkItemWorkFlowDto;
+import com.lei.dto.deduplication.DeduplicationDTOCollection;
+import com.lei.dto.hierarchy.HierarchyEntityDTO;
+import com.lei.dto.hierarchy.HierarchyDataCollection;
+import com.lei.dto.hierarchy.HierarchyMasterFilterDTO;
+import com.lei.dto.mdv.EntityRecord;
+import com.lei.dto.mdv.MDVGridDto;
+import com.lei.dto.news.CorporateCollectionDto;
+import com.lei.dto.platinum.CounterPartyPlatinumDtoCollection;
+import com.lei.dto.project.template.ProjectTemplateCountsDto;
+import com.lei.dto.project.template.ProjectTemplateMasterDto;
+import com.lei.dto.project.template.TemplateServiceMasterDto;
+import com.lei.dto.report.ReportDTO;
+import com.lei.dto.search.SearchDTO;
+import com.lei.dto.subscription.CountryWrapperDto;
+import com.lei.dto.subscription.OrderDetailDto;
+import com.lei.dto.subscription.PackageWithCHeaderDto;
+import com.lei.dto.subscription.SubscriptionDto;
+import com.lei.dto.ticketManagement.NotificationDto;
+import com.lei.dto.ticketManagement.TicketDetailsDto;
+import com.lei.dto.ticketManagement.TicketDto;
+import com.lei.dto.ticketManagement.TicketMessageDto;
+import com.lei.dto.user.CodApiRequestDto;
+import com.lei.dto.user.UserDTO;
+import com.lei.dto.user.UserDTOCollection;
+import com.lei.dto.user.UserProjectCollection;
+import com.lei.dto.workflow.ProjectConfigurationDto;
+import com.lei.dto.workflow.ProjectDTO;
+import com.lei.dto.workflow.WorkFlowMasterDto;
+import com.lei.dto.workflow.WorkFlowRecordsCountDto;
+import com.lei.dto.workflow.WorkFlowSearchGridDto;
+import com.lei.dto.workflow.WorkFlowUsersMapDto;
+import com.lei.dto.workflow.WorkflowCoreDTO;
+
+/**
+ * 
+ * @author Saurabh.Agarwal
+ *
+ */
+@XmlRootElement(name = "Response")
+@JsonRootName(value = "Response")
+@JsonInclude(Include.NON_NULL)
+@XmlAccessorType(XmlAccessType.NONE)
+@XmlSeeAlso({HashMap.class,UserDTO.class,SearchDTO.class,ArrayList.class,UserProjectCollection.class, ProjectDTO.class, AclDto.class, ReportDTO.class, DashboardDto.class, CountryWrapperDto.class,PackageWithCHeaderDto.class,GoldSearchGridDto.class,SubscriptionDto.class,EntityStatusMasterDto.class,OrderDetailDto.class,TicketDto.class,WorkFlowMasterDto.class,WorkFlowUsersMapDto.class,NotificationDto.class,CompanyDtoCollection.class,WorkFlowSearchGridDto.class,WorkFlowRecordsCountDto.class,MDVGridDto.class, CommonExternalFilterDto.class,WorkflowCoreDTO.class,ProjectConfigurationDto.class,TicketDetailsDto.class,TicketMessageDto.class,WorkItemDto.class,WorkItemNotificationDto.class,WorkItemTicketDto.class,WorkItemWorkFlowDto.class,ProjectTemplateMasterDto.class,ProjectTemplateCountsDto.class,CustomSearchGridDto.class,EntityRecord.class,CounterPartyPlatinumDtoCollection.class, GeoWidgetDtos.class, DeduplicationDTOCollection.class,CorporateCollectionDto.class,CommonSearchFilterDto.class,AdvanceSearchGridDto.class,String.class,ProjectStatusCollectionDto.class,ConfigSettingDto.class,SettingDto.class,TemplateServiceMasterDto.class,UserDTOCollection.class,FeedMasterDto.class,FeedMasterDtoCollection.class,MappingCollection.class,EtlPrestageMasterDto.class,EtlPrestageMapDto.class,ProjectFeedDto.class,EtlCreateMappingDto.class,EtlStageFieldMapDto.class,EtlIDRuleMasterDto.class,EtlTransformMasterDto.class,SourceTargetInfoDto.class,EtlIDRuleDetailDto.class,TransformationCollection.class,EtlFeedMatchingDetailDto.class,EtlMatchingColumnDetailDto.class,EtlMatchingScoreDetailDto.class,EtlMatchMasterColumnsDto.class,ReplaceCategoryCollection.class,CustomerDetailDto.class,FeedSetupDetailsDto.class,HierarchyDataCollection.class,HierarchyEntityDTO.class,HierarchyMasterFilterDTO.class,CodApiRequestDto.class})
+public class ResponseMessageDTO {
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "AuthToken")
+	@JsonProperty(value = "AuthToken")
+	private String authToken;
+
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "ResponseCode")
+	@JsonProperty(value = "ResponseCode")
+	private String responseCode;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "IsError")
+	@JsonProperty(value = "IsError")
+	private boolean isError;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "ResponseMessage")
+	@JsonProperty(value = "ResponseMessage")
+	private String responseMessage;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "ErrorDiscription")
+	@JsonProperty(value = "ErrorDiscription")
+	private String errorDiscription;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "Data")
+	@JsonProperty(value = "Data")
+	private Object data;
+}

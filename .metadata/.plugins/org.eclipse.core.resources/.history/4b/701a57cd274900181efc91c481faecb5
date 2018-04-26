@@ -1,0 +1,33 @@
+/**
+ * 
+ */
+package com.lei.maintenance.email;
+
+import java.util.List;
+
+import com.lei.dto.email.EmailContentDto;
+import com.lei.dto.email.EmailInfoDTO;
+import com.lei.dto.email.UnsentMailListDto;
+import com.lei.dto.user.UserDTO;
+import com.lei.exception.common.ObjectNotSupportedException;
+import com.lei.exception.common.ProcessFailedException;
+
+
+/**
+ * @author Aditya.Julka
+ *
+ */
+public interface IEmailMaintainance {
+
+	public String reSendEmail(EmailContentDto con);
+	
+	public EmailInfoDTO saveEmail(EmailContentDto con,String exception,UserDTO user) throws ObjectNotSupportedException, ProcessFailedException;
+	
+	public List<UnsentMailListDto> getEmailList(Long clientId);
+	
+	
+	public List<UnsentMailListDto> tryReSendEmail(Long clientId) throws  Exception ;
+
+	List<UnsentMailListDto> getEmailList();
+	
+}

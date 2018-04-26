@@ -1,0 +1,14 @@
+package com.lei.report;
+
+import java.io.IOException;
+
+import com.lei.exception.common.ObjectNotSupportedException;
+import com.lei.exception.common.ProcessFailedException;
+import com.lei.exception.project.ProjectConfigNotFoundException;
+import com.lei.exception.project.ProjectDoesNotExistsException;
+import com.lei.exception.user.LoginIDFormatException;
+
+public interface IReportGenerator {
+
+	public Long generateReport(ReportDataTable reportDataTable) throws ProcessFailedException, ObjectNotSupportedException, ProjectDoesNotExistsException, ProjectConfigNotFoundException, IOException,LoginIDFormatException;
+}

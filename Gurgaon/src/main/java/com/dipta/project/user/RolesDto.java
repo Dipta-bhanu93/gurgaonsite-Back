@@ -1,0 +1,55 @@
+package com.dipta.project.user;
+
+import java.io.Serializable;
+
+import javax.xml.bind.annotation.XmlAccessType;
+import javax.xml.bind.annotation.XmlAccessorType;
+import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlRootElement;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonRootName;
+
+import lombok.Getter;
+import lombok.Setter;
+
+
+@XmlRootElement(name = "Roles")
+@JsonRootName(value = "Roles")
+@XmlAccessorType(XmlAccessType.NONE)
+public class RolesDto implements Serializable{
+	
+	/**
+	 * 
+	 */
+	private static final long serialVersionUID = 8961987182301464998L;
+
+
+	@Getter
+	@Setter
+	@XmlElement(name = "Role_Id")
+	@JsonProperty(value = "Role_Id")
+	private Long roleId;
+	
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "Type")
+	@JsonProperty(value = "Type")
+	private String type;
+	
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "Description")
+	@JsonProperty(value = "Description")
+	private String description;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "RoleLevel")
+	@JsonProperty(value = "RoleLevel")
+	private Long roleLevel;
+	
+
+}

@@ -1,0 +1,37 @@
+package com.dipta.project.utility.queue;
+
+import java.util.concurrent.Callable;
+
+import com.lei.exception.common.ProcessFailedException;
+
+/**
+ * 
+ * @author saurabh.agarwal
+ *
+ */
+public abstract class CallableQueueJob<T extends Object> implements Callable<T>{
+	private Object[] data;
+	public CallableQueueJob(Object... data) {
+		this.data = data;
+	}
+	
+	public Object[] getData() {
+		return data;
+	}
+
+	public void setData(Object... data){
+		this.data = data;
+	}
+	
+	@Override
+	public final T call() throws Exception {
+		try {
+			return execute(data);
+		} catch (Exception e) {
+			e.printStackTrace();
+			return null;
+		}
+	};
+	
+	public abstract T execute(Object[] userData) throws ProcessFailedException;
+}

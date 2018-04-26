@@ -1,0 +1,52 @@
+package com.dipta.project.dao.project.orm;
+
+import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.text.DecimalFormat;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+
+import javax.persistence.ParameterMode;
+
+import lombok.extern.slf4j.Slf4j;
+
+import org.hibernate.CacheMode;
+import org.hibernate.Criteria;
+import org.hibernate.FlushMode;
+import org.hibernate.Hibernate;
+import org.hibernate.Query;
+import org.hibernate.criterion.Order;
+import org.hibernate.criterion.ProjectionList;
+import org.hibernate.criterion.Projections;
+import org.hibernate.criterion.Restrictions;
+import org.hibernate.procedure.ProcedureCall;
+import org.hibernate.transform.Transformers;
+import org.hibernate.type.StandardBasicTypes;
+
+/**
+ * 
+ * @author saurabh.agarwal
+ * 
+ */
+@Slf4j
+public class ProjectDaoImpl extends AbstractBaseDao implements IProjectDao {
+
+
+	public ProjectDaoImpl(String userEmail) {
+		super(userEmail);
+	}
+	public ProjectDaoImpl(Long clientId) {
+		super(clientId);
+	}
+
+
+	}

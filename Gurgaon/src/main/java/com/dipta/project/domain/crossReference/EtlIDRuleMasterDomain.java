@@ -1,0 +1,52 @@
+/**
+ * 
+ */
+package com.dipta.project.domain.crossReference;
+
+import java.sql.Timestamp;
+
+import javax.persistence.Column;
+import javax.persistence.Entity;
+import javax.persistence.Id;
+import javax.persistence.Table;
+
+import lombok.Getter;
+import lombok.Setter;
+
+/**
+ * @author santosh.panigrahi
+ * This class will represents domain object for master ID rule list.
+ *
+ */
+@Entity
+@Table(name = "ID_RULE_MASTER")
+public class EtlIDRuleMasterDomain {
+	
+	@Id
+	@Getter
+	@Setter
+	@Column(name = "RULE_ID")
+		private long ruleId;
+	
+	@Getter
+	@Setter
+	@Column(name = "rule_name")
+		private String ruleName;
+	
+	
+	@Getter
+	@Setter
+	@Column(name = "rule_status")
+		private String ruleStatus;
+	
+	@Getter
+	@Setter
+	@Column(name = "DESCRIPTION")
+		private String description;
+	
+	@Getter                   
+	@Setter                   
+	@Column(name = "DATECREATED")
+	private Timestamp dateCreated;  
+
+}

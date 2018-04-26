@@ -1,0 +1,22 @@
+package com.lei.report;
+
+public class ReportsComponentFactory {
+
+	public IReportGenerator getReportGenerator(String key) {
+
+		
+		if(key==null){
+			return new ExcelReportGeneratorImpl();
+		}else if (key.equals(ReportDefaultsEnum.CSV.getKey())) {
+			return new CsvReportGeneratorImpl();
+		} else if (key.equals(ReportDefaultsEnum.TXT.getKey())) {
+			return new TxtReportGeneratorImpl();
+		} else if (key.equals(ReportDefaultsEnum.XLSX.getKey())) {
+			return new ExcelReportGeneratorImpl();
+		} else {
+			//default 
+			return new ExcelReportGeneratorImpl();
+		}
+
+	}
+}

@@ -1,0 +1,49 @@
+/**
+ * 
+ */
+package com.dipta.project.dto.dashboard;
+
+import javax.xml.bind.annotation.XmlElement;
+
+import lombok.Getter;
+import lombok.Setter;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+/**
+ * @author Aditya.Julka
+ *
+ */
+public class SectorSummaryStatsListDto {
+	
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "lableNameList")
+	@JsonProperty(value = "lableNameList")
+	private Object[] lableNameList;
+	
+
+	@Getter
+	@Setter
+	@XmlElement(name = "platinumValueList")
+	@JsonProperty(value = "platinumValueList")
+	private Object[] platinumValueList;
+	
+	
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "goldValueList")
+	@JsonProperty(value = "goldValueList")
+	private Object[] goldValueList;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "series")
+	@JsonProperty(value = "series")
+	private Object[] series;
+
+	
+	
+}

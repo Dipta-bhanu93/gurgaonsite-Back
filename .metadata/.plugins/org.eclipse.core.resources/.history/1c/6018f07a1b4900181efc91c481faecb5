@@ -1,0 +1,154 @@
+package com.dipta.project.dao.base;
+
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
+
+import com.dipta.project.dao.*;
+
+/**
+ * 
+ * @author saurabh.agarwal
+ *
+ */
+public enum DaoManager {
+	USER("userdao",IUserDao.class),
+	USERAUTHDAO("authdao",IUserDao.class),
+	PROJECTDAO("projectdao",IProjectDao.class),
+	FILEDAO("filedao",IFileDao.class),
+	SCHEDULERDAO("schedulerdao",IFileDao.class),
+	REPORTSDAO("reportsdao",IReportDao.class),
+	COMMONDAO("commondao",ICommonDao.class),
+	LEIDAO("leidao",ILeiDao.class),
+	ACLDAO("acldao", IAclDao.class),
+	SUBSCRIPTIONDAO("subscriptiondao", ISubscriptionDao.class),
+	TICKETMAINTENANCEDAO("ticketMaintenancedao", ITicketMaintenanceDao.class),
+	COMMONGOLDDAO("commongolddao",ICommonGoldDao.class),
+	WORKFLOWDAO("workflowdao",IWorkFlowDao.class),
+	NOTIFICATIONDAO("notificationdao", INotificationDao.class),
+	COMPANYREGISTRATIONDAO("companyRegistrationDao", CompanyDao.class),
+	INSUPERUSERDAO("insuperuserdao", IInSuperUserDao.class),
+	COUNTERPARTYPLATINUMDAO("counterpartyplatinumdao", ICountryPartyPlatinumDao.class),
+	WORKFLOWCOREDAO("workflowCoreDao", WorkflowCoreDao.class),
+	MDVDAO("mdvDao", IMDVDao.class),
+	CUSTOMSEARCHDAO("customSearchDao",ICustomSearchDao.class),
+	DASHBOARD("dashboard",IDashboardDao.class),
+	NEWSDAO("newsDao", INewsDao.class),
+	DEDUPLICATIONDAO("deduplicationdao",IDeduplicationDao.class),
+	CLIENTREQUEST("clientRequestdao",IClientRequestedDao.class),
+	EMAIL("emailDaoImpl",IEmailDao.class),
+	CONFIGSETTINGDAO("configsettingDao", IConfigSettingDao.class),
+	CROSSREFDAO("crossRefDao", ICrossRefDao.class),
+	HIERARCHY("hierarchyDao", IHierarchyDao.class),
+	CONTROLPANEL("controlPanelDao",IControlPanelDao.class)
+	;
+	
+	
+	private final static String prefix = "maindao";
+	private Class<?> type = null;
+	private String classPath = null;
+	
+	DaoManager(String daoKey,Class type){
+		this.type = type;
+		
+		String prefix =PropertyUtility.getValueString(ApplicationConstants.DAOABSTRACTIONBUNDLE.getValue(),DaoManager.prefix,null);
+		String fullDaoKey = prefix+"."+daoKey;
+		classPath = PropertyUtility.getValueString(ApplicationConstants.DAOABSTRACTIONBUNDLE.getValue(),fullDaoKey,null);
+	}
+	/*public <T> T getDao(Class<T> type){
+		Object object = null;
+		
+		try {
+			object = Class.forName(classPath).newInstance();
+			if(type.isInstance(object)){
+				return type.cast(object);
+			}else{
+				return null;
+			}
+		} catch (InstantiationException | IllegalAccessException
+				| ClassNotFoundException e) {
+			return null;
+		}
+	}*/
+	public <T> T getDao(Object tenantIdentifier,Class<T> type){
+		Object object = null;
+		
+		
+		
+//		Class<?> c = Class.forName("mypackage.MyClass");
+//		Constructor<?> cons = c.getConstructor(String.class);
+//		Object object = cons.newInstance("MyAttributeValue");
+		
+		try {
+			Class<?> c = Class.forName(classPath);
+			Constructor<?> cons = null;
+			
+			if(tenantIdentifier instanceof String){
+				cons = c.getConstructor(String.class);
+				
+			}else if(tenantIdentifier instanceof Long){
+				cons = c.getConstructor(Long.class);
+				if(cons==null){
+					throw new InstantiationException("Constructor with supplied tenant identifier not defined in dao!!");
+				}
+			}else{
+				throw new InstantiationException("Illegal tenant identifier type passed. Only String and Long allowed!!");
+			}
+			
+			object = cons.newInstance(tenantIdentifier);
+			 			
+			if(type.isInstance(object)){
+				return type.cast(object);
+			}else{
+				return null;
+			}
+		} catch (InstantiationException | IllegalAccessException
+				| ClassNotFoundException | IllegalArgumentException | InvocationTargetException | NoSuchMethodException | SecurityException e) {
+			return null;
+		}
+	}
+	
+	
+	public <T> T getDaoByIdentifier(Object tenantIdentifier,Class<T> type){
+		Object object = null;
+		
+		
+		
+//		Class<?> c = Class.forName("mypackage.MyClass");
+//		Constructor<?> cons = c.getConstructor(String.class);
+//		Object object = cons.newInstance("MyAttributeValue");
+		
+		try {
+			Class<?> c = Class.forName(classPath);
+			Constructor<?> cons = null;
+			
+			if(tenantIdentifier instanceof String){
+				cons = c.getConstructor(String.class);
+				
+			}else if(tenantIdentifier instanceof Long){
+				cons = c.getConstructor(Long.class);
+				if(cons==null){
+					throw new InstantiationException("Exception while instantiating the dao. Constructor with supplied tenant identifier not defined in dao!!");
+				}
+			}else{
+				throw new InstantiationException("Exception while instantiating the dao. Illegal identifier passed. Only String and Long allowed!!");
+			}
+			
+			object = cons.newInstance(tenantIdentifier);
+			 			
+			if(type.isInstance(object)){
+				return type.cast(object);
+			}else{
+				return null;
+			}
+		} catch (InstantiationException | IllegalAccessException
+				| ClassNotFoundException | IllegalArgumentException | InvocationTargetException | NoSuchMethodException | SecurityException e) {
+			return null;
+		}
+	}
+	
+	
+	
+	public Object getDao(String tenantEmail){
+		return getDao(tenantEmail,type);
+	}
+}

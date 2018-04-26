@@ -1,0 +1,62 @@
+package com.dipta.project.scheduler.jobs;
+
+import com.lei.dto.news.NewsExecutionDTO;
+import com.lei.dto.scheduler.SchedulerJobDto;
+import com.lei.dto.scheduler.SchedulerJobDto.ReInitiateOnServerStartup;
+import com.lei.exception.common.ProcessFailedException;
+import com.lei.news.IFeedReader;
+import com.lei.news.RSSFeedReader;
+import com.lei.scheduler.SchedulerJob;
+import com.lei.scheduler.ScheduleManager.Repeat;
+/**
+ * 
+ * @author Saurabh Agarwal
+ *
+ */
+public class NewsExecutionJob extends SchedulerJob {
+	
+	public NewsExecutionJob() {
+	
+	}
+	
+
+	public NewsExecutionJob(String userEmail,NewsExecutionDTO triggerDetail){
+		SchedulerJobDto jobData = new SchedulerJobDto(triggerDetail.getId()+"",triggerDetail.getExecutionDate(),userEmail,triggerDetail,Repeat.EVERY_DAY,ReInitiateOnServerStartup.NO);
+		setJobData(jobData);
+	}
+	
+	@Override
+	public boolean execute(SchedulerJobDto jobDto) throws Exception {
+		IFeedReader rssFeedReader=new RSSFeedReader();
+		rssFeedReader.execute();
+		System.out.println("Execute the process");
+		return false;
+	}
+
+	@Override
+	public void executionFailed(SchedulerJobDto jobDto, String exceptionMessage)
+			throws ProcessFailedException {
+		System.out.println("Failed");
+	}
+
+	@Override
+	public void scheduled(SchedulerJobDto jobDto) throws ProcessFailedException {
+		System.out.println("scheduled");
+
+	}
+
+	@Override
+	public void executionStart(SchedulerJobDto jobDto)
+			throws ProcessFailedException {
+		System.out.println("executionStart");
+
+	}
+
+	@Override
+	public void executionFinish(SchedulerJobDto jobDto)
+			throws ProcessFailedException {
+		System.out.println("executionFinish");
+
+	}
+}
+

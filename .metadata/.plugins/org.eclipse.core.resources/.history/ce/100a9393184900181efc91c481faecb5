@@ -1,0 +1,102 @@
+package com.dipta.project.dao.user.orm;
+
+import java.sql.Timestamp;
+import java.util.List;
+
+import org.hibernate.Criteria;
+import org.hibernate.criterion.Restrictions;
+
+import com.lei.dao.base.orm.AbstractBaseDao;
+import com.lei.dao.user.IAuthenticatorDao;
+import com.lei.domain.user.AuthenticationDomain;
+import com.lei.exception.common.ProcessFailedException;
+import com.lei.utility.CommonUtils;
+import com.lei.utility.constants.ApplicationConstants;
+
+/**
+ * 
+ * @author Saurabh.Agarwal
+ *
+ */
+public class AuthenticatorDaoImpl extends AbstractBaseDao implements IAuthenticatorDao{
+	public AuthenticatorDaoImpl() {
+		this(ApplicationConstants.SUPERUSEREMAIL.getValue());
+	}
+	
+	public AuthenticatorDaoImpl(String userEmail) {
+		super(userEmail);
+	}
+
+	
+	@Override
+	public boolean login(AuthenticationDomain authData) throws ProcessFailedException {
+		boolean result= false;
+		beginTransaction();
+		try {
+			
+			hibernatePersistenceManager.save(authData);
+			result = true;
+		} catch (Exception e) {
+			e.printStackTrace();
+			rollBack();
+			throw new ProcessFailedException("User Login Failed in DAO.");
+		}
+		endTransaction();
+		return result;
+
+	}
+	
+	@Override
+	public AuthenticationDomain authenticate(String token,Timestamp currentTime) {
+		AuthenticationDomain authDomain=null;
+		beginTransaction();
+		Criteria authData = hibernatePersistenceManager.createCriteria(AuthenticationDomain.class);
+		authData.add(Restrictions.eq("token", token));
+		authData.add(Restrictions.ge("expiryDate",currentTime));
+		authData.add(Restrictions.eq("invalidated", "N"));
+		List<AuthenticationDomain> result = authData.list();
+		if(result != null && result.size()>0){
+			authDomain = result.get(0);
+		}
+		endTransaction();
+		return authDomain;
+	}
+	@Override
+	public boolean update(AuthenticationDomain authData) throws ProcessFailedException {
+		boolean result= false;
+		beginTransaction();
+		try {
+			hibernatePersistenceManager.saveOrUpdate(authData);
+			result = true;
+	} catch (Exception e) {
+			e.printStackTrace();
+			rollBack();
+			throw new ProcessFailedException("User Logout Failed.");
+		}
+		endTransaction();
+		return result;
+	}
+	
+	
+	public AuthenticationDomain get(String token) throws ProcessFailedException {
+		AuthenticationDomain authDomain=null;
+		beginTransaction();
+		Criteria authData = hibernatePersistenceManager.createCriteria(AuthenticationDomain.class);
+		authData.add(Restrictions.eq("token", token));
+		List<AuthenticationDomain> result = authData.list();
+		if(result != null && result.size()>0){
+			authDomain = result.get(0);
+		}
+		endTransaction();
+		return authDomain;
+	}
+	
+	public void updateExpiry(String token) throws ProcessFailedException{
+		AuthenticationDomain authDomain = get(token);
+		long sessionDuration = 600000;
+		authDomain.setExpiryDate(CommonUtils.getFutureTimestamp(sessionDuration));
+		update(authDomain);
+		
+	}
+	
+}

@@ -1,0 +1,107 @@
+package com.dipta.project.dao.project;
+
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+import com.lei.dao.base.DaoBaseInterface;
+import com.lei.domain.project.CodAttributesDomain;
+import com.lei.domain.project.ProjectConfigDomain;
+import com.lei.domain.project.ProjectExecutionDomain;
+import com.lei.dto.crossReference.ProjectFeedDto;
+import com.lei.dto.file.FileDataDTO;
+import com.lei.dto.hierarchy.HierarchyEntityDTO;
+import com.lei.dto.project.config.ProjectConfigXrefDto;
+import com.lei.dto.project.execute.ProjectExecutionDto;
+import com.lei.dto.project.execute.ProjectSkippedFeed;
+import com.lei.dto.project.template.ProjectTemplateCountsDto;
+import com.lei.dto.project.template.ProjectTemplateMasterDto;
+import com.lei.dto.project.template.ProjectTemplateSearchGridDto;
+import com.lei.dto.user.UserProjectCollection;
+import com.lei.dto.workflow.ProjectDTO;
+import com.lei.exception.common.ObjectNotSupportedException;
+import com.lei.exception.common.ProcessFailedException;
+import com.lei.exception.project.ProjectConfigNotFoundException;
+import com.lei.exception.project.ProjectCreationFailedException;
+import com.lei.exception.project.ProjectDoesNotExistsException;
+import com.lei.exception.project.SaveProjectConfigException;
+
+/**
+ * 
+ * @author saurabh.agarwal
+ *
+ */
+public interface IProjectDao extends DaoBaseInterface {
+	public List<ProjectDTO> getProjects(String userId) throws ObjectNotSupportedException;
+	public List<ProjectDTO> getProjects(long clientId,long templateID) throws ProcessFailedException;
+	public List<ProjectDTO> getProjects(String userId,long templateID) throws ProcessFailedException;
+	
+	public boolean exists(String userId,String projectName);
+	public ProjectDTO createProject(String userId,ProjectDTO projectDetails) throws ObjectNotSupportedException, ProjectCreationFailedException;
+	
+	public boolean saveFile(String userId,ProjectDTO projectDetails) throws ProcessFailedException, ProjectDoesNotExistsException;
+	public void saveFileData(String userID,Long projectID,Long fileId,List<FileDataDTO> inputData) throws ObjectNotSupportedException,ProcessFailedException;
+	public ProjectDTO getProjectDetails(String userEmail, String projectName)throws ObjectNotSupportedException;
+	public ProjectDTO getProjectDetails(String userEmail,Long projectId) throws ObjectNotSupportedException, ProjectDoesNotExistsException;
+	public ProjectDTO getProjectDetails(String userEmail, Long projectId, Long statusId) throws ObjectNotSupportedException, ProjectDoesNotExistsException, ProcessFailedException ;
+	public ProjectDTO getProjectDetails(String userEmail,Long projectId, boolean clientLevelFlag) throws ObjectNotSupportedException, ProjectDoesNotExistsException;
+	
+	public Boolean saveProjectConfig(ProjectDTO projectDetails) throws ObjectNotSupportedException, SaveProjectConfigException;
+	public ProjectDTO getProjectConfig(String loggedUser, String projectId) throws ObjectNotSupportedException,  ProjectConfigNotFoundException;
+	
+	public boolean saveUpdateProjectExecution(Long projectID, ProjectExecutionDto executionDetails) throws ProcessFailedException;
+	public boolean updateProjectExecutionStatus(Long projectID, Integer statusID,String Comment,String readStatus) throws ProcessFailedException;
+
+	public Boolean exists(Long projectId);
+	public ProjectExecutionDto getProjectExecution(Long projectId) throws ProcessFailedException;
+	
+	public ProjectExecutionDomain getProjectExecutionDomain(Long projectId) throws ProcessFailedException ;
+	public void execute(Long projectId) throws ProcessFailedException;
+	
+	public List<CodAttributesDomain> getCodAllAttributes(long templateId);
+	public ProjectDTO getProjectDetailsById(Long projectId) throws ObjectNotSupportedException, ProjectDoesNotExistsException;
+	List<ProjectConfigDomain> getSavedProjectConfigurations(long projectId);
+	
+	//public boolean saveProjectExecutionStatus(ProjectExecutionDto projectExecutionDto);
+	
+	public List<ProjectExecutionDto> getAllProjectExecutions(long projectId, String ExecutionNumbers) throws ObjectNotSupportedException, ProcessFailedException;
+	public ProjectExecutionDto getLatestExecutionDetails(long projectId) throws  ObjectNotSupportedException, ProcessFailedException;
+	public ProjectTemplateMasterDto getProjectTemplateMasterMapForDropDown(String userEmail);
+	public List<ProjectTemplateMasterDto> getProjectTemplates()throws ProcessFailedException;
+	public ProjectTemplateCountsDto getProjectTemplateInfo(String userEmail);
+	public UserProjectCollection getProjectDetailsByTemplateID(String userString,long templateID,Boolean allProject) throws ObjectNotSupportedException, ProjectConfigNotFoundException;
+	public ProjectTemplateSearchGridDto getProjectGoldDataDetails(String userEmail);
+	public int getProjectCountByTemplateID(String userEmail, long templateID);
+	public ProjectDTO getProjectDetailsByProjectID(String userEmail,Long projectId) throws ObjectNotSupportedException, ProjectConfigNotFoundException;
+	public void setPreExecutionFiles(Long projectId,Long executionId,Long fileId,Long catelogId) throws ProcessFailedException;
+	public Long getUnassignedMATPCountByProjectID(String emailID,Long projectID, Long templateId);
+	
+	public List<ProjectExecutionDto> getAllQueuedJobs() throws ProcessFailedException;
+	public ProjectTemplateMasterDto getServiceMasterMap(String userEmail);
+	public boolean deleteProjectById(Long projectId) throws ProcessFailedException;
+	public ProjectDTO getProjectConfigForXref(String loggedUser, String projectId) throws ObjectNotSupportedException, ProjectConfigNotFoundException;
+	public Boolean saveProjectConfigForXref(String userEmail, ProjectDTO projectDetails) throws ObjectNotSupportedException, SaveProjectConfigException;
+	public String isProjectConfigSavedforXref(String userEmail, Long projectId);
+	public Map<String, ArrayList<ProjectConfigXrefDto>> getSavedProjectConfigForXref(long projectId) throws ObjectNotSupportedException;
+	
+	public List<ProjectFeedDto> getProjectFeedList(Long projectId) throws ObjectNotSupportedException;
+	public String getProjectFeedName(Long projectId, Long fileId) throws ObjectNotSupportedException;
+	public ProjectDTO getProjectFeedForFileID(String userEmail, Long projectId)	throws ObjectNotSupportedException, ProjectDoesNotExistsException;
+	public ProjectDTO getPojectStatusbyProjectIds(String userEmail, String projectIds);
+	public List<ProjectSkippedFeed> getSkippedFeeds(String userEmail, Long projectId);
+	
+	
+	public void deleteStage() throws SQLException;
+	public boolean insertStage(long projectId,String serialNos)throws SQLException;
+	boolean hierarchyStageTable(long projectId, List<HierarchyEntityDTO> serialNo)
+			throws ProcessFailedException, ObjectNotSupportedException;
+	void addToGoldexecute(Long projectId) throws ProcessFailedException;
+	Object[] checkHierarchyConfig();
+	void truncateLastUpload(String userEmail, Long projectID, Long fileId,
+			List<FileDataDTO> inputData) throws ObjectNotSupportedException,
+			ProcessFailedException;
+	void truncateLastUpload(Long projectID, Long fileId,
+			List<FileDataDTO> inputData) throws ObjectNotSupportedException,
+			ProcessFailedException;
+}

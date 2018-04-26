@@ -1,0 +1,19 @@
+package com.lei.dao.email;
+
+import java.util.List;
+
+import com.lei.dao.base.DaoBaseInterface;
+import com.lei.dto.email.EmailInfoDTO;
+import com.lei.exception.common.ObjectNotSupportedException;
+import com.lei.exception.common.ProcessFailedException;
+
+public interface IEmailDao  extends DaoBaseInterface {
+	
+	public EmailInfoDTO save(EmailInfoDTO emailObj) throws ObjectNotSupportedException, ProcessFailedException;
+	public List<EmailInfoDTO> getEmailDetails()  throws ObjectNotSupportedException,ProcessFailedException;
+	public List<EmailInfoDTO> getEmailDetails(Long ClientId)  throws ObjectNotSupportedException,ProcessFailedException;
+	public boolean deleteEmail(EmailInfoDTO emailObj)	throws ObjectNotSupportedException, ProcessFailedException;
+	public boolean retryCount(EmailInfoDTO emailObj) throws ObjectNotSupportedException,ProcessFailedException;
+	
+	
+}

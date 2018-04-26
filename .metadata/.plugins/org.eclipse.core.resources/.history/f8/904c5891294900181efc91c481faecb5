@@ -1,0 +1,92 @@
+package com.dipta.project.utility.email;
+
+import java.io.IOException;
+
+import javax.mail.MessagingException;
+
+import com.dipta.project.dao.scheduler.ScheduleManager;
+import com.dipta.project.dao.scheduler.SchedulerJob;
+import com.dipta.project.dto.email.EmailContentDto;
+import com.dipta.project.dto.email.EmailDTO;
+import com.dipta.project.dto.email.EmailInfoDTO;
+import com.dipta.project.dto.email.base.IBaseEmail;
+import com.dipta.project.dto.user.UserDTO;
+import com.dipta.project.exception.common.EmailException;
+import com.dipta.project.exception.common.InvalidFileException;
+import com.dipta.project.exception.common.InvalidKeyException;
+import com.dipta.project.exception.common.ObjectNotSupportedException;
+import com.dipta.project.exception.common.ProcessFailedException;
+import com.dipta.project.exception.scheduler.SchedulingFailedException;
+import com.dipta.project.maintenance.email.EmailMaintainanceImpl;
+import com.dipta.project.utility.queue.jobcategory.EmailResendProcess;
+
+import lombok.extern.slf4j.Slf4j;
+
+/**
+ * 
+ * @author Saurabh.Agarwal
+ *
+ */
+@Slf4j
+public final class SendMail extends SendMailAbstract{
+	static{
+		try {
+			initiate();
+		} catch (InvalidFileException | InvalidKeyException e) {
+			e.printStackTrace();
+		}
+	}
+	
+	public SendMail() throws MessagingException {
+		super();
+	}
+
+	public void sendMail(IBaseEmail baseData) throws MessagingException, IOException {
+		setFrom(baseData.getFrom());
+		setRecepiants(baseData.getTo(),baseData.getCc(),baseData.getBcc());
+		setSubject(baseData.getSubject());
+		prepare(baseData.getBody(),baseData.getAttachments(),baseData.getAttachmentsName(),baseData.getSupportAttachment());
+		send();
+	}
+//	public static void sendMail(String event,String to,String cc,String body,String[] attachments) throws EmailException{
+	public static void sendMail(String event,String to,String cc,String body,String[] attachments,UserDTO user) throws EmailException{
+		sendMail(event, to, cc, body, attachments,null,user);
+	}
+//	public static void sendMail(String event,String to,String cc,String body,String[] attachments,String[] attachmentsName) throws EmailException{
+	public static void sendMail(String event,String to,String cc,String body,String[] attachments,String[] attachmentsName,UserDTO user) throws EmailException{
+		EmailDTO mailDto = new EmailDTO(event, to, cc, body, attachments,attachmentsName);
+		
+		try{
+			new SendMail().sendMail(mailDto);
+		}catch(MessagingException|IOException e){
+			EmailContentDto mail=new EmailContentDto(event, to, cc, body, attachments,attachmentsName);
+			EmailMaintainanceImpl serviceObj=new EmailMaintainanceImpl();
+			try {
+				EmailInfoDTO obj=serviceObj.saveEmail(mail, e.toString(),user);
+				if(obj!=null){
+					SchedulerJob job = new EmailResendProcess(user.getEmail(),obj);
+					ScheduleManager.schedule(job);
+				}
+			} catch (ObjectNotSupportedException|ProcessFailedException | SchedulingFailedException e1) {
+				// TODO Auto-generated catch block
+				log.error(e.toString());
+				throw new EmailException("Exception generated while Saving mail: "+e);
+			}
+				
+			//			throw new EmailException("Exception generated while sending mail: "+e);
+		}
+	}
+	
+	
+	
+	
+	public static String sendMail(EmailContentDto emailContentDto) {
+		EmailDTO mailDto =new EmailDTO(emailContentDto.getEvent(), emailContentDto.getTo(), emailContentDto.getCc(), emailContentDto.getBody(), emailContentDto.getAttachments(), emailContentDto.getAttachmentsName());
+		try{
+			new SendMail().sendMail(mailDto);
+		}catch(MessagingException|IOException e){
+				return e.toString();
+				}
+		return null;
+	}
+}

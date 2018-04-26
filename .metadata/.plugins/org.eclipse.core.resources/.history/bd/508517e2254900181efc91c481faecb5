@@ -1,0 +1,46 @@
+package com.dipta.project.dao.crossReference.orm;
+
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.Date;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Set;
+
+import javax.persistence.ParameterMode;
+
+import org.springframework.stereotype.Repository;
+
+import com.dipta.project.dao.base.orm.AbstractBaseDao;
+import com.dipta.project.dao.crossReference.ICrossRefDao;
+
+import lombok.extern.slf4j.Slf4j;
+
+
+/**
+ * @author Ashish.Patel
+ * 
+ */
+
+@Slf4j
+@Repository("crossRefDao")
+public class CrossRefDaoImpl extends AbstractBaseDao implements ICrossRefDao {
+
+	private static final String Yes = "ENABLE";
+
+	public CrossRefDaoImpl() {
+		this(ApplicationConstants.SUPERUSEREMAIL.getValue());
+	}
+
+	public CrossRefDaoImpl(String tenantEmail) {
+		super(tenantEmail);
+	}
+
+	public CrossRefDaoImpl(Long tenantId) {
+		super(tenantId);
+	}
+	
+}

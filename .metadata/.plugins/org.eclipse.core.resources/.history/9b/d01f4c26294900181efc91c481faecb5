@@ -1,0 +1,17 @@
+package com.dipta.project.dao.scheduler;
+
+import java.util.List;
+
+import com.lei.dao.base.DaoBaseInterface;
+import com.lei.dto.scheduler.SchedulerJobDto;
+import com.lei.exception.common.ProcessFailedException;
+
+/**
+ * 
+ * @author saurabh.agarwal
+ *
+ */
+public interface ISchedulerDao extends DaoBaseInterface {
+	public Boolean saveUpdateJobInfo(SchedulerJobDto jobData) throws ProcessFailedException;
+	public List<SchedulerJobDto> getAllScheduledJobs() throws ProcessFailedException;
+}

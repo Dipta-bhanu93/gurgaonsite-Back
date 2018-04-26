@@ -1,0 +1,19 @@
+package com.lei.maintenance.api;
+
+import com.lei.dto.user.APIResponseDto;
+import com.lei.dto.user.CodApiRequestDto;
+import com.lei.exception.common.ObjectNotSupportedException;
+import com.lei.exception.common.ProcessFailedException;
+
+public interface IClientRequestMaintenance {
+	public CodApiRequestDto getEnrichRecords(CodApiRequestDto apiRequestDto) throws ObjectNotSupportedException, ProcessFailedException;
+	
+	public CodApiRequestDto getEnrichMatchedRecords(CodApiRequestDto apiRequestDto) throws ObjectNotSupportedException, ProcessFailedException;
+
+	public CodApiRequestDto encodedURLObject(CodApiRequestDto codApiRequests)	throws Exception;
+
+	public CodApiRequestDto decodedURLObject(CodApiRequestDto codApiRequests,	String secureKey) throws Exception;
+
+	APIResponseDto buildResponse(CodApiRequestDto codApiRequests)	throws Exception;
+
+}

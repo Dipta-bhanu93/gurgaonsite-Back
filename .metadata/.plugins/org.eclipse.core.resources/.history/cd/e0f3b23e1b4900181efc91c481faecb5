@@ -1,0 +1,336 @@
+package com.lei.report;
+
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+
+import lombok.Getter;
+
+public enum ReportDefaultsEnum {
+
+	TIMESTAMP("MMDDYYYY", "MM_DD_YYYY",null),
+	
+	//BASE_QUERY("BASE_QUERY", "SELECT * FROM COUNTERPARTY_REPORT a, CLIENT_DATA b",null),
+	
+	BASE_QUERY("BASE_QUERY", "SELECT * FROM REPORTING_DATA a",null),
+	
+	COLS_PLACEHOLDER ("_COLS_", "_COLS_",null),
+	CRITERIA_PLACEHOLDER ("_CRIT_", "_CRIT_",null),
+	KEY_COLUMNS ("KEY_COLUMNS", "KEY_COLUMNS",null),
+	KEY_CRITERIA ( "KEY_CRITERIA", "KEY_CRITERIA",null),
+	KEY_REPORT_FORMATS ( "KEY_REPORT_FORMATS", "KEY_REPORT_FORMATS",null),
+	KEY_EMAIL_ME ( "KEY_EMAIL_ME", "KEY_EMAIL_ME",null),
+	
+	KEY_INCLUDE_IN_OUTPUT ( "KEY_INCLUDE_IN_OUTPUT", "KEY_INCLUDE_IN_OUTPUT",null),
+	
+	DEFAULT_REPORT_COLS ( "DEFAULT_REPORT_COLS", "a.SERIAL_NO , a.NAME , a.COUNTRY",null),
+	INSTRUMENT_EXTRA_DEF_REPORT_COLS ( "INSTRUMENT_EXTRA_DEF_REPORT_COLS", "a.ISIN, a.CUSIP, a.SEDOL",null),
+	DEFAULT_ADDED_REPORT_COLS ( "DEFAULT_ADDED_REPORT_COLS", "a.MATCHING_SCORE ,a.COMMENTS , a.MATCH_STATUS",null),
+	DISPALY_DEFAULT_REPORT_COLS ( "DEFAULT_REPORT_COLS", "SERIAL_NO,NAME,COUNTRY",null),
+	DISPALY_1_ADDED_REPORT_COLS ( "DEFAULT_ADDED_REPORT_COLS", "MATCHING_SCORE,COMMENTS,MATCH_STATUS",null),//1 is template Id
+	DISPALY_2_ADDED_REPORT_COLS ( "INSTRUMENT_EXTRA_DEF_REPORT_COLS", "ISIN,CUSIP,SEDOL",null),//2 is template Id
+
+	
+//	DEFAULT_REPORT_COLS ( "DEFAULT_REPORT_COLS", "SERIAL_NO AS \"Serial Number\", ENTITY_NAME AS \"Entity Name\", COUNTRY AS \"Country\",MATCHING_SCORE AS \"Matching Score\",COMMENTS AS \"Comments\", MATCH_STATUS"),
+//	DEFAULT_REPORT_CRITERIA ( "DEFAULT_REPORT_CRITERIA","USERID= :USERID AND PROJECTID= :PROJECTID"),
+	DEFAULT_REPORT_CRITERIA ( "DEFAULT_REPORT_CRITERIA"," a.PROJECTID= :PROJECTID ",null),
+	
+	COLUMN_USERID ( "USERID", "USERID", "User Id"),
+	
+	
+	COLUMN_PROJECTID ( "PROJECTID", "PROJECTID", "Project Id"),
+	
+	COLUMN_MATCH_STATUS ( "MATCH_STATUS", "a.MATCH_STATUS", "Match Status"),
+	
+	DEFAULT_ORDERBY("DEFAULT_ORDERBY", "ORDER BY a.ID ASC, a.MATCHING_SCORE DESC", "Matching Score"),
+	
+	
+	
+	COLUMN_SERIAL_NO ( "SERIAL_NO", "SERIAL_NO", "Serial Number"),
+	COLUMN_ENTITY_NAME ( "NAME", "NAME", "Name"),
+	COLUMN_COUNTRY ( "COUNTRY", "COUNTRY", "Country"),
+	COLUMN_ISIN ( "ISIN", "ISIN", "ISIN"),
+	COLUMN_SEDOL ( "SEDOL", "SEDOL", "SEDOL"),
+	COLUMN_CUSIP ( "CUSIP", "CUSIP", "CUSIP"),
+	COLUMN_MATCHING_SCORE ( "MATCHING_SCORE", "MATCHING_SCORE", "Matching Score"),
+	
+	COLUMN_COMMENTS("COMMENTS", "COMMENTS", "Comments"),
+	
+	COLUMN_LEGALNAME("LEGALNAME", "LEGALNAME", "Legal Name"),
+	COLUMN_DOMICILECNTRY_DESC("DOMICILECNTRY_DESC", "DOMICILECNTRY_DESC" , "Domicile Country"),
+	
+	// SUpported reports types
+	DB_ATTRIB_FORMAT("DWNFRMT", "DWNFRMT", "Download File Format"),
+	XLSX("XLSX", "xls", "Excel"),
+	CSV("CSV", "csv", "Csv"),
+	TXT("TXT", "txt", "Text"),
+	ZIP("ZIP","zip", "Zip");
+	
+	
+
+	
+	private ReportDefaultsEnum(String key,String value, String attributeInfo ) {
+		this.key = key;
+		this.value = value;
+		this.attributeInfo = attributeInfo;
+	//	projectTypeAndAtrributeMap.put(ProjectConfigEnum.INCLUDEINRESULT, ProjectConfigEnum.ConfigProperties);
+	}
+	
+
+
+	@Getter
+    private final String key;
+
+	@Getter
+    private final String value;
+	
+	@Getter
+    private final String attributeInfo;
+	
+	
+	private static HashMap<String, String> lookupAttributeInfo = new HashMap<String, String>();
+		static {
+			
+			// Populate out lookup when enum is created
+			
+			for (ReportDefaultsEnum e : ReportDefaultsEnum.values()) {
+				lookupAttributeInfo.put(e.getKey(), e.getAttributeInfo());
+			}
+		}
+
+		// Provide a method to lookup up enum with matching label
+		
+	public static String getAttributeInfo(String label) {
+			return lookupAttributeInfo.get(label);
+	}
+	
+	
+	 public enum XlsxReportTemplate{
+		 //new HashSet<String>(Arrays.asList("a", "b"));
+		 SHEET_FULL("ERROR","Error", false, new HashSet<String>(),new HashSet<String>(Arrays.asList( ReportDefaultsEnum.COLUMN_COMMENTS.getValue())) ),
+		 SHEET_PERFECTMATCH(ReportDefaultsEnum.MatchStatus.PERFECT_MATCH_ONLY.getAttributeDbValue(), "Enriched Entities", true, new HashSet<String>(),new HashSet<String>(Arrays.asList( ReportDefaultsEnum.COLUMN_COMMENTS.getValue()))),
+		
+		 SHEET_POTENMATCH(ReportDefaultsEnum.MatchStatus.POTEN_MATCH.attributeDbValue,"Manual Review Required", true, new HashSet<String>(Arrays.asList(
+				 														   ReportDefaultsEnum.COLUMN_SERIAL_NO.getValue(), 
+																		   ReportDefaultsEnum.COLUMN_ENTITY_NAME.getValue(), 
+																		   ReportDefaultsEnum.COLUMN_COUNTRY.getValue(), 
+																		   ReportDefaultsEnum.COLUMN_MATCHING_SCORE.getValue(),
+																		   
+																		   ReportDefaultsEnum.COLUMN_LEGALNAME.getValue(),
+																		   ReportDefaultsEnum.COLUMN_DOMICILECNTRY_DESC.getValue()
+																			
+																		   )), new HashSet<String>(Arrays.asList( ReportDefaultsEnum.COLUMN_COMMENTS.getValue()))),
+																		   
+																		   
+		 SHEET_NOMATCH(ReportDefaultsEnum.MatchStatus.NO_MATCH.getAttributeDbValue(),"Not Enriched", true, new HashSet<String>(Arrays.asList(ReportDefaultsEnum.COLUMN_SERIAL_NO.getValue(), 
+																		   ReportDefaultsEnum.COLUMN_ENTITY_NAME.getValue(), 
+																		   ReportDefaultsEnum.COLUMN_COUNTRY.getValue(), 
+																		   ReportDefaultsEnum.COLUMN_MATCHING_SCORE.getValue()
+				 															
+				 														   )), new HashSet<String>(Arrays.asList( ReportDefaultsEnum.COLUMN_COMMENTS.getValue()))),
+				 														   
+				 															
+		 SHEET_EXCEPN(ReportDefaultsEnum.MatchStatus.EXCEPTION_REPORT.getAttributeDbValue(),"Exceptions", true,new HashSet<String>(Arrays.asList(ReportDefaultsEnum.COLUMN_SERIAL_NO.getValue(), 
+																		   ReportDefaultsEnum.COLUMN_ENTITY_NAME.getValue(), 
+																		   ReportDefaultsEnum.COLUMN_COUNTRY.getValue(), 
+																		   ReportDefaultsEnum.COLUMN_MATCHING_SCORE.getValue(),
+																		   ReportDefaultsEnum.COLUMN_COMMENTS.getValue()
+																			
+																		   )), new HashSet<String>());
+		 
+		 private XlsxReportTemplate(String matchStatus, String sheet, boolean includeFlag, Set<String> includeFieldsSet ,Set<String> excludeFieldsSet) {
+			 
+			 this.matchStatus = matchStatus;
+			 this.sheet = sheet;
+			 this.includeFlag = includeFlag;
+			 this.includeFieldsSet = includeFieldsSet;
+			 this.excludeFieldsSet = excludeFieldsSet;
+		 }
+		 
+		
+		 @Getter
+		 private final String matchStatus ;
+		 
+		 @Getter
+		 private final String sheet ;
+		 
+		 @Getter
+		 private final boolean includeFlag ;
+		 
+		 @Getter
+		 private final Set<String> excludeFieldsSet;
+		
+		 @Getter
+		 private final Set<String> includeFieldsSet;
+		 
+		 
+		 private static Map<String, XlsxReportTemplate> lookup = new HashMap<String, XlsxReportTemplate>();
+			static {
+				
+				// Populate out lookup when enum is created
+				
+				for (XlsxReportTemplate e : XlsxReportTemplate.values()) {
+					lookup.put(e.getSheet(), e);
+				}
+			}
+
+			// Provide a method to lookup up enum with matching label
+			
+			public static XlsxReportTemplate get(String label) {
+				return lookup.get(label);
+			}
+			
+			
+			
+		
+			 private static Map<String, XlsxReportTemplate> lookupByMatchStatus = new HashMap<String, XlsxReportTemplate>();
+				static {
+					
+					// Populate out lookup when enum is created
+					
+					for (XlsxReportTemplate e : XlsxReportTemplate.values()) {
+						lookupByMatchStatus.put(e.getMatchStatus(), e);
+					}
+				}
+
+				// Provide a method to lookup up enum with matching label
+				
+				public static XlsxReportTemplate getByMatchStatus(String matchStatus) {
+					return lookupByMatchStatus.get(matchStatus);
+				}
+	 }
+	 
+	 
+	 
+	
+	 
+	 
+	 
+	 public enum PreviewReportColumns{
+		 
+		 SERIAL_NO("SERIAL_NO", "Serial Number"),
+		 NAME("NAME", "Name") , 
+		 COUNTRY("COUNTRY", "Country"),
+		 MATCHING_SCORE("MATCHING_SCORE", "Match Status") ,
+		 COMMENTS("COMMENTS", "Comments") , 
+		 MATCH_STATUS("MATCH_STATUS", "Match Status"), 
+		 LEI_NUMBER("LEI_NUMBER", "LEI Number"), 
+		 LEGALNAME("LEGALNAME","Entity Name"),
+		 DOMICILECNTRY_DESC("DOMICILECNTRY_DESC", "Domicile Country"),
+		 
+		 
+		 XLS_ENTITYNAME("Entityname","Entity Name"),
+		 XLS_DOMICILE("Domicile", "Domicile");
+		// XLS_LEINUMBER("LEI Number", "LEI Number"); 
+		 
+		private PreviewReportColumns(String column, String columnDisplayName ) {
+			this.column = column;
+			this.columnDisplayName = columnDisplayName;
+		}
+		 
+		
+		
+		 
+		 @Getter
+		 private final String column;
+		 @Getter
+		 private final String columnDisplayName;
+		 
+		 
+		 private static Map<String, PreviewReportColumns> lookup = new HashMap<String, PreviewReportColumns>();
+			static {
+				
+				// Populate out lookup when enum is created
+				
+				for (PreviewReportColumns e : PreviewReportColumns.values()) {
+					lookup.put(e.getColumn(), e);
+				}
+			}
+
+			// Provide a method to lookup up enum with matching label
+			
+			public static PreviewReportColumns get(String label) {
+				return lookup.get(label);
+			}
+		 
+	 }
+
+	 
+	 
+	   public enum MatchStatus{
+		   	 PERFECT_MATCH_ONLY("IN_PERFECT_MATCH_ONLY", "Perfect Match", "MATG", "100", true),   
+		   	 POTEN_MATCH("IN_POTEN_MATCH", "Potential Match", "MATP", "NA", true),
+		   	 EXCEPTION_REPORT("IN_EXCEPTION_REPORT", "Exception", "INEXP", "", true),
+	         NO_MATCH("IN_NO_MATCH", "No Match", "MATE", "0", true);
+	         
+	         
+	           
+	         
+	         @Getter
+	         private final String attribute;
+	         
+	         @Getter
+	         private final String attributeText;
+	         
+	         @Getter
+	         private final String attributeDbValue;
+	         
+	         @Getter
+	         private final String percentage;       
+	         
+	         @Getter
+	         private final boolean includeFlag;
+	         
+	         private MatchStatus(String attribute, String attributeText, String attributeDbValue, String percentage, boolean includeFlag ) {
+	        	 this.attribute = attribute;
+	        	 this.attributeText =  attributeText;
+	        	 this.attributeDbValue = attributeDbValue;
+	        	 this.percentage = percentage;
+	        	 this.includeFlag = includeFlag;
+				// TODO Auto-generated constructor stub
+			}
+	         
+	         
+	         private static Map<String, MatchStatus> lookup = new HashMap<String, MatchStatus>();
+	         static {
+	        	 
+	        	 // Populate out lookup when enum is created
+	        	 
+	        	 for (MatchStatus e : MatchStatus.values()) {
+	        		 lookup.put(e.getPercentage(), e);
+	        	 }
+	         }
+	         
+	         // Provide a method to lookup up enum with matching label
+	         
+	         public static MatchStatus get(String label) {
+	        	 return lookup.get(label);
+	         }
+	         
+	         
+	         
+	         
+	         
+	         
+	         
+        	 private static Map<String, MatchStatus> lookupMapByDbStatus = new HashMap<String, MatchStatus>();
+	     	 static {
+	     		
+	     		// Populate out lookup when enum is created
+	     		
+	     		for (MatchStatus e : MatchStatus.values()) {
+	     			lookupMapByDbStatus.put(e.getAttributeDbValue(), e);
+	     		}
+	     	 }
+
+	     	// Provide a method to lookup up enum with matching label
+	     	
+	     	 public static MatchStatus getCategoryByMatchStatus(String status) {
+	     		return lookupMapByDbStatus.get(status);
+	     	 }
+	    }
+	
+	   
+}

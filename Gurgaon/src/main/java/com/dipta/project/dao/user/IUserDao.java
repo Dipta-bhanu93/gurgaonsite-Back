@@ -1,0 +1,136 @@
+package com.dipta.project.dao.user;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import com.dipta.project.domain.user.StatusDomain;
+import com.dipta.project.domain.user.UserDomain;
+import com.dipta.project.dto.user.ApiProcessDto;
+import com.dipta.project.dto.user.CodApiRequestDto;
+import com.dipta.project.dto.user.RolesDto;
+import com.dipta.project.dto.user.StatusDTOCollection;
+import com.dipta.project.dto.user.StatusDto;
+import com.dipta.project.dto.user.UserDTO;
+import com.dipta.project.dto.user.UserDTOCollection;
+import com.dipta.project.exception.common.ObjectNotSupportedException;
+import com.dipta.project.exception.common.ProcessFailedException;
+import com.dipta.project.exception.user.RegistrationFailedException;
+
+/**
+ * 
+ * @author Saurabh.Agarwal
+ *
+ */
+public interface IUserDao {
+	public boolean logout(UserDTO UserDomain) throws ObjectNotSupportedException;
+	public boolean register(UserDTO UserDomain) throws RegistrationFailedException,ObjectNotSupportedException;
+	public boolean updatePasswordAndStatus(UserDTO UserDomain) throws ProcessFailedException, ObjectNotSupportedException;
+	public boolean exists(String emailId);
+	public UserDTO getUser(String emailId, boolean loadRoles) throws ObjectNotSupportedException;
+	public int getStatusId(String status);
+	public StatusDomain getStatus(String status);
+	/*public UserDTO getUserByProjectId(long projectId) throws ProjectIdNotSupportedException;
+	public long getUserIdByProjectId(long projectId) ;*/
+	public boolean registerCompany(String userEmail,Long companyID,boolean isGuest)throws ProcessFailedException ;
+	/**
+	 * Added for Spring security
+	 *
+	 */
+	public UserDTO findById(int id);
+	
+	public UserDTO findBySignInId(String sso,  boolean loadRoles) throws ObjectNotSupportedException;
+	/**
+	 * This method is used to update user profile.
+	 */
+	public boolean updateUserProfile(UserDTO userDto) throws ObjectNotSupportedException, ProcessFailedException;
+	
+	/**
+	 * This method is used to login with given loginId and password.
+	 * If valid, then it returns authorization token.
+	 * If invalid, it gives maximum 10 chances to login. Otherwise, user account is blocked. 
+	 * @param loginId
+	 * @param password
+	 * @return true/false
+	 * @throws ProcessFailedException
+	 */
+	boolean login(String loginId, String password) throws ProcessFailedException;
+	/**
+	 * This method is used to get list of users created by logged in user.
+	 */
+	public List<UserDTO> getUsersCreated(String emailId) throws ObjectNotSupportedException;
+	/**
+	 * This method is used to status master list from table.
+	 */
+	public List<StatusDto> getStatusMasterList() throws ObjectNotSupportedException;
+	/**
+	 * This method is used to get role master list from table.
+	 */
+	public List<RolesDto> getRoleMasterList() throws ObjectNotSupportedException;
+	/**
+	 * This method returns user domain object by id.
+	 */
+	public UserDomain userDomainById(long parseLong);
+	
+	/**
+	 * To activate user
+	 * @param userDto
+	 * @return
+	 * @throws ProcessFailedException
+	 */
+	public boolean activateUser(String emailId, String password, Integer statusId) throws ProcessFailedException, RegistrationFailedException;
+	public boolean updateCompany(String userEmail, Long companyID) throws ProcessFailedException ;
+	public boolean updateStatus(String userEmail) throws ProcessFailedException;
+	
+	/**
+	 * This function is used to fetch user list for a particular clientId. Role Id is an optional parameter.
+	 * If passed user list with specific role type will be returned, else the whole list will be returned
+	 * @param clientId
+	 * @param roleId
+	 * @return
+	 * @throws ProcessFailedException
+	 */
+	public ArrayList<UserDTO> getUsersForClient(Long clientId, Long roleId)	throws ProcessFailedException;
+	
+	
+	/**
+	 * To get user emailid for the given client id.
+	 * @param clientId
+	 * @return
+	 * @throws ProcessFailedException
+	 */
+	public String getUserEmailIdForClientId(Long clientId) throws ProcessFailedException;
+	/**
+	 * This method is used to get status for particular module.
+	 * @param moduleId
+	 * @return StatusDTOCollection
+	 * @throws ObjectNotSupportedException
+	 */
+	public StatusDTOCollection getStatusMasterList(int moduleId) throws ObjectNotSupportedException ;
+	
+	/**
+	 * To update DateCreated and PasswordExpiry Date
+	 * @param emailId
+	 * @return
+	 * @throws ProcessFailedException
+	 * @throws RegistrationFailedException
+	 */
+	public boolean updateCreatedAndPasswordExpiryDate(String emailId) throws ProcessFailedException;
+	
+	/**
+	 * 
+	 * @param emailId
+	 * @return
+	 */
+	public Long getUserID(String emailId);
+	
+	public UserDTOCollection getUserListForXorChat(String emailId) throws ObjectNotSupportedException;
+	boolean updatLastLogin(UserDTO userDTO) throws ProcessFailedException, ObjectNotSupportedException;
+	
+	public long createApiUserAccessToken(CodApiRequestDto dto) throws ObjectNotSupportedException;
+    public boolean updateApiUserAccessToken(CodApiRequestDto dto) throws ObjectNotSupportedException;
+    public ApiProcessDto isProcessRunning(CodApiRequestDto dto);
+    public boolean createApiRequestsLog(CodApiRequestDto dto) throws ObjectNotSupportedException;
+    public boolean isRequestPerDayReached(CodApiRequestDto dto, String requestThreshold);
+	boolean apiRegister(UserDTO userDto) throws RegistrationFailedException,ObjectNotSupportedException;
+
+}

@@ -1,0 +1,182 @@
+package com.lei.dto.crossReference;
+
+import java.io.Serializable;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.TreeMap;
+
+import javax.xml.bind.annotation.XmlAccessType;
+import javax.xml.bind.annotation.XmlAccessorType;
+import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlRootElement;
+import javax.xml.bind.annotation.XmlSeeAlso;
+import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
+
+import lombok.Getter;
+import lombok.Setter;
+
+import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonRootName;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.lei.serializers.JsonDateSerializer;
+import com.lei.serializers.XmlDateAdapter;
+
+
+
+/**
+ * @author Ashish.Patel
+ *
+ */
+@XmlRootElement(name = "FeedMasterInformation")
+@JsonRootName(value = "FeedMasterInformation")
+@XmlAccessorType(XmlAccessType.NONE)
+@XmlSeeAlso({HashSet.class,HashMap.class,TreeMap.class,EtlFileMetaDataDto.class})
+public class FeedMasterDto implements Serializable {
+
+	private static final long serialVersionUID = 1L;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "FeedId")
+	@JsonProperty(value = "FeedId")
+	private long feedid;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "FeedType")
+	@JsonProperty(value = "FeedType")
+	private String feedType;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "FeedName")
+	@JsonProperty(value = "FeedName")
+	private String feedName; 
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "SourceType")
+	@JsonProperty(value = "SourceType")
+	private String sourceType; 
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "FeedDataType")
+	@JsonProperty(value = "FeedDataType")
+	private String feedDataType; 
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "UserIdCreated")
+	@JsonProperty(value = "UserIdCreated")
+	private String userIdCreated; 
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "DateCreated")
+	@JsonProperty(value = "DateCreated")
+	@JsonSerialize(using=JsonDateSerializer.class)
+	@XmlJavaTypeAdapter(XmlDateAdapter.class)
+	@JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MMM-yyyy HH:mm:ss")
+	private Date dateCreated ;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "UserIdModified")
+	@JsonProperty(value = "UserIdModified")
+	private String userIdModified; 
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "DateModified")
+	@JsonProperty(value = "DateModified")
+	@JsonSerialize(using=JsonDateSerializer.class)
+	@XmlJavaTypeAdapter(XmlDateAdapter.class)
+	@JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MMM-yyyy HH:mm:ss")
+	private Date dateModified ;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "FeedDescription")
+	@JsonProperty(value = "FeedDescription")
+	private String feedDescription;
+		
+	@Getter
+	@Setter
+	@XmlElement(name = "ProjectFeedId")
+	@JsonProperty(value = "ProjectFeedId")
+	private long projectFeedId;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "FeedStatusId")
+	@JsonProperty(value = "FeedStatusId")
+	private long feedStatusId;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "FeedStatus")
+	@JsonProperty(value = "FeedStatus")
+	private String feedStatus;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "FeedOperation")
+	@JsonProperty(value = "FeedOperation")
+	private String feedOperation;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "ProjectId")
+	@JsonProperty(value = "ProjectId")
+	private long projectId;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "EtlFileMetaData")
+	@JsonProperty(value = "EtlFileMetaData")
+	private EtlFileMetaDataDto etlFileMetaDataDto;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "FeedMasterDropDown", nillable=true)
+	@JsonProperty(value = "FeedMasterDropDown")
+	private HashMap<String,Long> feedMasterDropDown;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "FeedCurrentStatus")
+	@JsonProperty(value = "FeedCurrentStatus")
+	private long feedCurrentStatus;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "FeedUsableForProject")
+	@JsonProperty(value = "FeedUsableForProject")
+	private boolean feedUsableForProject = true;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "FeedFileStatus")
+	@JsonProperty(value = "FeedFileStatus")
+	private long feedFileStatus;
+
+	@Override
+	public String toString() {
+		return "FeedMasterDto [feedid=" + feedid + ", feedType=" + feedType
+				+ ", feedName=" + feedName + ", sourceType=" + sourceType
+				+ ", userIdCreated=" + userIdCreated + ", dateCreated="
+				+ dateCreated + ", userIdModified=" + userIdModified
+				+ ", dateModified=" + dateModified + ", feedDescription="
+				+ feedDescription + ", projectFeedId=" + projectFeedId
+				+ ", feedStatusId=" + feedStatusId + ", feedStatus="
+				+ feedStatus + ", feedOperation=" + feedOperation
+				+ ", projectId=" + projectId + ", etlFileMetaDataDto="
+				+ etlFileMetaDataDto + "]";
+	}
+	
+	
+
+}

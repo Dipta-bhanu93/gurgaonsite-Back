@@ -1,0 +1,93 @@
+package com.dipta.project.dto.crossReference;
+
+import java.io.Serializable;
+
+import javax.xml.bind.annotation.XmlAccessType;
+import javax.xml.bind.annotation.XmlAccessorType;
+import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlRootElement;
+import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
+
+import lombok.Getter;
+import lombok.Setter;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonInclude.Include;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonRootName;
+import com.lei.utility.CharacterAdapter;
+
+
+/**
+ * @author Ashish.Patel
+ *
+ */
+@XmlRootElement(name = "EtlPrestageMapInformation")
+@JsonRootName(value = "EtlPrestageMapInformation")
+@XmlAccessorType(XmlAccessType.NONE)
+@JsonInclude(Include.NON_NULL)
+public class EtlPrestageMapDto implements Serializable {
+
+	private static final long serialVersionUID = 1L;
+
+	@Getter
+	@Setter
+	@XmlElement(name = "ID")
+	@JsonProperty(value = "ID")
+	private long id;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "PrestageTabName")
+	@JsonProperty(value = "PrestageTabName")
+	private String prestageTabName;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "PrestageColName")
+	@JsonProperty(value = "PrestageColName")
+	private String prestageColName;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "StageColName")
+	@JsonProperty(value = "StageColName")
+	private String stageColName;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "UniqueIdentifier")
+	@JsonProperty(value = "UniqueIdentifier")
+	@XmlJavaTypeAdapter(CharacterAdapter.class)
+	private Character uniqueIdentifier; 
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "Type")
+	@JsonProperty(value = "Type")
+	private String type;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "PrestageIdentifierName")
+	@JsonProperty(value = "PrestageIdentifierName")
+	private String prestageIdentifierName;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "Comments")
+	@JsonProperty(value = "Comments")
+	private String comments;
+	
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "isColumn")
+	@JsonProperty(value = "isColumn")
+	
+	private boolean isColumn;
+
+	
+	
+	
+}

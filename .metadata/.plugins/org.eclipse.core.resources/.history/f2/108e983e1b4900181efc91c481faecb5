@@ -1,0 +1,108 @@
+package com.lei.report;
+
+import java.sql.Timestamp;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+import com.lei.dto.common.FileReportDto;
+import com.lei.dto.crossReference.ProjectFeedDto;
+import com.lei.dto.file.FileDataDTO;
+
+import lombok.Getter;
+import lombok.Setter;
+
+public class ReportDataTable {
+	
+	
+	@Getter
+	@Setter
+	private String tenentEmail;
+
+	@Getter
+	@Setter
+	private List<ReportDataRow> reportDataRows;
+	
+	
+	@Getter
+	@Setter
+	List<LinkedHashMap<String,Object>> dataMapList;
+	
+	@Getter
+	@Setter
+	private String[] reportFormats;
+	
+	
+	@Getter
+	@Setter
+	private  String[] includeInOutput;
+	
+	@Getter
+	@Setter
+	private  String[] hinfo;
+	
+	@Getter
+	@Setter
+	private String emailMe;
+	
+	
+	@Getter
+	@Setter
+	private String projectId;
+	
+	@Getter
+	@Setter
+	private Timestamp executedOn;
+	
+	
+	@Getter
+	@Setter
+	private Long executedId=-1L;
+	
+	@Getter
+	@Setter
+	private List<FileDataDTO> badRecords;
+	
+	@Getter
+	@Setter
+	private long inputFileID;
+	
+	@Getter
+	@Setter
+	private long inputCatelogID;
+	
+	
+	@Getter
+	@Setter
+	private FileReportDto catalogData;
+	
+	@Getter
+	@Setter
+	private Map<String, FileReportDto > feedCriticalRecords;
+	
+	@Getter
+	@Setter
+	private Map<String, List<FileReportDto>> hierarchyReportingData;
+	
+	@Getter
+	@Setter
+	private long templateID;
+	
+	
+	@Getter
+	@Setter
+	private List<String> defaultHeader;
+	
+	@Getter
+	@Setter
+	private List<ProjectFeedDto> feedList;
+	
+	@Getter
+	@Setter
+	private boolean noData;
+	
+	@Getter
+	@Setter
+	private Long clientId;
+	
+}

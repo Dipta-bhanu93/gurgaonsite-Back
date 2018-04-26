@@ -1,0 +1,120 @@
+package com.dipta.project.dto.crossReference;
+
+import javax.xml.bind.annotation.XmlAccessType;
+import javax.xml.bind.annotation.XmlAccessorType;
+import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlRootElement;
+
+import lombok.Getter;
+import lombok.Setter;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonRootName;
+
+/**
+ * @author santosh.panigrahi
+ * 
+ * This class will represents details of a single rule in the system
+ *
+ */
+
+@XmlRootElement(name = "EtlIDRuleDetailInformation")
+@JsonRootName(value = "EtlIDRuleDetailInformation")
+@XmlAccessorType(XmlAccessType.NONE)
+public class EtlIDRuleDetailDto {
+	
+	
+	
+	public EtlIDRuleDetailDto(EtlIDRuleDetailDto copyObj) {
+		super();
+		this.id = copyObj.id;
+		this.ruleId = copyObj.ruleId;
+		this.rulesubId = copyObj.rulesubId;
+		this.tablename = copyObj.tablename;
+		this.columnname = copyObj.columnname;
+		this.status = copyObj.status;
+		this.parameter = copyObj.parameter;
+		this.userCreated = copyObj.userCreated;
+		this.feedId = copyObj.feedId;
+		this.securityLevel = copyObj.securityLevel;
+		this.etlIDRuleMasterDto = copyObj.etlIDRuleMasterDto;
+		this.isColumn= copyObj.isColumn;
+	}
+	
+	public EtlIDRuleDetailDto(){}
+
+	@Getter
+	@Setter
+	@XmlElement(name = "ID")
+	@JsonProperty(value = "ID")
+	private long id;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "ruleId")
+	@JsonProperty(value = "ruleId")
+		private long ruleId;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "rulesubId")
+	@JsonProperty(value = "rulesubId")
+		private long rulesubId;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "tablename")
+	@JsonProperty(value = "tablename")
+		private String tablename;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "columnname")
+	@JsonProperty(value = "columnname")
+		private String columnname;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "status")
+	@JsonProperty(value = "status")
+		private String status;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "parameter")
+	@JsonProperty(value = "parameter")
+		private String parameter;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "userCreated")
+	@JsonProperty(value = "userCreated")
+		private long userCreated;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "feedId")
+	@JsonProperty(value = "feedId")
+	private long feedId;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "securityLevel")
+	@JsonProperty(value = "securityLevel")
+	
+	private String securityLevel;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "isColumn")
+	@JsonProperty(value = "isColumn")
+	
+	private boolean isColumn;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "etlIDRuleMasterDto")
+	@JsonProperty(value = "etlIDRuleMasterDto")
+	private EtlIDRuleMasterDto etlIDRuleMasterDto;
+
+}

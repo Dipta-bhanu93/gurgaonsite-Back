@@ -1,0 +1,460 @@
+package com.dipta.project.scheduler.jobs;
+
+import java.sql.Timestamp;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.List;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+
+import com.dipta.project.dao.base.DaoManager;
+import com.dipta.project.dao.project.IProjectDao;
+import com.dipta.project.dao.report.IReportDao;
+import com.dipta.project.domain.project.ProjectExecutionDomain;
+import com.dipta.project.dto.common.FileReportDto;
+import com.dipta.project.dto.file.FileDataDTO;
+import com.dipta.project.dto.hierarchy.HierarchyDataCollection;
+import com.dipta.project.dto.project.execute.ProjectExecutionDto;
+import com.dipta.project.dto.scheduler.SchedulerJobDto;
+import com.dipta.project.dto.scheduler.SchedulerJobDto.ReInitiateOnServerStartup;
+import com.dipta.project.dto.workflow.ProjectDTO;
+import com.dipta.project.exception.common.ObjectNotSupportedException;
+import com.dipta.project.exception.common.ProcessFailedException;
+import com.dipta.project.exception.file.FeedSetupIncompleteException;
+import com.dipta.project.exception.file.FileAlreadyProcessingException;
+import com.dipta.project.exception.file.FileDoesNotExistException;
+import com.dipta.project.exception.project.ProjectDoesNotExistsException;
+import com.dipta.project.exception.project.TicketAssignedException;
+import com.dipta.project.exception.project.WorkflowAssignedException;
+import com.dipta.project.exception.scheduler.SchedulingFailedException;
+//import com.dipta.project.maintenance.project.IProjectMaintenance;
+//import com.dipta.project.maintenance.project.ProjectMaintenanceImpl;
+//import com.dipta.project.report.ReportDataTable;
+//import com.dipta.project.report.ReportingEngine;
+import com.dipta.project.scheduler.ScheduleManager;
+import com.dipta.project.scheduler.ScheduleManager.Repeat;
+import com.dipta.project.scheduler.SchedulerJob;
+import com.dipta.project.utility.PropertyUtility;
+import com.dipta.project.utility.constants.ApplicationConstants;
+import com.dipta.project.utility.constants.CommonConstants;
+import com.dipta.project.utility.constants.StatusConstants;
+import com.dipta.project.utility.queue.ProjectExecutionQueueManager;
+import com.dipta.project.utility.queue.QueueManager;
+import com.dipta.project.utility.queue.RunnableQueueJob;
+import com.dipta.project.utility.queue.jobcategory.ProjectExecutionQueueJob;
+
+/**
+ * 
+ * @author saurabh.agarwal
+ *
+ */
+public class ProjectExecutionJob extends SchedulerJob{
+
+	public ProjectExecutionJob() {
+	}
+	/*public ProjectExecutionJob(String userEmail,SchedulerJobDto jobDto) {
+		jobDto.setUserEmail(userEmail);
+		setJobData(jobDto);
+	}*/
+
+	public ProjectExecutionJob(String userEmail,ProjectDTO projectDto){
+		SchedulerJobDto jobData = new SchedulerJobDto(projectDto.getId().toString(),projectDto.getExecutionDetails().getNextExecution(),userEmail,projectDto,Repeat.DO_NO_REPEAT,ReInitiateOnServerStartup.YES);
+		setJobData(jobData);
+	}
+	public ProjectExecutionJob(String userEmail,ProjectDTO projectDto,HierarchyDataCollection collection){
+		SchedulerJobDto jobData = new SchedulerJobDto(projectDto.getId().toString(),projectDto.getExecutionDetails().getNextExecution(),userEmail,projectDto,collection,Repeat.DO_NO_REPEAT,ReInitiateOnServerStartup.YES);
+		setJobData(jobData);
+	}
+
+	@Override
+	public void scheduled(SchedulerJobDto jobDto) throws ProcessFailedException{
+		ProjectDTO projectDTO = (ProjectDTO)jobDto.getData();
+
+		IProjectDao dao = DaoManager.PROJECTDAO.getDao(jobDto.getUserEmail(),IProjectDao.class);
+		dao.updateProjectExecutionStatus(projectDTO.getId(), StatusConstants.SCHEDULED.getID(), "Job scheduled successfully",null);
+	}
+
+	@Override
+	public boolean execute(SchedulerJobDto jobDto) throws Exception {
+		ProjectDTO projectDTO = (ProjectDTO)jobDto.getData();
+		boolean isAddToGold=false;
+		if(jobDto.getExtraData()!=null) {
+			isAddToGold=true;
+		}else {
+			isAddToGold=false;
+		}
+		HierarchyDataCollection list = new HierarchyDataCollection();
+		
+		IProjectMaintenance projectMaintenance = new ProjectMaintenanceImpl();
+		try {
+			projectMaintenance.canExecuteProject(jobDto.getUserEmail(), projectDTO.getId(),isAddToGold);
+		} catch (TicketAssignedException | WorkflowAssignedException
+				| ProjectDoesNotExistsException | FileDoesNotExistException
+				| FileAlreadyProcessingException | FeedSetupIncompleteException | ObjectNotSupportedException e) {
+			e.printStackTrace();
+			throw new ProcessFailedException("A Ticket/Workflow/FIle Processing is already associated with the project. Detail Message: "+e.getMessage());
+		}
+		
+		
+		IProjectDao dao = DaoManager.PROJECTDAO.getDao(jobDto.getUserEmail(),IProjectDao.class);
+		
+		Timestamp executionOn = new Timestamp(new java.util.Date().getTime());
+		
+//		dao.execute(projectDTO);
+		
+		if(isAddToGold) {
+			list=(HierarchyDataCollection)jobDto.getExtraData();
+			executeProject(dao,projectDTO.getId(),list);
+		}else {
+			executeProject(dao,projectDTO.getId());	
+	
+		ProjectExecutionDto executionDto = dao.getLatestExecutionDetails(projectDTO.getId());
+		
+
+		//EXECUTION_ID
+		
+		// add report generation
+	
+		String isFetchDataInChunks = PropertyUtility.getValueString(ApplicationConstants.CONFIGURATIONSBUNDLE.getValue(), "PARALLEL_FETCH_REPORT_DATA","Y");
+		
+		IReportDao reportDao= DaoManager.REPORTSDAO.getDao(jobDto.getUserEmail(),IReportDao.class);
+		ReportDataTable reportDataTable=reportDao.getReportsData(String.valueOf( projectDTO.getId()),isFetchDataInChunks);
+		List<FileDataDTO> badRecords = reportDao.getBadRecords(projectDTO.getId());
+		
+		//fetch catlog data
+		FileReportDto catalogData  = new FileReportDto();
+		
+		
+		reportDataTable.setExecutedOn(executionOn);
+		reportDataTable.setExecutedId(executionDto.getExecutionId());
+		reportDataTable.setBadRecords(badRecords);
+		
+		//******** set tenent email id here
+		reportDataTable.setTenentEmail(jobDto.getUserEmail());
+		//************
+		
+		//******** set tenent id here
+		reportDataTable.setClientId(dao.getClientId());
+		
+		ReportingEngine engine = new ReportingEngine();
+		
+		ProjectDTO projectForFileId = dao.getProjectDetails(jobDto.getUserEmail(), projectDTO.getId());
+		
+		if(reportDataTable.getTemplateID() == CommonConstants.REFERENCE_DATA_ENRICHMENT_ID || reportDataTable.getTemplateID() == CommonConstants.INSTRUMENTS_ISSUER_MAPPING){
+			long fileID = projectForFileId.getFileId();
+			reportDataTable.setInputFileID(fileID);	
+			catalogData  = projectMaintenance.getCataloguData(jobDto.getUserEmail(), projectDTO.getId());
+			reportDataTable.setCatalogData(catalogData);
+		}else if(reportDataTable.getTemplateID() == CommonConstants.DATA_CROSS_REFERENCING){
+			reportDataTable.setFeedList(dao.getProjectFeedList(projectDTO.getId()));
+			catalogData  = projectMaintenance.getCataloguDataForXref(jobDto.getUserEmail(), projectDTO.getId());
+			reportDataTable.setCatalogData(catalogData);
+		}else if(reportDataTable.getTemplateID() == CommonConstants.ENRICH || reportDataTable.getTemplateID() == CommonConstants.BUILD){
+			long fileID = projectForFileId.getFileId();
+			reportDataTable.setInputFileID(fileID);	
+		}
+		
+		engine.execute(reportDataTable);
+		
+		dao.updateProjectExecutionStatus(projectDTO.getId(), StatusConstants.EXECUTIONREPORTCOMPLETE.getID(), "Dashboard refreshed with new report(s)",null);
+		//
+
+		}
+		return true;
+	}
+	
+	
+	private void executeProject(IProjectDao dao, Long projectId,HierarchyDataCollection list) throws ProcessFailedException {
+		Boolean successFlag=true;
+		QueueManager queueManager = ProjectExecutionQueueManager.getClientsQueue(dao.getClientId());
+		dao.updateProjectExecutionStatus(projectId, StatusConstants.ON_HOLD.getID(), "Execution is Queued.",null);
+		ProjectExecutionQueueJob addToGoldExecutionJob=new ProjectExecutionQueueJob(dao, projectId,list); 
+		Future<Boolean> future = queueManager.submitJob(addToGoldExecutionJob);
+		try {
+			successFlag=future.get();
+		} catch (InterruptedException | ExecutionException e) {
+			e.printStackTrace();
+			throw new ProcessFailedException(e.getCause().getMessage());
+		}
+		//Not to catch the Exception from Future Object
+		if(successFlag==null){
+			ProjectExecutionDomain executionDomain = dao.getProjectExecutionDomain(projectId);
+			throw new ProcessFailedException("Database Step Failed=" + executionDomain.getComments() +" | Feed ID:"+executionDomain.getFeedId()+", Feed Counter:"+executionDomain.getFeedCounter());
+		}	
+		
+	}
+
+	@Override
+	public void executionStart(SchedulerJobDto jobDto)
+			throws ProcessFailedException {
+		ProjectDTO projectDTO = (ProjectDTO)jobDto.getData();
+
+		IProjectDao dao = DaoManager.PROJECTDAO.getDao(jobDto.getUserEmail(),IProjectDao.class);
+		dao.updateProjectExecutionStatus(projectDTO.getId(), StatusConstants.INPROGRESS.getID(), "Project execution started and will be in queue.",null);
+
+	}
+	@Override
+	public void executionFinish(SchedulerJobDto jobDto)
+			throws ProcessFailedException {
+		ProjectDTO projectDTO = (ProjectDTO)jobDto.getData();
+		ProjectExecutionDto executionDetails = projectDTO.getExecutionDetails();
+
+		executionDetails.setComments("Project executed successfully.");
+		executionDetails.setStatusId(StatusConstants.COMPLETED.getID());
+		executionDetails.setFeedCounter(0);
+		executionDetails.setLastExecution(executionDetails.getNextExecution());
+		executionDetails.setLastStatus(StatusConstants.COMPLETED.getID());
+		executionDetails.setDateCreated(new Date());
+		executionDetails.setResultPublished(ApplicationConstants.RESULTNOTPUBLISHED.getValue());
+
+		executionDetails.setNextExecution(null);
+
+		IProjectDao dao = DaoManager.PROJECTDAO.getDao(jobDto.getUserEmail(),IProjectDao.class);
+		dao.saveUpdateProjectExecution(projectDTO.getId(), executionDetails);
+
+		if(!executionDetails.isOneTime()){
+			Reschedule reschedule = new Reschedule(projectDTO.getId(), executionDetails,jobDto.getUserEmail());
+			QueueManager qm = new QueueManager();
+			qm.executeAJob(reschedule);
+		}
+		
+		
+		// Release all feeds after execution
+	/*	ICrossRefDao xrefDao = DaoManager.CROSSREFDAO.getDao(jobDto.getUserEmail(),ICrossRefDao.class);
+		ProjectDTO projectDto = xrefDao.getFeedListByProjectId(jobDto.getUserEmail(), projectDTO.getId());
+		
+		if(null != projectDto && null != projectDto.getFeedMasterDtos() && !projectDto.getFeedMasterDtos().isEmpty()){
+			for (FeedMasterDto feedDto : projectDto.getFeedMasterDtos()) {
+				xrefDao.updateFeedSetupStepCompletion(jobDto.getUserEmail(), feedDto.getFeedid(), projectDto.getId(), StatusConstants.IDLE.getID().longValue());
+			}
+		}*/
+	}
+	
+	
+	
+	@Override
+	public void executionFailed(SchedulerJobDto jobDto,String exceptionMessage)
+			throws ProcessFailedException {
+		ProjectDTO projectDTO = (ProjectDTO)jobDto.getData();
+		ProjectExecutionDto executionDetails = projectDTO.getExecutionDetails();
+
+		executionDetails.setComments("Project execution failed. Exception message:"+exceptionMessage);
+		executionDetails.setStatusId(StatusConstants.FAILED.getID());
+
+		executionDetails.setLastExecution(executionDetails.getNextExecution());
+		executionDetails.setLastStatus(StatusConstants.FAILED.getID());
+		executionDetails.setDateCreated(new Date());
+		executionDetails.setFeedCounter(0);
+		executionDetails.setNextExecution(null);
+		executionDetails.setResultPublished(ApplicationConstants.RESULTNOTPUBLISHED.getValue());
+
+
+		IProjectDao dao = DaoManager.PROJECTDAO.getDao(jobDto.getUserEmail(),IProjectDao.class);
+		dao.saveUpdateProjectExecution(projectDTO.getId(), executionDetails);
+		//LP-910		[COD-P4] - Project is showing success on Project dashboard but the status in db is showing as PSLS.
+		//Incase of Exception on DB side the project under execution was not updated to 0
+		ProjectExecutionQueueManager.setProjectUnderExecution(dao.getClientId(), 0L);
+	}
+	
+	public void executeProject(IProjectDao dao,Long projectId) throws ProcessFailedException{
+		Boolean successFlag=true;
+		QueueManager queueManager = ProjectExecutionQueueManager.getClientsQueue(dao.getClientId());
+		dao.updateProjectExecutionStatus(projectId, StatusConstants.ON_HOLD.getID(), "Execution is Queued.",null);
+		ProjectExecutionQueueJob projectExecutionJob = new ProjectExecutionQueueJob(dao, projectId);
+		Future<Boolean> future = queueManager.submitJob(projectExecutionJob);
+		try {
+			successFlag=future.get();
+		} catch (InterruptedException | ExecutionException e) {
+			e.printStackTrace();
+			throw new ProcessFailedException(e.getCause().getMessage());
+		}
+		//Not to catch the Exception from Future Object
+		if(successFlag==null){
+			ProjectExecutionDomain executionDomain = dao.getProjectExecutionDomain(projectId);
+			throw new ProcessFailedException("Database Step Failed=" + executionDomain.getComments() +" | Feed ID:"+executionDomain.getFeedId()+", Feed Counter:"+executionDomain.getFeedCounter());
+		}
+	}
+	
+	
+	/*public void reSchedule(Long projectId,ProjectExecutionDto executionDetails) throws ProcessFailedException, SchedulingFailedException{
+		Date nextExecutionDate = getNextExecutionDate(executionDetails.getPeriodically(), executionDetails.getOnDay(), executionDetails.getLastExecution());
+
+		executionDetails.setComments("Project Re-execution requested. Previous execution was success.");
+		executionDetails.setStatusId(StatusConstants.NEW.getID());
+		executionDetails.setDateCreated(new Date());
+		executionDetails.setNextExecution(nextExecutionDate);
+
+		IProjectDao dao = DaoManager.PROJECTDAO.getDao(IProjectDao.class);
+		dao.saveUpdateProjectExecution(projectId, executionDetails);
+
+		ProjectDTO projectDto = new ProjectDTO();
+		projectDto.setId(projectId);
+		projectDto.setExecutionDetails(executionDetails);
+
+		SchedulerJob job = new ProjectExecutionJob(projectDto);
+		ScheduleManager.schedule(job);
+	}
+
+	private Date getNextExecutionDate(String periodically,int period,Date startExecutionDate){
+		if(periodically.equals("daily")){
+			return getNextDay(startExecutionDate);
+		}else if(periodically.equals("weekly")){
+			return getNextWeek(startExecutionDate, period);
+		}else if(periodically.equals("monthly")){
+			return getNextMonth(startExecutionDate, period);
+		}else{
+			return new Date();
+		}
+	}
+
+	private Date getNextDay(Date startExecutionDate){
+		Calendar cal = Calendar.getInstance();
+        cal.setTime(startExecutionDate);
+        cal.add(Calendar.DATE, 1);
+        return cal.getTime();
+	}
+	private Date getNextWeek(Date startExecutionDate,int onDay){
+		int todayDay = 0;
+
+		Calendar cal = Calendar.getInstance();
+        cal.setTime(startExecutionDate);
+        todayDay = cal.get(Calendar.DAY_OF_WEEK);
+
+        if(onDay>todayDay){
+        	cal.add(Calendar.DATE, Math.abs(todayDay-onDay));
+        }else{
+        	cal.add(Calendar.DATE, Math.abs((7-todayDay)+onDay));
+        }
+
+       return cal.getTime();
+	}
+	private Date getNextMonth(Date startExecutionDate,int onDay){
+		Calendar cal = Calendar.getInstance();
+        cal.setTime(startExecutionDate);
+        cal.add(Calendar.MONTH, 1);
+        int monthMaxDays = cal.getActualMaximum(Calendar.DAY_OF_MONTH);
+        int nextDay = cal.get(Calendar.DAY_OF_MONTH);
+
+        if(onDay>=monthMaxDays){
+        	cal.add(Calendar.DATE, Math.abs(nextDay-monthMaxDays));
+        }else if(onDay>=nextDay){
+        	cal.add(Calendar.DATE, Math.abs(nextDay-onDay));
+        }else if(onDay<nextDay){
+        	cal.add(Calendar.DATE, (onDay - nextDay) );
+        }
+
+       return cal.getTime();
+	}*/
+
+	private class Reschedule extends RunnableQueueJob{
+
+		public Reschedule(Long projectId,ProjectExecutionDto executionDetails,String userEmail) {
+			super(projectId,executionDetails,userEmail);
+		}
+		@Override
+		public boolean execute(Object[] userData) throws ProcessFailedException{
+			Long projectId = (Long)userData[0];
+			ProjectExecutionDto executionDetails = (ProjectExecutionDto)userData[1];
+			String userEmail = (String)userData[2]; 
+			
+				try {
+					Thread.sleep(1000);
+					reSchedule(projectId,executionDetails,userEmail);
+				} catch (ProcessFailedException | SchedulingFailedException|InterruptedException  e) {
+					IProjectDao dao = DaoManager.PROJECTDAO.getDao(userEmail,IProjectDao.class);
+					dao.updateProjectExecutionStatus(projectId,StatusConstants.FAILED.getID() ,"Project rescheduling failed:"+e.getMessage(),null);
+				} 
+				
+			return true;
+		}
+
+		private void reSchedule(Long projectId,ProjectExecutionDto executionDetails,String userEmail) throws ProcessFailedException, SchedulingFailedException{
+			
+			/*ITicketMaintenanceDao ticketDao = DaoManager.TICKETMAINTENANCEDAO.getDao(userEmail, ITicketMaintenanceDao.class);
+			TicketDto ticketDto = ticketDao.getLatestTicket(projectId);
+			if(ticketDto!=null && ticketDto.getTicketId()>0){
+				throw new ProcessFailedException("A ticket is already associated with the project. Can'nt execute the project right now Ticket no associated:"+ticketDto.getTicketId());
+			}*/
+			
+			/*IProjectMaintenance projectMaintenance = new ProjectMaintenanceImpl();
+			try {
+				projectMaintenance.canExecuteProject(userEmail, projectId);
+			} catch (TicketAssignedException | WorkflowAssignedException
+					| ProjectDoesNotExistsException | FileDoesNotExistException
+					| FileAlreadyProcessingException e) {
+				e.printStackTrace();
+				throw new ProcessFailedException("A Ticket/Workflow/FIle Processing is already associated with the project. Detail Message: "+e.getMessage());
+			}*/
+			
+			
+			Date nextExecutionDate = getNextExecutionDate(executionDetails.getPeriodically(), executionDetails.getOnDay(), executionDetails.getLastExecution());
+
+			executionDetails.setComments("Project Re-execution requested. Previous execution was success.");
+			executionDetails.setStatusId(StatusConstants.NEW.getID());
+			executionDetails.setDateCreated(new Date());
+			executionDetails.setNextExecution(nextExecutionDate);
+
+			IProjectDao dao = DaoManager.PROJECTDAO.getDao(userEmail,IProjectDao.class);
+			dao.saveUpdateProjectExecution(projectId, executionDetails);
+
+			ProjectDTO projectDto = new ProjectDTO();
+			projectDto.setId(projectId);
+			projectDto.setExecutionDetails(executionDetails);
+
+			SchedulerJob job = new ProjectExecutionJob(userEmail,projectDto);
+			ScheduleManager.schedule(job);
+		}
+
+		private Date getNextExecutionDate(String periodically,int period,Date startExecutionDate){
+			if(periodically.equals("daily")){
+				return getNextDay(startExecutionDate);
+			}else if(periodically.equals("weekly")){
+				return getNextWeek(startExecutionDate, period);
+			}else if(periodically.equals("monthly")){
+				return getNextMonth(startExecutionDate, period);
+			}else{
+				return new Date();
+			}
+		}
+
+		private Date getNextDay(Date startExecutionDate){
+			Calendar cal = Calendar.getInstance();
+			cal.setTime(startExecutionDate);
+			cal.add(Calendar.DATE, 1);
+			return cal.getTime();
+		}
+		private Date getNextWeek(Date startExecutionDate,int onDay){
+			int todayDay = 0;
+
+			Calendar cal = Calendar.getInstance();
+			cal.setTime(startExecutionDate);
+			todayDay = cal.get(Calendar.DAY_OF_WEEK);
+
+			if(onDay>todayDay){
+				cal.add(Calendar.DATE, Math.abs(todayDay-onDay));
+			}else{
+				cal.add(Calendar.DATE, Math.abs((7-todayDay)+onDay));
+			}
+
+			return cal.getTime();
+		}
+		private Date getNextMonth(Date startExecutionDate,int onDay){
+			Calendar cal = Calendar.getInstance();
+			cal.setTime(startExecutionDate);
+			cal.add(Calendar.MONTH, 1);
+			int monthMaxDays = cal.getActualMaximum(Calendar.DAY_OF_MONTH);
+			int nextDay = cal.get(Calendar.DAY_OF_MONTH);
+
+			if(onDay>=monthMaxDays){
+				cal.add(Calendar.DATE, Math.abs(nextDay-monthMaxDays));
+			}else if(onDay>=nextDay){
+				cal.add(Calendar.DATE, Math.abs(nextDay-onDay));
+			}else if(onDay<nextDay){
+				cal.add(Calendar.DATE, (onDay - nextDay) );
+			}
+
+			return cal.getTime();
+		}
+
+	}
+}

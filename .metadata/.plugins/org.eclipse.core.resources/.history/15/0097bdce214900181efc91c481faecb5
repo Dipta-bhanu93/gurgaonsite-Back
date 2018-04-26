@@ -1,0 +1,269 @@
+package com.dipta.project.dto.workflow;
+
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+
+import javax.xml.bind.annotation.XmlAccessType;
+import javax.xml.bind.annotation.XmlAccessorType;
+import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlRootElement;
+import javax.xml.bind.annotation.XmlSeeAlso;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonRootName;
+import com.lei.dto.crossReference.FeedMasterDto;
+import com.lei.dto.file.FileDto;
+import com.lei.dto.project.config.IncludeInResultPropsDto;
+import com.lei.dto.project.config.PremuimServicesPropsDto;
+import com.lei.dto.project.config.ProjectConfigXrefDto;
+import com.lei.dto.project.config.ResultConfigPropsDto;
+import com.lei.dto.project.config.SupportServicesPropsDto;
+import com.lei.dto.project.execute.ProjectExecutionDto;
+import com.lei.dto.project.template.ProjectClassificationDto;
+import com.lei.dto.report.PreExecutionFileReports;
+import com.lei.dto.report.RecordCountsDto;
+import com.lei.dto.report.ReportDTO;
+
+import lombok.Getter;
+import lombok.Setter;
+
+/**
+ * 
+ * @author saurabh.agarwal
+ *
+ */
+
+@XmlRootElement(name = "Project")
+@JsonRootName(value = "Project")
+@XmlAccessorType(XmlAccessType.NONE)
+@XmlSeeAlso({HashMap.class,PreExecutionFileReports.class,IncludeInResultPropsDto.class,SupportServicesPropsDto.class,PremuimServicesPropsDto.class,ProjectExecutionDto.class, ReportDTO.class, Date.class,RecordCountsDto.class,WorkflowRecordsMappingDto.class,WorkFlowSearchGridDto.class,FileDto.class,FeedMasterDto.class,ProjectConfigXrefDto.class})
+public class ProjectDTO implements java.io.Serializable{
+	private static final long serialVersionUID = 1L;
+
+	@Getter
+	@Setter
+	@XmlElement(name = "Id")
+	@JsonProperty(value = "Id")
+	private Long id;
+
+	@Getter
+	@Setter
+	@XmlElement(name = "ProjectName")
+	@JsonProperty(value = "ProjectName")
+	private String projectName;
+
+	@Getter
+	@Setter
+	@XmlElement(name = "Source")
+	@JsonProperty(value = "Source")
+	private String sourceId;
+
+	@Getter
+	@Setter
+	@XmlElement(name = "CategoryId")
+	@JsonProperty(value = "CategoryId")
+	private long categoryId;
+
+	@Getter
+	@Setter
+	@XmlElement(name = "PerssistData")
+	@JsonProperty(value = "PerssistData")
+	private String perssistData;
+
+	@Getter
+	@Setter
+	@XmlElement(name = "StatusId")
+	@JsonProperty(value = "StatusId")
+	private long statusId;
+
+	@Getter
+	@Setter
+	@XmlElement(name = "UserFile")
+	@JsonProperty(value = "UserFile")
+	private long fileId;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "DateCreated")
+	@JsonProperty(value = "DateCreated")
+/*	@JsonSerialize(using=JsonDateSerializer.class)
+	@XmlJavaTypeAdapter(XmlDateAdapter.class)
+	@JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MMM-yyyy HH:mm:ss")
+*/	private Date dateCreated;
+	
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "DateExecuted")
+	@JsonProperty(value = "DateExecuted")
+/*	@JsonSerialize(using=JsonDateSerializer.class)
+	@XmlJavaTypeAdapter(XmlDateAdapter.class)
+	@JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MMM-yyyy HH:mm:ss")
+*/	private Date dateExecuted;
+	
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "IncludeInResultPropsDto")
+	@JsonProperty(value = "IncludeInResultPropsDto")
+	private IncludeInResultPropsDto includeInResultPropsDto;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "SupportServicesPropsDto")
+	@JsonProperty(value = "SupportServicesPropsDto")
+	private SupportServicesPropsDto supportServicesPropsDto;
+	
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "PremuimServicesPropsDto")
+	@JsonProperty(value = "PremuimServicesPropsDto")
+	private PremuimServicesPropsDto premuimServicesPropsDto;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "ExecutionDetails")
+	@JsonProperty(value = "ExecutionDetails")
+	private ProjectExecutionDto executionDetails;
+	
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "ResultConfigPropsDto")
+	@JsonProperty(value = "ResultConfigPropsDto")
+	private ResultConfigPropsDto resultConfigPropsDto;
+	
+	
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "Reports")
+	@JsonProperty(value = "Reports")
+	private List<ReportDTO> reports;
+	
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "MinimumMatchScore")
+	@JsonProperty(value = "MinimumMatchScore")
+	private int minimumMatchScore;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "TemplateID")
+	@JsonProperty(value = "TemplateID")
+	private long templateID;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "RecordCounts")
+	@JsonProperty(value = "RecordCounts")
+	private RecordCountsDto recordCounts;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "ProjectClassificationMap")
+	@JsonProperty(value = "ProjectClassificationMap")
+	private HashMap<String,ProjectClassificationDto> projectClassificationMap;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "UserCreated")
+	@JsonProperty(value = "UserCreated")
+	private long userCreated;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "CreatedBy")
+	@JsonProperty(value = "CreatedBy")
+	private String createdBy;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "Tickets")
+	@JsonProperty(value = "Tickets")
+	private List<WorkflowRecordsMappingDto> ticketDetails;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "UploadedFile")
+	@JsonProperty(value = "UploadedFile")
+	private FileDto uploadedFile;
+	
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "WorkflowDetails")
+	@JsonProperty(value = "WorkflowDetails")
+	private WorkFlowSearchGridDto workflowDetails;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "DisplaySelfDeliveredFile")
+	@JsonProperty(value = "DisplaySelfDeliveredFile")
+	private boolean displaySelfDeliveredFile;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "DisplayCdiDeliveredFile")
+	@JsonProperty(value = "DisplayCdiDeliveredFile")
+	private boolean displayCdiDeliveredFile;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "PreExecutionReports")
+	@JsonProperty(value = "PreExecutionReports")
+	private List<PreExecutionFileReports> preExecutionReports;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "OneTimeExecutionFlag")
+	@JsonProperty(value = "OneTimeExecutionFlag")
+	private boolean oneTimeExecutionFlag;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "FeedMasterList")
+	@JsonProperty(value = "FeedMasterList")
+	private List<FeedMasterDto> feedMasterDtos;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "ProjectConfigXrefMap")
+	@JsonProperty(value = "ProjectConfigXrefMap")
+	private HashMap<String, ArrayList<ProjectConfigXrefDto>> projectConfigXrefMap;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "ProjectConfigXrefList")
+	@JsonProperty(value = "ProjectConfigXrefList")
+	private List<ProjectConfigXrefDto> projectConfigXrefList;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "FeedDeleteList")
+	@JsonProperty(value = "FeedDeleteList")
+	private List<FeedMasterDto> feedDeleteList;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "ProjectStatusMap")
+	@JsonProperty(value = "ProjectStatusMap")
+	private HashMap<String,String> projectStatusMap;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "ExecutionType")
+	@JsonProperty(value = "ExecutionType")
+	private String executionType;
+	
+
+	@Getter
+	@Setter
+	@XmlElement(name = "AddToGoldRecordCounts")
+	@JsonProperty(value = "AddToGoldRecordCounts")
+	private RecordCountsDto addToGoldRecordCounts;
+}

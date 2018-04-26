@@ -1,0 +1,102 @@
+/**
+ * 
+ */
+package com.lei.domain.workflow;
+
+import java.sql.Timestamp;
+
+import javax.persistence.Column;
+import javax.persistence.Entity;
+import javax.persistence.GeneratedValue;
+import javax.persistence.GenerationType;
+import javax.persistence.Id;
+import javax.persistence.SequenceGenerator;
+import javax.persistence.Table;
+
+import lombok.Getter;
+import lombok.Setter;
+
+import org.hibernate.envers.Audited;
+
+/**
+ * @author Pranav.Aggarwal
+ *
+ */
+@Entity
+@Table(name = "WORKFLOW_RECORDS_AUD")
+@Audited
+public class WorkFlowAuditDomain {
+	
+	@Getter
+	@Setter
+	@Id
+	@Column(name = "WORKFLOW_RECORD_ID")
+	@GeneratedValue(strategy=GenerationType.AUTO, generator="SEQ_WORKFLOW")
+	@SequenceGenerator(name="SEQ_WORKFLOW", sequenceName="SEQ_WORKFLOW")
+	private long workFlowRecordId;
+	
+	@Getter
+	@Setter
+	@Column(name = "WORKFLOW_ID")
+	private Long workFlowId;
+	
+	@Getter
+	@Setter
+	@Column(name = "PROJECT_ID")
+	private Long projectId;
+	
+	@Getter
+	@Setter
+	@Column(name = "RECORD_ID")
+	private Long recordId;
+	
+	@Getter
+	@Setter
+	@Column(name = "WF_STATUS_ID")
+	private Long workflowStatusId;
+	
+	@Getter
+	@Setter
+	@Column(name = "USER_ID_CREATED")
+	private Long userIdCreated;
+	
+	@Getter
+	@Setter
+	@Column(name="DATECREATED")
+	private Timestamp dateCreated;
+	
+	@Getter
+	@Setter
+	@Column(name = "USER_ID_MODIFIED")
+	private Long userIdModified;
+	
+	@Getter
+	@Setter
+	@Column(name="DATEMODIFIED")
+	private Timestamp dateModified;
+	
+	@Getter
+	@Setter
+	@Column(name = "STATUS_USER")
+	private Long statusUserId;
+	
+	@Getter
+	@Setter
+	@Column(name = "NEXT_ROLE_ID")
+	private Long nextRoleId;
+
+	@Getter
+	@Setter
+	@Column(name = "COMMENTS")
+	private String comments;
+	
+	@Getter
+	@Setter
+	@Column(name = "TKT_ID")
+	private Long ticketId;
+	
+	@Getter
+	@Setter
+	@Column(name = "BATCH_ID")
+	private Long batchID;
+}

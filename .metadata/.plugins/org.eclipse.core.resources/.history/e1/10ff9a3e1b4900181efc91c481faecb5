@@ -1,0 +1,19 @@
+package com.lei.report;
+
+import lombok.Getter;
+import lombok.Setter;
+
+public class ReportDataColumn {
+
+
+	@Getter
+	@Setter
+	private String columnHeader;
+	
+
+	@Getter
+	@Setter
+	private String columnValue;
+	
+	
+}

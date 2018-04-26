@@ -1,0 +1,238 @@
+package com.dipta.project.scheduler;
+
+import java.util.Calendar;
+import java.util.Date;
+import java.util.GregorianCalendar;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.TimeZone;
+
+import org.quartz.CronScheduleBuilder;
+import org.quartz.JobBuilder;
+import org.quartz.JobDetail;
+import org.quartz.JobKey;
+import org.quartz.Scheduler;
+import org.quartz.SchedulerException;
+import org.quartz.Trigger;
+import org.quartz.TriggerBuilder;
+import org.quartz.TriggerKey;
+import org.quartz.impl.StdSchedulerFactory;
+import org.quartz.impl.matchers.GroupMatcher;
+
+import com.lei.dao.base.DaoManager;
+import com.lei.dao.scheduler.ISchedulerDao;
+import com.lei.dto.scheduler.SchedulerJobDto;
+import com.lei.exception.common.ProcessFailedException;
+import com.lei.exception.scheduler.SchedulingFailedException;
+import com.lei.utility.constants.StatusConstants;
+
+/**
+ * 
+ * @author saurabh.agarwal
+ *
+ */
+public class ScheduleManager {
+	public static final String DATAKEY = "JOBDATA";
+	private static Scheduler scheduler = null;
+	private static ScheduleManager manager = null;
+	private ScheduleManager() {
+	}
+
+	private void createScheduler()  throws SchedulerException{
+		if(scheduler==null){
+			scheduler = new StdSchedulerFactory().getScheduler();
+			scheduler.start();
+		}
+	}
+	private Scheduler getScheduler() throws SchedulerException{
+		createScheduler();
+		return scheduler;
+	}
+	private static ScheduleManager getManager(){
+		if(manager==null){
+			manager = new ScheduleManager();
+		}
+		return manager;
+	}
+
+
+	public static void cancelJob(Long clientId,Long id,Class classType) throws SchedulerException{
+		String rawJobKey = clientId+"-"+id;
+		Scheduler scheduler = getManager().getScheduler();
+		JobKey jobKey = new JobKey(rawJobKey, classType.getName());
+		/*JobDetail quartJob = scheduler.getJobDetail(jobKey);
+
+		scheduler.interrupt(jobKey);*/
+
+		scheduler.deleteJob(jobKey);
+	}
+
+	public static void schedule(SchedulerJob job) throws SchedulingFailedException, ProcessFailedException{
+		boolean scheduleCreated = false;
+		SchedulerJobDto jobData = job.getJobData();
+		ISchedulerDao schedulerDao = null;
+		try{
+			if(jobData==null){
+				throw new SchedulingFailedException("Scheduling failed due to invalid job data."+jobData);
+			}
+			jobData.setExecutionDate(jobData.getExecutionDate());
+			schedulerDao = DaoManager.SCHEDULERDAO.getDao(jobData.getUserEmail(),ISchedulerDao.class);
+			scheduleCreated = schedulerDao.saveUpdateJobInfo(jobData);
+			
+			
+			JobKey jobKey = new JobKey(jobData.getJobId(), jobData.getJobCategory());
+			JobDetail quartJob = JobBuilder.newJob(job.getClass()).withIdentity(jobKey).build();
+
+			quartJob.getJobDataMap().put(DATAKEY, jobData);
+
+			TriggerKey triggerKey = new TriggerKey(jobData.getJobId(), jobData.getJobCategory());
+			TriggerBuilder<Trigger> triggerBuilder = TriggerBuilder.newTrigger().withIdentity(triggerKey).startAt(jobData.getExecutionDate());
+
+			Trigger trigger = getManager().getCronTrigger(triggerBuilder, jobData.getRepeat(), jobData.getExecutionDate());
+
+			Scheduler scheduler = getManager().getScheduler();
+			scheduler.scheduleJob(quartJob, trigger);
+
+
+			jobData.setStatusId(StatusConstants.SCHEDULED.getID());
+			schedulerDao.saveUpdateJobInfo(jobData);
+			job.scheduled(jobData);
+		}catch(Exception e){
+			if(scheduleCreated){
+				jobData.setStatusId(StatusConstants.FAILED.getID());
+				schedulerDao.saveUpdateJobInfo(jobData);
+			}
+			throw new SchedulingFailedException("Unable to schedule the job. Details:"+e);
+		}
+	}
+
+	public static void getAllScheduled() throws SchedulerException{
+		Scheduler scheduler = getManager().getScheduler();
+
+		System.out.println("------------------------- Going to get all scheduled Jobs --------------------------------");
+		for (String groupName : scheduler.getJobGroupNames()) {
+			for (JobKey jobKey : scheduler.getJobKeys(GroupMatcher.jobGroupEquals(groupName))) {
+
+				String jobName = jobKey.getName();
+				String jobGroup = jobKey.getGroup();
+
+				//get job's trigger
+				List<Trigger> triggers = (List<Trigger>) scheduler.getTriggersOfJob(jobKey);
+				Date nextFireTime = triggers.get(0).getNextFireTime(); 
+
+				System.out.println("[jobName] : " + jobName + " [groupName] : "
+						+ jobGroup + " - " + nextFireTime);
+
+			}
+
+		}
+		System.out.println("------------------------- Got all scheduled Jobs --------------------------------");
+	}
+
+	public Date convertDateToServerTimeZone(final Date dateTime, final String timeZone) {
+		final Calendar userDefinedTime = Calendar.getInstance();
+		userDefinedTime.setTime(dateTime);
+		if (!TimeZone.getDefault().getID().equalsIgnoreCase(timeZone)) {
+			final Calendar quartzStartDate = new GregorianCalendar(TimeZone.getTimeZone(timeZone));
+			quartzStartDate.set(Calendar.YEAR, userDefinedTime.get(Calendar.YEAR));
+			quartzStartDate.set(Calendar.MONTH, userDefinedTime.get(Calendar.MONTH));
+			quartzStartDate.set(Calendar.DAY_OF_MONTH, userDefinedTime.get(Calendar.DAY_OF_MONTH));
+			quartzStartDate.set(Calendar.HOUR_OF_DAY, userDefinedTime.get(Calendar.HOUR_OF_DAY));
+			quartzStartDate.set(Calendar.MINUTE, userDefinedTime.get(Calendar.MINUTE));
+			quartzStartDate.set(Calendar.SECOND, userDefinedTime.get(Calendar.SECOND));
+			quartzStartDate.set(Calendar.MILLISECOND, userDefinedTime.get(Calendar.MILLISECOND));
+			return quartzStartDate.getTime();
+		} else {
+			return dateTime;
+		}
+	}
+
+
+	private Trigger getCronTrigger(TriggerBuilder<Trigger> triggerBuilder,Repeat repeatFrequency,Date executionDate){
+		String cronExpression = getCronExpression(repeatFrequency, executionDate);
+		Trigger trigger = null;
+		if(cronExpression!=null && cronExpression.length()>0){
+			trigger = triggerBuilder.withSchedule(CronScheduleBuilder.cronSchedule(cronExpression)).build();
+		}else{
+			trigger = triggerBuilder.build();
+		}
+
+
+		return trigger;
+	}
+
+	private String getCronExpression(Repeat repeatFrequency,Date executionDate){
+		StringBuilder response = new StringBuilder();
+		Calendar calendar = Calendar.getInstance();
+		calendar.setTime(executionDate);
+		int hour = calendar.get(Calendar.HOUR_OF_DAY);
+		int minutes = calendar.get(Calendar.MINUTE);
+		int seconds = calendar.get(Calendar.SECOND);
+
+
+		switch(repeatFrequency.repeateFrequency){
+
+		case 4:/*Every two hour. Cron Exp like: 20 40 0/2 * * ?*/
+			response.append(seconds);	
+			response.append(" ");
+			response.append(minutes);
+			response.append(" ");
+			response.append("0/2 * * ?");
+			break;
+		case 7:/*Every day at the same time - Cron Expression Example:(0 15 10 * * ? *)*/
+			response.append(seconds);
+			response.append(" ");
+			response.append(minutes);
+			response.append(" ");
+			response.append(hour);
+			response.append(" ");
+			response.append("* * ? *");
+			break;
+		}
+
+		return response.toString();
+	}
+
+	public enum Repeat{
+
+		DO_NO_REPEAT(-1),
+		EVERY_MINUTE(1),
+		EVERY_30_MINUTES(2),
+		EVERY_HOUR(3),
+		EVERY_2_HOUR(4),
+		EVERY_6_HOUR(5),
+		EVERY_12_HOUR(6),
+		EVERY_DAY(7),
+		EVERY_ALTERNATE_DAY(8),
+		WEEKLY_SAME_DAY(9),
+		WEEKLY_ON_SUNDAY(10),
+		WEEKLY_ON_MONDAY(11),
+		WEEKLY_ON_TUESDAY(12),
+		WEEKLY_ON_WEDNESDAY(13),
+		WEEKLY_ON_THRUSDAY(14),
+		WEEKLY_ON_FRIDAY(15),
+		WEEKLY_ON_SATURDAY(16),
+		MONTHLY_SAME_DAY(17),
+		MONTHLY_ON_1ST(18);
+
+		private static final Map<Integer, Repeat> possibleRepeats = new HashMap<>(values().length, 1);
+		static{
+			for (Repeat c : values()) possibleRepeats.put(c.repeateFrequency, c);
+		}
+
+		Integer repeateFrequency = -1;
+		Repeat(Integer repeateFrequency){
+			this.repeateFrequency = repeateFrequency;
+		}
+
+		public Integer getRepeatFrequency(){
+			return this.repeateFrequency;
+		}
+
+
+		public static Repeat getRepeatOf(Integer value){
+			return possibleRepeats.get(value);
+		}
+	}
+}

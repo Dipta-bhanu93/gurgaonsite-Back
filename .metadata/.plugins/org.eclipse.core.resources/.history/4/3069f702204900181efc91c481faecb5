@@ -1,0 +1,35 @@
+package com.lei.dao.ticketManagement;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import com.lei.dao.base.DaoBaseInterface;
+import com.lei.dto.ticketManagement.NotificationDto;
+import com.lei.exception.common.ObjectNotSupportedException;
+import com.lei.exception.common.ProcessFailedException;
+
+
+public interface INotificationDao  extends DaoBaseInterface {
+	
+	/**
+	 * This method is used to fetch notification details per ticket in DAO.
+	 * @param ticketId
+	 * @return List<NotificationDto>
+	 * @throws ProcessFailedException
+	 */
+	public ArrayList<NotificationDto> getNotifications(Long ticketId) throws ProcessFailedException;
+
+	/**
+	 * This method is used to save notification details in DAO.
+	 * @param notificationDto
+	 * @return notificationDto
+	 * @throws ObjectNotSupportedException
+	 */
+	public NotificationDto saveNotification(NotificationDto notificationDto) throws ObjectNotSupportedException, ProcessFailedException;
+
+	ArrayList<NotificationDto> getNotifications(List<Long> ticketIds)
+			throws ProcessFailedException;
+
+	Boolean saveNotification(NotificationDto[] notificationDto)
+			throws ObjectNotSupportedException, ProcessFailedException;
+}

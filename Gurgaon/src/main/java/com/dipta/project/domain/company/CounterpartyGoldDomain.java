@@ -1,0 +1,118 @@
+package com.dipta.project.domain.company;
+
+import javax.persistence.Column;
+import javax.persistence.Entity;
+import javax.persistence.Id;
+import javax.persistence.Table;
+
+import lombok.Getter;
+import lombok.Setter;
+
+
+@Entity
+@Table(name = "COUNTERPARTY_REPORT")
+public class CounterpartyGoldDomain {
+	
+	
+	@Getter @Setter @Column(name="CPTY_ID") @Id private Long id ;
+
+	@Getter @Setter @Column(name="CDID") private String cdid ;
+	
+	
+	@Getter @Setter @Column(name="USERID") private String userid ;
+	@Getter @Setter @Column(name="PROJECTID") private String projectid ;
+	@Getter @Setter @Column(name="PROJECT_NAME") private String projectName ;
+	
+	
+/*	@Getter
+	@Setter
+	@OneToOne
+	@JoinColumn(name="PROJECTID") 
+	@NotFound(action = NotFoundAction.IGNORE)
+	private UserProjectDomain projectDomain;*/
+	
+	
+	@Getter @Setter @Column(name="SERIAL_NO") private String serialNo ;
+	@Getter @Setter @Column(name="NAME") private String name ;
+	@Getter @Setter @Column(name="COUNTRY") private String country ;
+	@Getter @Setter @Column(name="LEI_NUMBER") private String leiNumber ;
+	@Getter @Setter @Column(name="LEGALNAME") private String legalname ;
+	@Getter @Setter @Column(name="NORMALIZED_LEGALNAME") private String normalizedLegalname ;
+	@Getter @Setter @Column(name="DOMICILECNTRY") private String domicilecntry ;
+	@Getter @Setter @Column(name="DOMICILECNTRY_DESC") private String domicilecntryDesc ;
+	@Getter @Setter @Column(name="LEGALCNTRY") private String legalcntry ;
+	@Getter @Setter @Column(name="LEGALCNTRY_DESC") private String legalcntryDesc ;
+	@Getter @Setter @Column(name="PARTYTYPE") private String partytype ;
+	@Getter @Setter @Column(name="PARTY_SUB_TYPE") private String partySub ;
+	@Getter @Setter @Column(name="DATE_OF_ESTABLISHMENT") private String dateOf ;
+	@Getter @Setter @Column(name="DATEINCORPORATED") private String dateincorporated ;
+	@Getter @Setter @Column(name="LEGALFORM") private String legalform ;
+	@Getter @Setter @Column(name="FORMER_NAME") private String formerName ;
+	@Getter @Setter @Column(name="LEGAL_ADD1") private String legalAdd1 ;
+	@Getter @Setter @Column(name="LEGAL_ADD2") private String legalAdd2 ;
+	@Getter @Setter @Column(name="LEGAL_ADD3") private String legalAdd3 ;
+	@Getter @Setter @Column(name="LEGAL_CITY") private String legalCity ;
+	@Getter @Setter @Column(name="LEGAL_STATE") private String legalState ;
+	@Getter @Setter @Column(name="LEGAL_CNTRY") private String legalCntry ;
+	@Getter @Setter @Column(name="LEGAL_ZIP") private String legalZip ;
+	@Getter @Setter @Column(name="LEGAL_PHONE") private String legalPhone ;
+	@Getter @Setter @Column(name="LEGAL_FAX") private String legalFax ;
+	@Getter @Setter @Column(name="BUSINESS_ADD1") private String businessAdd1 ;
+	@Getter @Setter @Column(name="BUSINESS_ADD2") private String businessAdd2 ;
+	@Getter @Setter @Column(name="BUSINESS_ADD3") private String businessAdd3 ;
+	@Getter @Setter @Column(name="BUSINESS_CITY") private String businessCity ;
+	@Getter @Setter @Column(name="BUSINESS_STATE") private String businessState ;
+	@Getter @Setter @Column(name="BUSINESS_CNTRY") private String businessCntry ;
+	@Getter @Setter @Column(name="BUSINESS_ZIP") private String businessZip ;
+	@Getter @Setter @Column(name="BUSINESS_PHONE") private String businessPhone ;
+	@Getter @Setter @Column(name="BUSINESS_FAX") private String businessFax ;
+	@Getter @Setter @Column(name="TAX_FILE_ID") private String taxFile ;
+	@Getter @Setter @Column(name="TAX_AUTHORITY_TYPE") private String taxAuthority ;
+	@Getter @Setter @Column(name="COMPANY_NUMBER") private String companyNumber ;
+	@Getter @Setter @Column(name="INCORPORATION_AUTHORITY") private String incorporationAuthority ;
+	@Getter @Setter @Column(name="PRIMARY_REGULATOR") private String primaryRegulator ;
+	@Getter @Setter @Column(name="PRIMARY_REGULATOR_ID") private String primaryRegulatorId ;
+	@Getter @Setter @Column(name="WEBADDRESS") private String webaddress ;
+	@Getter @Setter @Column(name="NACE_CODE") private String naceCode ;
+	@Getter @Setter @Column(name="SIC_CODE") private String sicCode ;
+	@Getter @Setter @Column(name="NAICS_CODE") private String naicsCode ;
+	@Getter @Setter @Column(name="ISIC_CODE") private String isicCode ;
+	@Getter @Setter @Column(name="ISIN") private String isin ;
+	@Getter @Setter @Column(name="CUSIP") private String cusip ;
+	@Getter @Setter @Column(name="SEDOL") private String sedol ;
+	@Getter @Setter @Column(name="SWIFT_CODE") private String swiftCode ;
+	@Getter @Setter @Column(name="EXCHANGE") private String exchange ;
+	@Getter @Setter @Column(name="LISTED_COUNTERPARTY_NAME") private String listedCounterparty ;
+	@Getter @Setter @Column(name="TICKER") private String ticker ;
+	@Getter @Setter @Column(name="ENTITY_STATUS") private String entityStatus ;
+	@Getter @Setter @Column(name="STATUS_DATE") private String statusDate ;
+	@Getter @Setter @Column(name="SUCCESSOR") private String successor ;
+	@Getter @Setter @Column(name="SUCCESSOR_LEGAL_NAME") private String successorLegal ;
+	@Getter @Setter @Column(name="SUCCESSOR_LEI_NUMBER") private String successorLei ;
+	@Getter @Setter @Column(name="PREDECESSOR") private String predecessor ;
+	@Getter @Setter @Column(name="PREDECESSOR_LEGAL_NAME") private String predecessorLegal ;
+	@Getter @Setter @Column(name="PREDECESSOR_LEI_NUMBER") private String predecessorLei ;
+	@Getter @Setter @Column(name="IMMEDIATE_PARENT") private String immediateParent ;
+	@Getter @Setter @Column(name="ULTIMATE_PARENT") private String ultimateParent ;
+	
+	@Getter @Setter @Column(name="MATCH_STATUS") private String matchStatus ;
+	@Getter @Setter @Column(name="BUSINESS_ADD") private String businessAdd ;
+	@Getter @Setter @Column(name="P_P_INDICATOR") private String pPIndicator ;
+	@Getter @Setter @Column(name="SWIFTCODE") private String swiftcode ;
+	@Getter @Setter @Column(name="OBSOLETE_FLAG") private String obsoleteFlag ;
+	@Getter @Setter @Column(name="OBSOLETE_DATE") private String obsoleteDate ;
+	@Getter @Setter @Column(name="OBSOLETE_EVENT") private String obsoleteEvent ;
+	@Getter @Setter @Column(name="VALIDATION_FLAG") private String validationFlag ;
+	@Getter @Setter @Column(name="COMMENTS") private String comments ;
+	@Getter @Setter @Column(name="MATCHING_SCORE") private String matchingScore ;
+	@Getter @Setter @Column(name="LEGAL_ADD") private String legalAdd ;
+	@Getter @Setter @Column(name="MATCH_STATUS_DESC") private String matchStatusDesc ;
+	@Getter @Setter @Column(name="SOURCE_ID") private String sourceId ;
+	@Getter @Setter @Column(name="MATCH_FLAG") private String matchFlag ;
+	@Getter @Setter @Column(name="JURISDICTION") private String jurisdiction ;
+	@Getter @Setter @Column(name="TRADINGSTATUS") private String tradingStatus ;
+	
+	
+	@Getter @Setter @Column(name="ID") private String entityId ;	
+
+}

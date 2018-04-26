@@ -1,0 +1,71 @@
+/**
+ * 
+ */
+package com.lei.dto.common;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import javax.xml.bind.annotation.XmlAccessType;
+import javax.xml.bind.annotation.XmlAccessorType;
+import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlRootElement;
+
+import lombok.Getter;
+import lombok.Setter;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonRootName;
+
+/**
+ * @author savita.khurana
+ *
+ */
+
+@XmlRootElement(name = "Row")
+@JsonRootName(value = "Row")
+@XmlAccessorType(XmlAccessType.NONE)
+public class RowDto implements java.io.Serializable {
+	private static final long serialVersionUID = 1L;
+	
+	@Getter	@Setter	@XmlElement(name = "Columns")	@JsonProperty(value = "Columns")
+	private List<String> columns=new ArrayList<>();
+	
+	@Getter	@Setter	@XmlElement(name = "FeedDatacolumns")	@JsonProperty(value = "FeedDatacolumns")
+	private List<Object> feedDatacolumns = new ArrayList<>();
+	
+	/**
+	 * This method will return columns count
+	 * @return
+	 */
+	public int columnsCount(){
+		return columns.size();
+	}
+	/**
+	 * This method is used to get column at a particular index
+	 * @param columnIndex
+	 * @return String
+	 */
+	public String getColumn(int columnIndex){
+		String column="";
+		if(columns.size()>0){
+			column=this.columns.get(columnIndex);
+		}
+		return column;
+	}
+	
+	public int feedDatacolumnsCount(){
+		return feedDatacolumns.size();
+	}
+	
+	public String getFeedDataColumn(int columnIndex){
+		String column="";
+		if(feedDatacolumns.size()>0){
+			column=(String) this.feedDatacolumns.get(columnIndex);
+		}
+		return column;
+	}
+	
+	
+	
+}

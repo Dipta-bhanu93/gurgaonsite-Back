@@ -1,0 +1,51 @@
+package com.lei.dto.crossReference;
+
+import javax.xml.bind.annotation.XmlAccessType;
+import javax.xml.bind.annotation.XmlAccessorType;
+import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlRootElement;
+import javax.xml.bind.annotation.XmlSeeAlso;
+
+import lombok.Getter;
+import lombok.Setter;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonRootName;
+
+@XmlRootElement(name = "ReplaceTransformDto")
+@JsonRootName(value = "ReplaceTransformDto")
+@XmlAccessorType(XmlAccessType.NONE)
+@XmlSeeAlso({TransRuleDto.class})
+public class ReplaceTransformDto {
+	
+	@Getter                   
+	@Setter                   
+	@XmlElement(name = "TransformMapId")
+	@JsonProperty(value = "TransformMapId")
+	private long transformMapId;
+	
+	@Getter                   
+	@Setter                   
+	@XmlElement(name = "ReplaceCategoryid")
+	@JsonProperty(value = "ReplaceCategoryid")
+	private long replaceCategoryid;
+	
+	@Getter                   
+	@Setter                   
+	@XmlElement(name = "RuleTableName")
+	@JsonProperty(value = "RuleTableName")
+	private String ruleTableName;
+	
+	@Getter                   
+	@Setter                   
+	@XmlElement(name = "RuleId")
+	@JsonProperty(value = "RuleId")
+	private long ruleId;
+	
+	@Getter                   
+	@Setter                   
+	@XmlElement(name = "ruleInfo")
+	@JsonProperty(value = "ruleInfo")
+	private TransRuleDto ruleInfo;
+
+}

@@ -1,0 +1,75 @@
+package com.dipta.project.domain.project;
+
+import java.sql.Timestamp;
+
+import javax.persistence.Column;
+import javax.persistence.Entity;
+import javax.persistence.GeneratedValue;
+import javax.persistence.GenerationType;
+import javax.persistence.Id;
+import javax.persistence.SequenceGenerator;
+import javax.persistence.Table;
+
+import lombok.Getter;
+import lombok.Setter;
+
+
+@Entity
+@Table(name = "GENERATED_REPORTS")
+public class GeneratedReportsDomain {
+	public GeneratedReportsDomain() {
+		badRecordsFileFlag = "N";
+	}
+	
+	@Getter
+	@Setter
+	@Id
+	@GeneratedValue(strategy=GenerationType.AUTO, generator="SEQ_REPORT_ID")
+	@SequenceGenerator(name="SEQ_REPORT_ID", sequenceName="SEQ_REPORT_ID")
+	@Column(name = "REPORTID")
+	private Long reportId;
+	
+	
+	@Getter
+	@Setter
+	@Column(name = "USERID")
+	private Long userId;
+	
+	@Getter
+	@Setter
+	@Column(name = "FILE_ID")
+	private Long fileId;
+	
+
+	@Getter
+	@Setter
+	@Column(name = "PROJECTID")
+	private Long projectId;
+	
+	
+	/*@Getter
+	@Setter
+	@ManyToOne
+	private UserProjectDomain userProject;*/
+	
+	
+	
+	@Getter
+	@Setter
+	@Column(name = "GENERATED_DATE")
+	private Timestamp generatedDate;
+	
+
+	
+	@Getter
+	@Setter
+	@Column(name = "EXECUTION_ID")
+	private Long executionId;
+	
+	
+	@Getter
+	@Setter
+	@Column(name = "BADRECORDS_FILE_FLAG")
+	private String badRecordsFileFlag;
+	
+}

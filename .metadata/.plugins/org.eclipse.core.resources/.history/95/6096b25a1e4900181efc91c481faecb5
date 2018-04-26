@@ -1,0 +1,172 @@
+package com.lei.dto.project.execute;
+
+import java.io.Serializable;
+import java.util.Date;
+import java.util.List;
+
+import javax.xml.bind.annotation.XmlAccessType;
+import javax.xml.bind.annotation.XmlAccessorType;
+import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlRootElement;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonRootName;
+import com.lei.dto.report.generate.GeneratedReportsDto;
+
+import lombok.Getter;
+import lombok.Setter;
+
+@XmlRootElement(name = "ExecutionDetails")
+@JsonRootName(value = "ExecutionDetails")
+@XmlAccessorType(XmlAccessType.NONE)
+public class ProjectExecutionDto implements Serializable{
+
+	
+	
+	
+	/**
+	 * 
+	 */
+	private static final long serialVersionUID = -3125799155614780102L;
+
+	@Getter
+	@Setter
+	@XmlElement(name = "OneTime")
+	@JsonProperty(value = "OneTime")
+	private boolean oneTime;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "Periodically")
+	@JsonProperty(value = "Periodically")
+	private String periodically;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "OnDay")
+	@JsonProperty(value = "OnDay")
+	private Integer onDay;
+	
+	
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "ProjectId")
+	@JsonProperty(value = "ProjectId")
+	private Long projectId;
+	
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "StatusId")
+	@JsonProperty(value = "StatusId")
+	private long statusId;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "addToGoldStatusId")
+	@JsonProperty(value = "addToGoldStatusId")
+	private Long addToGoldStatusId;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "Comments")
+	@JsonProperty(value = "Comments")
+	private String comments;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "DateCreated")
+	@JsonProperty(value = "DateCreated")
+	private Date dateCreated;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "LastExecution")
+	@JsonProperty(value = "LastExecution")
+	private Date lastExecution;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "addToGoldLastExecution")
+	@JsonProperty(value = "addToGoldLastExecution")
+	private Date addToGoldLastExecution;
+	
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "LastExecutionStatus")
+	@JsonProperty(value = "LastExecutionStatus")
+	private Integer lastStatus;
+	
+	
+
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "NextExecution")
+	@JsonProperty(value = "NextExecution")
+	private Date nextExecution;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "LastExecutionText")
+	@JsonProperty(value = "LastExecutionText")
+	private String lastExecutionText;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "addToGoldLastExecutionText")
+	@JsonProperty(value = "addToGoldLastExecutionText")
+	private String addToGoldLastExecutionText;
+	
+	
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "ExecutionId")
+	@JsonProperty(value = "ExecutionId")
+	private Long executionId;
+	
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "GeneratedReports")
+	@JsonProperty(value = "GeneratedReports")
+	private List<GeneratedReportsDto> generatedReports;
+	
+	
+	@Getter
+	@Setter
+	private String resultPublished;
+	
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "NextExecutionString")
+	@JsonProperty(value = "NextExecutionString")
+	private String nextExecutionString;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "UserExecuted")
+	@JsonProperty(value = "UserExecuted")
+	private String userExecuted;
+	
+	
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "FeedID")
+	@JsonProperty(value = "FeedID")
+	private int feedId;
+	
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "FeedCounter")
+	@JsonProperty(value = "FeedCounter")
+	private int feedCounter;
+	
+	
+}

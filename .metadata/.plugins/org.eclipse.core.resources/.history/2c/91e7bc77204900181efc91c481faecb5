@@ -1,0 +1,78 @@
+package com.lei.dto.crossReference;
+
+import javax.xml.bind.annotation.XmlAccessType;
+import javax.xml.bind.annotation.XmlAccessorType;
+import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlRootElement;
+
+import lombok.Getter;
+import lombok.Setter;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonRootName;
+
+/**
+ * @author santosh.panigrahi
+ * 
+ * This Class will represents matching score information linked to feed type.
+ *
+ */
+@XmlRootElement(name = "EtlMatchingScoreDetail")
+@JsonRootName(value = "EtlMatchingScoreDetail")
+@XmlAccessorType(XmlAccessType.NONE)
+public class EtlMatchingScoreDetailDto {
+	@Getter
+	@Setter
+	@XmlElement(name = "ruleId")
+	@JsonProperty(value = "ruleId")
+		private long ruleId;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "matchStartValue")
+	@JsonProperty(value = "matchStartValue")
+		private long matchStartValue;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "matchEndValue")
+	@JsonProperty(value = "matchEndValue")
+		private long matchEndValue;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "noMatchStartValue")
+	@JsonProperty(value = "noMatchStartValue")
+		private long noMatchStartValue;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "noMatchEndValue")
+	@JsonProperty(value = "noMatchEndValue")
+		private long noMatchEndValue;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "partialMatchStartValue")
+	@JsonProperty(value = "partialMatchStartValue")
+		private long partialMatchStartValue;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "partialEndValue")
+	@JsonProperty(value = "partialEndValue")
+		private long partialEndValue;
+		
+	@Getter
+	@Setter
+	@XmlElement(name = "order")
+	@JsonProperty(value = "order")
+		private long order;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "remarks")
+	@JsonProperty(value = "remarks")
+		private String remarks;
+
+}

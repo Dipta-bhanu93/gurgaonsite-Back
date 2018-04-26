@@ -1,0 +1,47 @@
+package com.lei.domain.project;
+
+import javax.persistence.Column;
+import javax.persistence.Entity;
+import javax.persistence.Id;
+import javax.persistence.Table;
+
+import lombok.Getter;
+import lombok.Setter;
+
+/**
+ * 
+ * @author Ashish.Patel
+ * 
+ */
+
+@Entity
+@Table(name = "PROJECT_CLASSIFICATION")
+public class ProjectClassificationDomain {
+	
+	@Getter
+	@Setter
+	@Id
+	@Column(name = "PRJ_CLASS_ID")
+	private long projectClassID;
+
+	@Getter
+	@Setter
+	@Column(name = "PROJECT_ID")
+	private long projectID;
+	
+	@Getter
+	@Setter
+	@Column(name = "CLASS_TYPE")
+	private String classType;
+	
+	@Getter
+	@Setter
+	@Column(name = "CLASS_DETAILS")
+	private String classDetails;
+	
+	@Getter
+	@Setter
+	@Column(name = "CLASS_CNT")
+	private long classCount;
+	
+}

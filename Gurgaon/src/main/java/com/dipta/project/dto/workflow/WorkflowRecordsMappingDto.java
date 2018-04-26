@@ -1,0 +1,135 @@
+package com.dipta.project.dto.workflow;
+
+import java.io.Serializable;
+import java.util.Date;
+
+import javax.xml.bind.annotation.XmlAccessType;
+import javax.xml.bind.annotation.XmlAccessorType;
+import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlRootElement;
+import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
+
+import lombok.Getter;
+import lombok.Setter;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonInclude.Include;
+import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonRootName;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.dipta.project.serializers.JsonDateSerializer;
+import com.dipta.project.serializers.XmlDateAdapter;
+
+
+@XmlRootElement(name = "WorkflowRecordsMappingDto")
+@JsonRootName(value = "WorkflowRecordsMappingDto")
+@XmlAccessorType(XmlAccessType.NONE)
+@JsonInclude(Include.NON_NULL)
+public class WorkflowRecordsMappingDto implements Comparable<WorkflowRecordsMappingDto>,Serializable{
+
+	
+	/**
+	 * 
+	 */
+	private static final long serialVersionUID = 2014433784133044251L;
+
+	@Getter
+	@Setter
+	@JsonProperty(value = "WorkFlowRecordId")
+	@XmlElement(name = "WorkFlowRecordId")
+	private long workFlowRecordId;
+	
+	@Getter
+	@Setter
+	@JsonProperty(value = "WorkFlowId")
+	@XmlElement(name = "WorkFlowId")
+	private long workFlowId;
+	
+	@Getter
+	@Setter
+	@JsonProperty(value = "ProjectId")
+	@XmlElement(name = "ProjectId")
+	private long projectId;
+
+	@Getter
+	@Setter
+	@JsonProperty(value = "RecordId")
+	@XmlElement(name = "RecordId")
+	private long recordId;
+	
+	@Getter
+	@Setter
+	@JsonProperty(value = "WorkflowStatusId")
+	@XmlElement(name = "WorkflowStatusId")
+	private long workflowStatusId;
+	
+	@Getter
+	@Setter
+	@JsonProperty(value = "UserIdCreated")
+	@XmlElement(name = "UserIdCreated")
+	private long userIdCreated;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "DateModified")
+	@JsonProperty(value = "DateModified")
+	@JsonSerialize(using=JsonDateSerializer.class)
+	@XmlJavaTypeAdapter(XmlDateAdapter.class)
+	@JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MMM-yyyy HH:mm:ss")
+	private Date dateModified;
+	
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "StatusUser")
+	@JsonProperty(value = "StatusUser")
+	private long statusUserId;
+	
+	@Getter
+	@Setter
+	@JsonProperty(value = "UserIdModified")
+	@XmlElement(name = "UserIdModified")
+	private long userIdModified;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "DateCreated")
+	@JsonProperty(value = "DateCreated")
+	private Date dateCreated;
+	
+	@Getter
+	@Setter
+	@JsonProperty(value = "TicketID")
+	@XmlElement(name = "TicketID")
+	private Long ticketID;
+	
+	
+	@Getter
+	@Setter
+	@JsonProperty(value = "StatusId")
+	@XmlElement(name = "StatusId")
+	private int statusId;
+	
+	@Getter
+	@Setter
+	@JsonProperty(value = "Status")
+	@XmlElement(name = "Status")
+	private String ticketStatus;
+	
+	
+	@Getter
+	@Setter
+	@JsonProperty(value = "Subject")
+	@XmlElement(name = "Subject")
+	private String tktSubject;
+	
+	
+
+	@Override
+	public int compareTo(WorkflowRecordsMappingDto wDto) {
+		if (getDateModified() == null || wDto.getDateModified() == null)
+		      return 0;
+		    return wDto.getDateModified().compareTo(getDateModified());
+	}
+}

@@ -1,0 +1,83 @@
+/**
+ * 
+ */
+package com.lei.dto.workflow;
+
+import java.io.Serializable;
+import java.util.Date;
+import java.util.HashSet;
+
+import javax.xml.bind.annotation.XmlAccessType;
+import javax.xml.bind.annotation.XmlAccessorType;
+import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlRootElement;
+import javax.xml.bind.annotation.XmlSeeAlso;
+
+import lombok.Getter;
+import lombok.Setter;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonInclude.Include;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonRootName;
+
+/**
+ * @author Ashish.Patel
+ *
+ */
+@XmlRootElement(name = "WorkFlowUsersMapInformation")
+@JsonRootName(value = "WorkFlowUsersMapInformation")
+@XmlAccessorType(XmlAccessType.NONE)
+@JsonInclude(Include.NON_NULL)
+@XmlSeeAlso({HashSet.class})
+public class WorkFlowUsersMapDto implements Serializable {
+
+	/**
+	 * 
+	 */
+	private static final long serialVersionUID = 1L;
+
+	@Getter
+	@Setter
+	@JsonProperty(value = "WorkFlowDetailId")
+	@XmlElement(name = "WorkFlowDetailId")
+	private Long workFlowDetailId;
+	
+	@Getter
+	@Setter
+	@JsonProperty(value = "WorkFlowId")
+	@XmlElement(name = "WorkFlowId")
+	private Long workFlowId;
+	
+	/*@Getter
+	@Setter
+	@JsonProperty(value = "WorkFlowMaster")
+	@XmlElement(name = "WorkFlowMaster")
+	private WorkFlowMasterDto WorkFlowMasterDto;*/
+	
+	@Getter
+	@Setter
+	@JsonProperty(value = "AssociateUserId")
+	@XmlElement(name = "AssociateUserId")
+	private Long associateUserId;
+	
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "DateCreated")
+	@JsonProperty(value = "DateCreated")
+	private Date dateCreated;
+
+
+	@Override
+	public String toString() {
+		return "WorkFlowUsersMapDto [workFlowDetailId=" + workFlowDetailId
+				+ ", workFlowId=" + workFlowId + ", associateUserId="
+				+ associateUserId + ", dateCreated=" + dateCreated + "]";
+	}
+
+	
+
+	
+	
+}

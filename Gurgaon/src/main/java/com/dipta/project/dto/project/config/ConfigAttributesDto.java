@@ -1,0 +1,144 @@
+package com.dipta.project.dto.project.config;
+
+import java.io.Serializable;
+import java.util.Objects;
+
+import javax.persistence.Column;
+import javax.xml.bind.annotation.XmlAccessType;
+import javax.xml.bind.annotation.XmlAccessorType;
+import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlRootElement;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonRootName;
+import com.dipta.project.domain.project.ProjectConfigDomain;
+
+import lombok.Getter;
+import lombok.Setter;
+
+
+/**
+ * 
+ * @author Vinay.Kumar1
+ *
+ */
+@XmlRootElement(name = "ConfigAttributes")
+@JsonRootName(value = "ConfigAttributes")
+@XmlAccessorType(XmlAccessType.NONE)
+public class ConfigAttributesDto implements Serializable{
+
+	
+	/**
+	 * 
+	 */
+	private static final long serialVersionUID = 3771468099443830029L;
+
+	@Getter
+	@Setter
+	@XmlElement(name = "ConfigId")
+	@JsonProperty(value = "ConfigId")
+	private String id;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "MasterAttribId")
+	@JsonProperty(value = "MasterAttribId")
+	// defualt set to 200 -- later from properties
+	private long masterAttribId;
+	
+	@Getter
+	@Setter
+	@Column(name = "ProjectId")
+	@XmlElement(name = "ProjectId")
+	@JsonProperty(value = "ProjectId")
+	private String projectId;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "Type")
+	@JsonProperty(value = "Type")
+	private String type;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "TypeDisplayName")
+	@JsonProperty(value = "TypeDisplayName")
+	private String typeDisplayName;
+	
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "Attribute")
+	@JsonProperty(value = "Attribute")
+	private String attribute;
+	
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "AttributeText")
+	@JsonProperty(value = "AttributeText")
+	private String attributeText;
+	
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "AttributeValue")
+	@JsonProperty(value = "AttributeValue")
+	private Boolean attributeValue;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "Description")
+	@JsonProperty(value = "Description")
+	private String description;
+
+	/*@Override
+	public int hashCode() {
+		final int prime = 31;
+		int result = 1;
+		result = prime * result + ((attribute == null) ? 0 : attribute.hashCode());
+		result = prime * result + (int) (masterAttribId ^ (masterAttribId >>> 32));
+		return result;
+	}
+
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj)
+			return true;
+		if (obj == null)
+			return false;
+		if (getClass() != obj.getClass())
+			return false;
+		ConfigAttributesDto other = (ConfigAttributesDto) obj;
+		if (attribute == null) {
+			if (other.attribute != null)
+				return false;
+		} else if (!attribute.equals(other.attribute))
+			return false;
+		if (masterAttribId != other.masterAttribId)
+			return false;
+		return true;
+	}*/
+
+	 @Override
+	    public boolean equals(Object o) {
+
+	        if (o == this) return true;
+	        if (!(o instanceof ProjectConfigDomain)) {
+	            return false;
+	        }
+	        ConfigAttributesDto configObj = (ConfigAttributesDto) o;
+	        return masterAttribId==configObj.masterAttribId &&
+	        		projectId == configObj.projectId &&
+	                Objects.equals(type, configObj.type) &&
+	                Objects.equals(attribute, configObj.attribute);
+	    }
+
+	    @Override
+	    public int hashCode() {
+	        return Objects.hash(masterAttribId, projectId, type, attribute);
+	    }
+	
+	
+	
+}

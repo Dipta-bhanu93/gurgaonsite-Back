@@ -1,0 +1,65 @@
+package com.dipta.project.utility.constants;
+
+import java.io.File;
+
+import com.dipta.project.utility.PropertyUtility;
+
+/**
+ * 
+ * @author Saurabh.Agarwal
+ *
+ */
+public enum ApplicationConstants {
+	CONFIGURATIONSBUNDLE(File.separator + "configuration.properties"),
+	APPLICATION_BUNDLE(File.separator + "application.properties"),
+	APPLICATIONCLIENT_BUNDLE(File.separator + "applicationclient.properties"),
+	EXCEPTIONBUNDLE(File.separator + "exception.properties"),
+	EMAILBUNDLE(File.separator + "emailTemplate.properties"),
+	CAPTCHAVALIDATIONBUNDLE(File.separator + "captchavalidation.properties"),
+	SEARCHPARAMETERBUNDLE(File.separator + "searchFieldsMapping.properties"),
+	DAOABSTRACTIONBUNDLE(File.separator + "daoabstraction.properties"),
+	WORKFLOWBUNDLE(File.separator + "workflow.properties"),
+	LOGGERBUNDLE(File.separator + "log4j.properties"),
+	CAPTCHAVARIABLE("captchaformvariable"),
+	CAPTCHAPUBLICKEY("captchapublickey"),
+	CAPTCHAPRIVATEKEY("captchaprivatekey"),
+	CAPTCHAURL("captchavalidationURL"),
+	SESSIONTOKEN("SESSIONTOKEN"),
+	ENCRIPTIONENABLED("encriptionenabled"),
+	ENCRIPTIONALGO("encriptionalgorithm"),
+	ENCRIPTKEYLENGTH("encriptionkeylength"),
+	SERVERKEY("securekey"),
+	FILESTORAGEPATH("FILESTORAGEPATH"),
+	RESULTPUBLISHED("VISITED"),
+	RESULTNOTPUBLISHED("NOTVISITED"),
+	
+	COMPANYREGISTERDBSCRIPTPATH("CREATECOMPANYDBSCRIPTS"),
+	COMPANYREGISTERBATCHFILE_BASEPATH("CREATECOMPANYDB_BASEPATH"),
+	COMPANYREGISTERBATCHFILENAME("CREATECOMPANYDBBATCHFILE"),
+	COMPANYREGISTERSHFILENAME("CREATECOMPANYDBSHFILE"),
+	COMPANYREGISTER_SCRIPTFILE("CREATECOMPANYDB_SCRIPTFILE"),
+	
+	DBTNS("DBTNS"),
+	SUPERUSEREMAIL(PropertyUtility.getValueString(ApplicationConstants.CONFIGURATIONSBUNDLE.getValue(), "SUPERTENANTEMAIL","cdidimension@gmail.com")),
+	SUPERUSERSCHEMA(PropertyUtility.getValueString(ApplicationConstants.CONFIGURATIONSBUNDLE.getValue(), "SUPERTENANTSCHEMA","ondemand_1")),
+	
+	ROOT_TENANT_EMAIL(PropertyUtility.getValueString(ApplicationConstants.CONFIGURATIONSBUNDLE.getValue(), "ROOT_TENANT_EMAIL","cod@creditdimensions.com")),
+	
+	SERIALIZED_DATE_FORMAT("dd-MMM-yyyy hh:mm:ss"),
+	
+	EMAIL_RETRY_INTERVAL("EMAILRETRYINTERVAL"),
+	
+	RE_SCHEDULE_JOB_QUEUE("RE_SCHEDULE_JOB_QUEUE"),
+	
+	PRESTAGE_PREFIX_COLUMNS("PRESTAGE_PREFIX_COLUMNS");
+	
+	private String value;
+	
+	private ApplicationConstants(String value) {
+		this.value=value;
+	}
+	
+	public String getValue() {
+		return value;
+	}
+}

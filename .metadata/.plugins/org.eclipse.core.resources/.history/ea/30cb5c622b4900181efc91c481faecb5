@@ -1,0 +1,42 @@
+package com.dipta.project.dto.dashboard;
+
+import java.util.List;
+
+import javax.xml.bind.annotation.XmlAccessType;
+import javax.xml.bind.annotation.XmlAccessorType;
+import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlRootElement;
+import javax.xml.bind.annotation.XmlSeeAlso;
+
+import lombok.Getter;
+import lombok.Setter;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonRootName;
+import com.dipta.project.dto.company.CompanyDto;
+
+
+@XmlRootElement(name = "PlatinumDataCoverageCollection")
+@JsonRootName(value = "PlatinumDataCoverageCollection")
+@XmlAccessorType(XmlAccessType.NONE)
+@XmlSeeAlso({PlatinumDataCoverageDto.class,PlatinumDataTypeDto.class})
+public class PlatinumDataCoverageDtoCollection {
+
+	
+private static final long serialVersionUID = 1L;
+	
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "PlatinumData")
+	@JsonProperty(value = "PlatinumData")
+	private List<PlatinumDataCoverageDto> platinumData;
+	
+	
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "PlatinumDataType")
+	@JsonProperty(value = "PlatinumDataType")
+	private List<PlatinumDataTypeDto> platinumDataType;
+}

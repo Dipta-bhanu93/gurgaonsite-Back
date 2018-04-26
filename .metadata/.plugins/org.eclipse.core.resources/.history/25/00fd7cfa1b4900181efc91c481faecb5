@@ -1,0 +1,63 @@
+/**
+ * 
+ */
+package com.lei.dao.workflow;
+
+import java.util.List;
+
+import com.lei.dao.base.DaoBaseInterface;
+import com.lei.domain.workflow.WorkFlowBatchDomain;
+import com.lei.domain.workflow.WorkFlowMasterDomain;
+import com.lei.dto.project.template.TemplateServiceMasterDto;
+import com.lei.dto.user.ClientDto;
+import com.lei.dto.workflow.WorkFlowMasterDto;
+import com.lei.dto.workflow.WorkFlowRecordsCountDto;
+import com.lei.dto.workflow.WorkFlowSearchGridDto;
+import com.lei.dto.workflow.WorkflowRecordsMappingCollection;
+import com.lei.exception.common.ObjectNotSupportedException;
+import com.lei.exception.common.ProcessFailedException;
+import com.lei.exception.workflow.DuplicateWorkFlowNameException;
+
+/**
+ * @author Ashish.Patel
+ *
+ */
+public interface IWorkFlowDao extends DaoBaseInterface {
+
+	public WorkFlowMasterDto createWorkFlowMaster(String userID,WorkFlowMasterDto workFlowMasterDto) throws ObjectNotSupportedException, ProcessFailedException;
+	public boolean updateWorkFlowMaster(String userEmail,WorkFlowMasterDto workFlowMasterDto) throws ObjectNotSupportedException,ProcessFailedException;
+	public WorkFlowMasterDomain getWorkFlowMasterDomainById(long Id);
+	public WorkFlowMasterDto getWorkFlowMasterMap(String userEmail);
+	public WorkFlowRecordsCountDto saveWorkflowRecords(String userEmail,WorkflowRecordsMappingCollection mappingCollection,String description) throws ProcessFailedException;
+	public ClientDto getRoleWiseUserList(String userEmail);
+	public boolean isWorkFlowNameExits(String workFlowName) throws DuplicateWorkFlowNameException;
+	public WorkFlowMasterDto getWorkFlowMasterDataById(long workFlowID);
+	public WorkFlowSearchGridDto getWorkFlowRecords(String userEmail,WorkFlowMasterDto workFlowMasterDto);
+	public List<Long> getAssociatedWorkflowsForUser(Long userId);
+	public boolean isRecordsExitsByProjectID(long projectID);
+	public boolean updateRecordsWorkFlowStatus(String userEmail,WorkflowRecordsMappingCollection mappingCollection,long actionID) throws ProcessFailedException;
+	public boolean isUserAssociatedWithWorkflow(Long userId);
+	//public WorkFlowSearchGridDto getWorkFlowStatusAndUpdatedDateByWorkFlowId(String userEmail, long workFlowID,long ticketORBatchID,boolean ispremium) throws ProcessFailedException;
+	public WorkFlowSearchGridDto getWorkFlowStatusAndUpdatedDateByWorkFlowId(String userEmail, long workFlowID) throws ProcessFailedException;
+	public WorkFlowMasterDto getWorkFlowMasterMapForDropDown(String userEmail,Long serviceId);
+	public WorkFlowBatchDomain getBatchIDbyWorkFlowID(long workFlowID) throws ProcessFailedException;
+//	public String addAllWorkFlowRecordsToTicket(String userEmail, long workFlowID) throws ProcessFailedException;
+	public void updateWorkFlowStatus(long wf_id, String wf_status);
+	public WorkFlowSearchGridDto getWorkFlowRecordsByAllocatedUser(String userEmail,WorkFlowMasterDto workFlowMasterDto);
+	public String workFlowRecordsByPass(String userEmail,WorkflowRecordsMappingCollection mappingCollection) throws ProcessFailedException;
+	public List<WorkFlowMasterDomain> getWorkFlowMaster();
+	public WorkFlowMasterDto getavailableWorkFlowList(String userEmail,long clientId,Long serviceId);
+	public String addUserInWorkFlow(String userEmail, WorkFlowMasterDto masterDto) throws ProcessFailedException;
+	public WorkFlowSearchGridDto getWorkFlowInfoByProjectID(String userEmail,Long projectID,boolean isCallFromDashboard);
+	public List<Long> getWorkFlowDeliveredRecordIdsByWfId(String userEmail, WorkFlowMasterDto workFlowMasterDto, List<Long> ticketsList, Long projectId);
+	public List<WorkFlowMasterDto> getWorkflowListByProjectId(Long projectID, boolean selfServiced);
+	public String addAllWorkFlowRecordsToTicket(String userEmail, long workFlowID, String desc) throws ProcessFailedException;
+	public WorkFlowSearchGridDto getWorkFlowDetails(String userEmail);
+	public TemplateServiceMasterDto getServiceNameByWorkFlowId(String loggedInUserName, Long workFlowId);
+	public List<Long> getProjectListByWorkflowId(Long wfId, boolean selfServiced);
+	public List<Long> getWorkFlowDeliveredRecordIdsByWorkFlowId(Long workFlowId,boolean selfServiced);
+	public List<Long> getWorkFlowDeliveredRecordIdsByProjectId(Long projectId,boolean selfServiced);
+	public List<Long> getWorkFlowDeliveredRecordIdsByWorkFlowAndProjectId(Long projectId, Long workFlowId, boolean selfServiced);
+	public Long getWorkflowInprogressCount(long workFlowID);
+
+}

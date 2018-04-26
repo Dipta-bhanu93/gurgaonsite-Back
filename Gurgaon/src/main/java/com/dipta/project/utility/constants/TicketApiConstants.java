@@ -1,0 +1,25 @@
+package com.dipta.project.utility.constants;
+
+public enum TicketApiConstants {
+	LIVE_ZILLA("liveZilla","Subscribed API");
+	private String apiName;
+	private String apiDescription;
+	private TicketApiConstants(String apiName, String apiDescription){
+		this.apiDescription=apiDescription;
+		this.apiName=apiName;
+	}
+	/**
+	 * @return the apiName
+	 */
+	public String getApiName() {
+		return apiName;
+	}
+	/**
+	 * @return the apiDescription
+	 */
+	public String getApiDescription() {
+		return apiDescription;
+	}
+	
+
+}

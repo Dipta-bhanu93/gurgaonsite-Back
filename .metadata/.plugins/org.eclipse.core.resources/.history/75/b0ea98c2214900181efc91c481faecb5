@@ -1,0 +1,126 @@
+package com.dipta.project.dto.project.execute;
+
+import java.util.List;
+
+import javax.xml.bind.annotation.XmlAccessType;
+import javax.xml.bind.annotation.XmlAccessorType;
+import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlRootElement;
+
+import lombok.Getter;
+import lombok.Setter;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonInclude.Include;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonRootName;
+import com.fasterxml.jackson.annotation.JsonInclude.Include;
+import com.lei.dto.report.RecordCountsDto;
+import com.lei.dto.ticketManagement.TicketDto;
+import com.lei.dto.user.UserDTO;
+import com.lei.dto.workflow.ProjectDTO;
+
+/**
+ * 
+ * @author Saurabh Agarwal
+ *
+ */
+@XmlRootElement(name = "ProjectExecutionStats")
+@JsonRootName(value = "ProjectExecutionStats")
+@XmlAccessorType(XmlAccessType.NONE)
+@JsonInclude(Include.NON_NULL)
+public class ProjectExecutionStatsDto {
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "RecordCounts")
+	@JsonProperty(value = "RecordCounts")
+	private RecordCountsDto recordCounts;
+	
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "RecordCountsForFeeds")
+	@JsonProperty(value = "RecordCountsForFeeds")
+	private List<RecordCountsDto> recordCountsForFeeds;
+	
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "StatsAvailableForFeeds")
+	@JsonProperty(value = "StatsAvailableForFeeds")
+	private String statsAvailableForFeeds="N";
+	
+	
+	
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "TicketDetails")
+	@JsonProperty(value = "TicketDetails")
+	private TicketDto ticketDetails;
+	
+	
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "OtherExecutionUser")
+	@JsonProperty(value = "OtherExecutionUser")
+	private UserDTO otherExecutionUser;
+	
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "OtherExecutionDetails")
+	@JsonProperty(value = "OtherExecutionDetails")
+	private ProjectExecutionDto otherExecutionDetails;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "OtherExecutionProjectDetails")
+	@JsonProperty(value = "OtherExecutionProjectDetails")
+	private ProjectDTO otherExecutionProjectDetails;
+	
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "ExecutingProjectDetail")
+	@JsonProperty(value = "ExecutingProjectDetail")
+	private ProjectDTO executingProjectDetail;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "ExecutionOrder")
+	@JsonProperty(value = "ExecutionOrder")
+	private int executionOrder;
+	
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "FeedID")
+	@JsonProperty(value = "FeedID")
+	private int feedId;
+	
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "FeedCounter")
+	@JsonProperty(value = "FeedCounter")
+	private int feedCounter;
+	
+	
+    @Getter
+	@Setter
+	@XmlElement(name = "SkippedFeedArray")
+	@JsonProperty(value = "SkippedFeedArray")
+	private List<int[]> skippedFeedArray;
+	
+	
+	
+	/*@Getter
+	@Setter
+	@XmlElement(name = "SkippedFeedArray")
+	@JsonProperty(value = "SkippedFeedArray")
+	private List<ProjectSkippedFeed> skippedFeedArray;*/
+	
+}

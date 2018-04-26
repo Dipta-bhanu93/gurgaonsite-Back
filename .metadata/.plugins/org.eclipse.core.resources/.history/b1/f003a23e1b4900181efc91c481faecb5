@@ -1,0 +1,816 @@
+package com.lei.report;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.sql.Timestamp;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
+
+import org.apache.poi.hssf.usermodel.HSSFWorkbook;
+import org.apache.poi.hssf.util.HSSFColor;
+import org.apache.poi.ss.usermodel.BorderStyle;
+import org.apache.poi.ss.usermodel.CellStyle;
+import org.apache.poi.ss.usermodel.FillPatternType;
+import org.apache.poi.ss.usermodel.Font;
+import org.apache.poi.ss.usermodel.IndexedColors;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.streaming.SXSSFCell;
+import org.apache.poi.xssf.streaming.SXSSFRow;
+import org.apache.poi.xssf.streaming.SXSSFSheet;
+import org.apache.poi.xssf.streaming.SXSSFWorkbook;
+import org.apache.poi.xssf.usermodel.XSSFCell;
+import org.apache.poi.xssf.usermodel.XSSFCellStyle;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+
+import com.lei.domain.project.GeneratedReportsDomain;
+import com.lei.dto.common.FileReportDto;
+import com.lei.dto.common.RowDto;
+import com.lei.dto.workflow.ProjectDTO;
+import com.lei.exception.common.ObjectNotSupportedException;
+import com.lei.exception.common.ProcessFailedException;
+import com.lei.exception.project.ProjectConfigNotFoundException;
+import com.lei.exception.project.ProjectDoesNotExistsException;
+import com.lei.exception.user.LoginIDFormatException;
+import com.lei.maintenance.file.FileMaintenanceImpl;
+import com.lei.maintenance.file.IFileMaintenance;
+import com.lei.maintenance.project.IProjectMaintenance;
+import com.lei.maintenance.project.ProjectMaintenanceImpl;
+import com.lei.maintenance.user.IUserMaintenance;
+import com.lei.maintenance.user.UserMaintenanceImpl;
+import com.lei.maintenence.report.IReportsMaintenence;
+import com.lei.maintenence.report.ReportsMaintenenceImpl;
+import com.lei.report.ReportDefaultsEnum.XlsxReportTemplate;
+import com.lei.utility.CommonUtils;
+import com.lei.utility.constants.CommonConstants;
+import com.lei.utility.constants.FileConstants;
+import com.lei.utility.constants.FileSourceConstants;
+import com.lei.utility.constants.ProjectConfigEnum;
+
+public class ExcelReportGeneratorImpl implements IReportGenerator{
+	
+	private static final String XLSX="xlsx";
+	private static final String XLS="xls";
+	
+	public Long generateReport(ReportDataTable reportDataTable) throws ProcessFailedException, ObjectNotSupportedException, ProjectDoesNotExistsException, ProjectConfigNotFoundException, IOException, LoginIDFormatException{
+		long projectId = Long.valueOf(reportDataTable.getProjectId());
+		
+		
+		// get project details
+		IProjectMaintenance projectMaintenance = new ProjectMaintenanceImpl();
+		ProjectDTO projectDetail = projectMaintenance.getProject(reportDataTable.getTenentEmail(), projectId);
+		
+		// get user details
+		IUserMaintenance userMaintenance  = new UserMaintenanceImpl();
+		long userId =  userMaintenance.getUser(reportDataTable.getTenentEmail(), false).getId();
+		
+		
+
+		// get data bytes and SAVE file
+		IFileMaintenance fileMaintenance =new FileMaintenanceImpl();
+		byte[] data = null;	
+		
+		if(CommonConstants.ENRICH == reportDataTable.getTemplateID() || CommonConstants.BUILD == reportDataTable.getTemplateID()){
+			data=createReportFileForHierarchy(reportDataTable);
+		}else{
+			data=createReportFileFromData(reportDataTable);
+		}
+		
+//		Timestamp reportGenOn = new Timestamp(new java.util.Date().getTime());
+		long fileID= fileMaintenance.saveFile(reportDataTable.getTenentEmail(), getFileName(projectDetail.getProjectName(), projectDetail.getTemplateID(), reportDataTable.getExecutedOn()), data, FileSourceConstants.REPORT);
+
+
+		//Call to save into Generated Report
+		IReportsMaintenence reportsMaintenence = new ReportsMaintenenceImpl();
+		GeneratedReportsDomain generatedReportsDomain=new GeneratedReportsDomain();
+		generatedReportsDomain.setFileId(fileID);
+		generatedReportsDomain.setProjectId(projectId);
+		generatedReportsDomain.setUserId(userId);
+		generatedReportsDomain.setGeneratedDate(reportDataTable.getExecutedOn());
+		generatedReportsDomain.setExecutionId(reportDataTable.getExecutedId());
+		if(reportsMaintenence.saveGeneratedReports(reportDataTable.getTenentEmail(), generatedReportsDomain)){
+			return fileID;
+		}else{
+			return 0L;
+		}
+	}
+
+	
+	
+//	private XSSFCellStyle getCellStyle(XSSFWorkbook wb){
+//	
+//		XSSFCellStyle cellStyle = wb.createCellStyle();
+//		cellStyle.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
+//		cellStyle.setFillPattern(XSSFCellStyle.SOLID_FOREGROUND);
+//		return cellStyle;
+//	}
+	
+	private CellStyle getCellStyle(SXSSFWorkbook wb){
+		
+		CellStyle cellStyle = wb.createCellStyle();
+				
+//				createCellStyle();
+		
+		cellStyle.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
+		cellStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);//XSSFCellStyle.SOLID_FOREGROUND);
+		return cellStyle;
+	}
+	
+	private CellStyle getNoDataCellStyle(SXSSFWorkbook wb){
+		
+		CellStyle cellStyle = wb.createCellStyle();
+		Font font = wb.createFont();
+	    font.setColor(HSSFColor.RED.index);
+	    cellStyle.setFont(font);
+		return cellStyle;
+	}
+	
+	
+//	private XSSFWorkbook  createWorkBook(ReportDataTable reportDataTable){
+//		
+//		XSSFWorkbook wb= new XSSFWorkbook();
+//		boolean gotSavedReportConfig = false;
+//		
+//		String[] includeInOutput = reportDataTable.getIncludeInOutput();
+//		if(includeInOutput != null && includeInOutput.length>0 ){
+//			
+//			for (int i = 0; i < includeInOutput.length; i++) {
+//				
+//				if(!includeInOutput[i].equals("")){
+//					wb.createSheet(XlsxReportTemplate.getByMatchStatus(includeInOutput[i]).getSheet());
+//					gotSavedReportConfig = true;
+//				}
+//				//return wb;
+//			}
+//			
+//		}
+//
+//		/*if(!gotSavedReportConfig){
+//			
+//			for (XlsxReportTemplate sheet : ReportDefaultsEnum.XlsxReportTemplate.values()) {
+//					
+//					if(reportDataTable==null || reportDataTable.getDataMapList()==null || reportDataTable.getDataMapList().size()==0){
+//						wb.createSheet(sheet.getSheet());
+//						return wb;
+//					}
+//					
+//					else 
+//						if(sheet.isIncludeFlag()){
+//						
+//						wb.createSheet(sheet.getSheet());
+//					}
+//				}
+//			
+//		}
+//		*/
+//		
+//		
+//	
+//		return wb;
+//	}
+//	
+	
+private SXSSFWorkbook  createWorkBookStream(ReportDataTable reportDataTable){
+		
+		XSSFWorkbook wb_template = new XSSFWorkbook();
+		boolean gotSavedReportConfig = false;
+		SXSSFWorkbook wb = new SXSSFWorkbook(wb_template); 
+        wb.setCompressTempFiles(true);
+
+//        SXSSFSheet sh = (SXSSFSheet) wb.getSheetAt(0);
+//        sh.setRandomAccessWindowSize(100);
+		String[] includeInOutput = reportDataTable.getIncludeInOutput();
+		if(includeInOutput != null && includeInOutput.length>0 ){
+			
+			for (int i = 0; i < includeInOutput.length; i++) {
+				
+				if(!includeInOutput[i].equals("")){
+					wb.createSheet(XlsxReportTemplate.getByMatchStatus(includeInOutput[i]).getSheet());
+					gotSavedReportConfig = true;
+				}
+				//return wb;
+			}
+			
+		}
+
+		/*if(!gotSavedReportConfig){
+			
+			for (XlsxReportTemplate sheet : ReportDefaultsEnum.XlsxReportTemplate.values()) {
+					
+					if(reportDataTable==null || reportDataTable.getDataMapList()==null || reportDataTable.getDataMapList().size()==0){
+						wb.createSheet(sheet.getSheet());
+						return wb;
+					}
+					
+					else 
+						if(sheet.isIncludeFlag()){
+						
+						wb.createSheet(sheet.getSheet());
+					}
+				}
+			
+		}
+		*/
+		
+		
+	
+		return wb;
+	}
+	
+	
+	
+//	private Set<String> includeHeaders(XSSFSheet sheet , List<String> headers){
+//		
+//		  List<String> reportHeaders = new ArrayList<String>();
+//		  
+//		  //Collections.copy(reportHeaders,headers);
+//		  reportHeaders.addAll(headers);
+//		  
+//		  Set<String> includeHeadersSet = ReportDefaultsEnum.XlsxReportTemplate.get(sheet.getSheetName()).getIncludeFieldsSet();
+//		  
+//		  Set<String> excludeHeadersSet = ReportDefaultsEnum.XlsxReportTemplate.get(sheet.getSheetName()).getExcludeFieldsSet();
+//		  
+//		  for (String string : headers) {
+//			  if(excludeHeadersSet.size()>0 && excludeHeadersSet.contains(string)){
+//				  reportHeaders.remove(string);
+//			  }
+//		  }
+//		  
+//		  for (String string : headers) {
+//			  if(includeHeadersSet.size()>0 && !includeHeadersSet.contains(string)){
+//				  reportHeaders.remove(string);
+//			  }
+//		  }
+//		
+//		Set<String> headersSet = new LinkedHashSet<String>(reportHeaders);
+//		  
+//		return headersSet;
+//		
+//	}
+
+	private Set<String> includeHeaders(SXSSFSheet sheet , List<String> headers, long templateId){
+		
+		  List<String> reportHeaders = new ArrayList<String>();
+		  
+		  //Collections.copy(reportHeaders,headers);
+		  reportHeaders.addAll(headers);
+		  sheet.setRandomAccessWindowSize(100);
+		  Set<String> includeHeadersSet = ReportDefaultsEnum.XlsxReportTemplate.get(sheet.getSheetName()).getIncludeFieldsSet();
+		  if(templateId == 2 && XlsxReportTemplate.SHEET_NOMATCH.getSheet().equalsIgnoreCase(sheet.getSheetName())){
+			  includeHeadersSet.add( ReportDefaultsEnum.COLUMN_ISIN.getValue());
+			  includeHeadersSet.add( ReportDefaultsEnum.COLUMN_CUSIP.getValue());
+			  includeHeadersSet.add( ReportDefaultsEnum.COLUMN_SEDOL.getValue());
+		  }
+		  Set<String> excludeHeadersSet = ReportDefaultsEnum.XlsxReportTemplate.get(sheet.getSheetName()).getExcludeFieldsSet();
+		  
+		  for (String string : headers) {
+			  if(excludeHeadersSet.size()>0 && excludeHeadersSet.contains(string)){
+				  reportHeaders.remove(string);
+			  }
+		  }
+		  
+		  for (String string : headers) {
+			  if(includeHeadersSet.size()>0 && !includeHeadersSet.contains(string)){
+				  reportHeaders.remove(string);
+			  }
+		  }
+		
+		Set<String> headersSet = new LinkedHashSet<String>(reportHeaders);
+		  
+		return headersSet;
+		
+	}
+	
+//	private void addHeadersToallSheets(XSSFWorkbook wb , List<String> headers, String tenentEmail){
+//		
+//		IReportsMaintenence maintenence = new ReportsMaintenenceImpl();
+//		
+//		Map<String, String> map = maintenence.getReportsHeaderDisplayNames(tenentEmail);
+//		  for (int i = 0; i < wb.getNumberOfSheets(); i++) {
+//	            XSSFSheet sheet = wb.getSheetAt(i);
+//	            int columnIndex=0;
+//	            
+//	            // Do your stuff        
+//	            XSSFRow row = sheet.createRow(0);
+//	            
+//	            Set<String> reportHeaders =includeHeaders(sheet, headers);
+//	            
+//	            for(String header:reportHeaders){
+//	            	
+//	            		
+//	            		XSSFCell dataNameCell = row.createCell(columnIndex);
+//	            		dataNameCell.setCellStyle(getCellStyle(wb));
+//	            		
+//	            		String headerName = null;
+//	            		String attributeInfoHeader = ReportDefaultsEnum.getAttributeInfo(header);
+//						if( map.get(header) == null && attributeInfoHeader!=null){
+//	            			headerName = attributeInfoHeader;
+//	            		}else{
+//	            			headerName = map.get(header)!=null?map.get(header):header;
+//	            		}
+//	            		
+//	            		dataNameCell.setCellValue(headerName);
+//	            		
+//	            		columnIndex++;
+//					}
+//	            	
+//	       }
+//	}
+	
+private void addHeadersToallSheets(SXSSFWorkbook wb , List<String> headers, String tenentEmail, long templateId){
+		
+		IReportsMaintenence maintenence = new ReportsMaintenenceImpl();
+		
+		Map<String, String> map = maintenence.getReportsHeaderDisplayNames(tenentEmail,templateId);
+		  for (int i = 0; i < wb.getNumberOfSheets(); i++) {
+	            SXSSFSheet sheet = wb.getSheetAt(i);
+	            int columnIndex=0;
+	            sheet.setRandomAccessWindowSize(100);
+	            // Do your stuff        
+	            SXSSFRow row = sheet.createRow(0);
+	            
+	            Set<String> reportHeaders =includeHeaders(sheet, headers, templateId);
+	            
+	            for(String header:reportHeaders){
+	            	
+	            		
+	           SXSSFCell dataNameCell = row.createCell(columnIndex);
+	            		dataNameCell.setCellStyle(getCellStyle(wb));
+	            		
+	            		String headerName = null;
+	            		String attributeInfoHeader = ReportDefaultsEnum.getAttributeInfo(header);
+						if( map.get(header) == null && attributeInfoHeader!=null){
+	            			headerName = attributeInfoHeader;
+	            		}else{
+	            			headerName = map.get(header)!=null?map.get(header):header;
+	            		}
+	            		
+	            		dataNameCell.setCellValue(headerName);
+	            		
+	            		columnIndex++;
+					}
+	            	
+	       }
+	}
+	
+	
+	
+	private boolean isNoDataToShow(ReportDataTable reportDataTable){
+	
+		return (reportDataTable==null || reportDataTable.getDataMapList()==null || reportDataTable.getDataMapList().size()==0);
+	}
+	
+	
+	/**
+	 * This method is used for hierarchy template and generating reports
+	 * @param reportDataTable This is the first parameter to createReportFileForHierarchy method 
+	 */
+	private  byte[] createReportFileForHierarchy(ReportDataTable reportDataTable) throws IOException  {
+		
+		Map<String, List<FileReportDto>> hierarchyReportMap = reportDataTable.getHierarchyReportingData();
+		Workbook wb = getWorkbook(FileConstants.XLSX);
+		ByteArrayOutputStream baos = new ByteArrayOutputStream();
+		
+		if(null != hierarchyReportMap && !hierarchyReportMap.isEmpty()){
+
+			for (Entry entry : hierarchyReportMap.entrySet()) {
+				
+				Sheet sheet = wb.createSheet(entry.getKey().toString());
+				
+				List<FileReportDto> fileReportList = (List<FileReportDto>) entry.getValue();
+				
+				int rowId=0;
+				Row rowhead = sheet.createRow(rowId);
+				for(int cellIndex=0;cellIndex<fileReportList.get(0).getHeader().columnsCount();cellIndex++){
+					rowhead.createCell(cellIndex).setCellValue(CommonUtils.getHierarchyReportHeader(fileReportList.get(0).getHeader().getColumn(cellIndex)));
+					rowhead.getCell(cellIndex).setCellStyle(getCellStyle(wb));
+				}
+				RowDto dataRow= new RowDto();
+				int	cellIndex=0;
+				Row row;
+				
+				for (FileReportDto fileReportDto : fileReportList) {	
+					rowId++;
+				for(int rowIndex=0;rowIndex<fileReportDto.getDataRows().size();rowIndex++){
+					rowId++;
+					row = sheet.createRow(rowId);
+					cellIndex=0;
+					dataRow =fileReportDto.getDataRows().get(rowIndex);
+					for(String columnData:dataRow.getColumns()){
+						row.createCell(cellIndex).setCellValue(columnData);
+						cellIndex++;
+					}
+				}
+				
+			}
+				
+			}
+			
+		}else {
+			Sheet sheet = wb.createSheet("No Data");
+			Row rowhead = sheet.createRow(0);
+			rowhead.createCell(0).setCellValue("");
+		}
+		
+		wb.write(baos);
+		byte[] xls = baos.toByteArray();
+		wb.close();
+		return xls;
+	}
+	
+	private CellStyle getCellStyle(Workbook wb){
+		
+		CellStyle cellStyle = wb.createCellStyle();
+				
+		cellStyle.setBorderTop(BorderStyle.DOUBLE);//short) 1); // double lines border
+		cellStyle.setBorderBottom( BorderStyle.DOUBLE);   //(short) 1); // single line border
+		cellStyle.setBorderLeft(BorderStyle.DOUBLE); //(short) 1); // single line border
+		cellStyle.setBorderRight(BorderStyle.DOUBLE); //(short) 1); // single line border
+		
+		
+		cellStyle.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
+		cellStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND  ); //XSSFCellStyle.SOLID_FOREGROUND);
+		return cellStyle;
+	}
+	
+	private Workbook getWorkbook(String fileType) 
+			throws IOException {
+		Workbook workbook = null;
+		
+		if (fileType.equalsIgnoreCase(XLSX)) {
+			workbook = new XSSFWorkbook();
+		} else if (fileType.equalsIgnoreCase(XLS)) {
+			workbook = new HSSFWorkbook();
+		} else {
+			throw new IllegalArgumentException("The specified file is not Excel file");
+		}
+		
+		return workbook;
+	}
+	
+	
+	/**
+	 * Generate byte array of excel
+	 * @param reportDataTable
+	 * @return
+	 * @throws IOException 
+	 * @throws Exception
+	 */
+	private  byte[] createReportFileFromData(ReportDataTable reportDataTable) throws IOException  {
+		//XSSFSheet fullReportSheet = null;
+		int rowIndex = 1;
+		int columnIndex =0 ;
+		
+//		XSSFSheet potenMatchSheet = null;
+		
+		
+		SXSSFSheet potenMatchSheet = null;
+		SXSSFSheet noMatchSheet = null;
+		SXSSFSheet perfectMatchSheet = null;
+		SXSSFSheet excepnSheet = null;
+		
+		
+
+		
+		
+		int potenRowIndex = 1;
+		
+//		XSSFSheet noMatchSheet = null;
+		int noMatchRowIndex = 1;
+
+
+//		XSSFSheet perfectMatchSheet = null;
+		int perfectMatchRowIndex = 1;
+		
+		
+//		XSSFSheet excepnSheet = null;
+		int excepnRowIndex = 1;
+		
+//		XSSFWorkbook workBook = null;
+		SXSSFWorkbook workBook=null;//Stream  Version
+		ByteArrayOutputStream baos = new ByteArrayOutputStream();
+		
+			//wb = new XSSFWorkbook();
+		
+			// Header Set
+			List<String> headers=getResultHeader(reportDataTable);
+		
+//			workBook = createWorkBook(reportDataTable);
+			workBook = createWorkBookStream(reportDataTable);
+			addHeadersToallSheets(workBook, headers, reportDataTable.getTenentEmail(), reportDataTable.getTemplateID());
+			
+			
+		//	fullReportSheet = workBook.getSheet(ReportDefaultsEnum.XlsxReportTemplate.SHEET_FULL.getSheet());
+			perfectMatchSheet = workBook.getSheet(ReportDefaultsEnum.XlsxReportTemplate.SHEET_PERFECTMATCH.getSheet());
+			potenMatchSheet = workBook.getSheet(ReportDefaultsEnum.XlsxReportTemplate.SHEET_POTENMATCH.getSheet());
+			noMatchSheet = workBook.getSheet(ReportDefaultsEnum.XlsxReportTemplate.SHEET_NOMATCH.getSheet());
+			excepnSheet = workBook.getSheet(ReportDefaultsEnum.XlsxReportTemplate.SHEET_EXCEPN.getSheet());
+			
+			if(isNoDataToShow(reportDataTable)){
+				
+				// Removed on QA suggestion....can be added later. 
+				
+				/*for (int i = 0; i < reportDataTable.getIncludeInOutput().length; i++) {
+					SXSSFSheet blankSheet = workBook.getSheetAt(i);
+					
+					SXSSFRow rowsheet = blankSheet.createRow(0);
+					columnIndex=0;
+					SXSSFCell dataNameCell = rowsheet.createCell(columnIndex);
+					
+					dataNameCell.setCellStyle(getCellStyle(workBook));
+					
+					dataNameCell.setCellValue("No records found for this match-status!");
+				
+				}*/
+				
+			}
+			else{
+				
+				
+				
+			//	XSSFRow rowFullsheet = null;
+				
+				
+							
+				//Add report data into worksheet
+				for (Map<String, Object> map : reportDataTable.getDataMapList()) {
+					columnIndex=0;
+					
+					/*if(fullReportSheet!=null){
+						rowFullsheet = fullReportSheet.createRow(rowIndex);
+					}*/
+					
+//					XSSFRow rowPerfMatch = null;
+//					XSSFCell cellPerfMatch = null;
+//					
+//					XSSFRow rowPotenMatch = null;
+//					XSSFCell cellPotenMatch = null;
+//					
+//					XSSFRow rowNoMatch = null;
+//					XSSFCell cellNoMatch = null;
+//					
+//					XSSFRow rowExcepn = null;
+//					XSSFCell cellExcepn = null;
+					
+					SXSSFRow rowPerfMatch = null;
+					SXSSFCell cellPerfMatch = null;
+					
+					SXSSFRow rowPotenMatch = null;
+					SXSSFCell cellPotenMatch = null;
+					
+					SXSSFRow rowNoMatch = null;
+					SXSSFCell cellNoMatch = null;
+					
+					SXSSFRow rowExcepn = null;
+					SXSSFCell cellExcepn = null;
+					
+					
+					String matchStatus = map.get(ReportDefaultsEnum.COLUMN_MATCH_STATUS.getKey())!=null ? map.get(ReportDefaultsEnum.COLUMN_MATCH_STATUS.getKey()).toString():"";
+					
+					Set<String> reportHeadersSet = null;
+					
+					// PERFECT MATCH Sheet------------
+					//setHeaderInSheet(wb, perfectMatchSheet, headers);
+					if(null!=potenMatchSheet){
+					potenMatchSheet.setRandomAccessWindowSize(10);
+					}
+					if(null!=noMatchSheet){
+						noMatchSheet.setRandomAccessWindowSize(10);
+					}
+					if(null!=perfectMatchSheet){
+						perfectMatchSheet.setRandomAccessWindowSize(10);
+					}
+					if(null!=excepnSheet){
+						excepnSheet.setRandomAccessWindowSize(10);
+					}
+					
+					if(perfectMatchSheet!= null && matchStatus.equals(ProjectConfigEnum.ConfigProperties.IN_PERFECT_MATCH_ONLY.getAttributeDbValue())){
+						
+						rowPerfMatch = perfectMatchSheet.createRow(perfectMatchRowIndex);
+						perfectMatchRowIndex++;
+						
+						reportHeadersSet = includeHeaders(perfectMatchSheet, headers, reportDataTable.getTemplateID());
+					}
+					// ------------------------------
+					
+					
+					// POTENTIAL MATCH Sheet------------
+					//setHeaderInSheet(wb, potenMatchSheet, headers);
+					
+					if(potenMatchSheet!= null && matchStatus.equals(ProjectConfigEnum.ConfigProperties.IN_POTEN_MATCH.getAttributeDbValue())){
+						
+						rowPotenMatch = potenMatchSheet.createRow(potenRowIndex);
+						potenRowIndex++;
+						
+						reportHeadersSet = includeHeaders(potenMatchSheet, headers, reportDataTable.getTemplateID());
+					}
+					// ------------------------------
+					
+					
+					// NO MATCH Sheet------------
+				//	setHeaderInSheet(wb, noMatchSheet, headers);
+					
+					if(noMatchSheet!=null && matchStatus.equals(ProjectConfigEnum.ConfigProperties.IN_NO_MATCH.getAttributeDbValue())){
+						
+						rowNoMatch = noMatchSheet.createRow(noMatchRowIndex);
+						noMatchRowIndex++;
+						
+						reportHeadersSet = includeHeaders(noMatchSheet, headers, reportDataTable.getTemplateID());
+					}
+					// ------------------------------
+					
+					
+				
+					
+					// EXCEPTION Sheet------------
+				//	setHeaderInSheet(wb, excepnSheet, headers);
+					
+					if(excepnSheet!=null && matchStatus.equals(ProjectConfigEnum.ConfigProperties.IN_EXCEPTION_REPORT.getAttributeDbValue())){
+						
+						rowExcepn = excepnSheet.createRow(excepnRowIndex);
+						excepnRowIndex++;
+						
+						reportHeadersSet = includeHeaders(excepnSheet, headers, reportDataTable.getTemplateID());
+					}
+					// ------------------------------
+					
+					
+					
+					
+			
+					
+					
+					
+					
+					XSSFCell dataNameCell = null; 
+					
+					for (Entry dataRow : map.entrySet()) {
+
+						/*if(rowFullsheet!=null){
+							dataNameCell = rowFullsheet.createCell(columnIndex);
+						}*/
+						
+						if(rowPerfMatch!=null){
+							cellPerfMatch = rowPerfMatch.createCell(columnIndex);
+						}
+						if(rowPotenMatch!=null){
+							cellPotenMatch = rowPotenMatch.createCell(columnIndex);
+						}
+						if(rowNoMatch!=null){
+							cellNoMatch = rowNoMatch.createCell(columnIndex);
+						}
+						if(rowExcepn!=null){
+							cellExcepn = rowExcepn.createCell(columnIndex);
+							
+						}
+						
+						
+						
+						
+						
+						String data = dataRow.getValue()!=null?dataRow.getValue().toString():"";
+					//	if(!dataRow.getKey().toString().equals(ReportDefaultsEnum.COLUMN_MATCH_STATUS.getValue())){
+							
+							if(reportHeadersSet!=null && reportHeadersSet.contains(dataRow.getKey().toString()))	{
+								
+								if(dataNameCell!=null){
+									
+									dataNameCell.setCellValue(data);
+								}
+								
+								
+								if(cellPerfMatch!=null){
+									
+									cellPerfMatch.setCellValue(data);
+								}
+								if(cellPotenMatch!=null){
+									
+									cellPotenMatch.setCellValue(data);
+								}
+								if(cellNoMatch!=null){
+									
+									cellNoMatch.setCellValue(data);
+								}
+								if(cellExcepn!=null){
+									
+									cellExcepn.setCellValue(data);
+								}
+								columnIndex++;
+							}
+						
+						
+					}
+					rowIndex++;
+					
+					// Add next sheet with header
+					/*if(rowIndex % 65000==0){
+						fullReportSheet = wb.createSheet("sheet " + sheetNumber);
+						rowsheet = fullReportSheet.createRow(0);
+						for(String header:headers){
+							XSSFCell dataNameCell = rowsheet.createCell(columnIndex);
+							dataNameCell.setCellStyle(getCellStyle(wb));
+							
+							dataNameCell.setCellValue(header);
+							columnIndex++;
+						}
+						sheetNumber++;
+						rowIndex = 1;
+					}*/
+				}
+			}
+			
+			//Added for LP-833
+/*			 for (int i = 0; i < workBook.getNumberOfSheets(); i++) {
+		            SXSSFSheet sheet = workBook.getSheetAt(i);
+		            if(null == sheet.getRow(0)){
+		            	SXSSFRow rowsheet = sheet.createRow(0);
+						columnIndex=0;
+						SXSSFCell dataNameCell = rowsheet.createCell(columnIndex);
+						dataNameCell.setCellStyle(getNoDataCellStyle(workBook));
+						dataNameCell.setCellValue("No records found for this match-status!");
+		            }else if(null != sheet.getRow(0) && null == sheet.getRow(1)){
+		            	sheet.removeRow(sheet.getRow(0));
+		            	SXSSFRow rowsheet = sheet.createRow(0);
+						columnIndex=0;
+						SXSSFCell dataNameCell = rowsheet.createCell(columnIndex);
+						dataNameCell.setCellStyle(getNoDataCellStyle(workBook));
+						dataNameCell.setCellValue("No records found for this match-status!");
+		            };
+			 }*/
+		
+			
+			workBook.write(baos);
+			byte[] xls = baos.toByteArray();
+			
+			workBook.close();
+		return xls;
+	}
+
+	/**
+	 * Get headers list on the basis of report data table
+	 * @param reportDataTable
+	 * @return
+	 */
+	private List<String> getResultHeader(ReportDataTable reportDataTable) {
+		List<String> headers = new ArrayList<String>();
+		Map<String, Object> map = null;
+		
+		// Fix for LP - 886
+		if(reportDataTable.getDataMapList() !=null && reportDataTable.getDataMapList().size()>0){
+		
+	//	if(reportDataTable.getDataMapList() !=null){
+			 map =reportDataTable.getDataMapList().get(0);
+			 for (Entry dataRow : map.entrySet()) {
+				 if(!dataRow.getKey().toString().equals(ReportDefaultsEnum.COLUMN_MATCH_STATUS.getValue())){
+					 
+					 headers.add((String) dataRow.getKey());
+				 }
+			 }			
+		}
+		
+		// Fix for LP - 886
+		else if( !(reportDataTable.getDataMapList().size() > 0)){
+			//return reportDataTable.getDefaultHeader();
+			headers.clear();
+			headers = Arrays.asList(CommonConstants.No_XREF_DATA);
+		}
+		
+		
+		return headers;
+	}
+	
+	
+	
+
+	
+	private String getFileName(String projectName, long templateId, Timestamp reportGenOn){
+		
+		if(CommonConstants.INSTRUMENTS_ISSUER_MAPPING == templateId){
+			return CommonConstants.FILE_PREFIX_INSTISS +projectName + new SimpleDateFormat("_dd-MMM-yyyy_(HH-mm-ss").format(reportGenOn)+"Hrs).xlsx";
+		}else if(CommonConstants.DATA_CROSS_REFERENCING == templateId){
+			return CommonConstants.FILE_PREFIX_XREF +projectName + new SimpleDateFormat("_dd-MMM-yyyy_(HH-mm-ss").format(reportGenOn)+"Hrs).xlsx";
+		}else if(CommonConstants.ENRICH == templateId){
+			return CommonConstants.FILE_PREFIX_CHY_ENRICH +projectName + new SimpleDateFormat("_dd-MMM-yyyy_(HH-mm-ss").format(reportGenOn)+"Hrs).xlsx";
+		}else if(CommonConstants.BUILD == templateId){
+			return CommonConstants.FILE_PREFIX_CHY_BUILD +projectName + new SimpleDateFormat("_dd-MMM-yyyy_(HH-mm-ss").format(reportGenOn)+"Hrs).xlsx";
+		}else{
+			return CommonConstants.FILE_PREFIX_REFDATA +projectName + new SimpleDateFormat("_dd-MMM-yyyy_(HH-mm-ss").format(reportGenOn)+"Hrs).xlsx";
+		}
+		
+		
+	}
+
+
+
+
+	 
+	
+
+}

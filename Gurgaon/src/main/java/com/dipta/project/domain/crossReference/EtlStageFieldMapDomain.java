@@ -1,0 +1,63 @@
+package com.dipta.project.domain.crossReference;
+
+import javax.persistence.Column;
+import javax.persistence.Entity;
+import javax.persistence.GeneratedValue;
+import javax.persistence.GenerationType;
+import javax.persistence.Id;
+import javax.persistence.SequenceGenerator;
+import javax.persistence.Table;
+
+import lombok.Getter;
+import lombok.Setter;
+
+/**
+ * @author Pranav.Aggarwal
+ *
+ */
+@Entity
+@Table(name = "ETL_STAGE_FIELD_MAP")
+public class EtlStageFieldMapDomain {
+
+	@Getter
+	@Setter
+	@Id
+	@Column(name = "ID")
+	@GeneratedValue(strategy=GenerationType.AUTO, generator="SEQ_etl_stage_field_map")
+	@SequenceGenerator(name="SEQ_etl_stage_field_map", sequenceName="SEQ_etl_stage_field_map")
+	private long id;
+	
+	@Getter
+	@Setter
+	@Column(name = "TABLE_NAME")
+	private String tableName;
+	
+	@Getter                   
+	@Setter                   
+	@Column(name = "FIELD_NAME")
+	private String fieldName; 
+	
+	@Getter                   
+	@Setter                   
+	@Column(name = "DISPLAY_NAME")
+	private String displayName; 
+	
+	@Getter                   
+	@Setter                   
+	@Column(name = "FEED_DATA_TYPE")
+	private String feedDataType; 
+	
+	@Getter                   
+	@Setter                   
+	@Column(name = "FEEDTYPE")
+	private String feedType;
+
+	@Override
+	public String toString() {
+		return "EtlStageFieldMap [tableName=" + tableName + ", fieldName="
+				+ fieldName + ", displayName=" + displayName
+				+ ", feedDataType=" + feedDataType + ", feedType=" + feedType
+				+ "]";
+	} 
+	
+}

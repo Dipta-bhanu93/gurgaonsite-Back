@@ -1,0 +1,1112 @@
+package com.dipta.project.dao.user.orm;
+
+
+import java.math.BigDecimal;
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.List;
+
+import javax.persistence.ParameterMode;
+
+import lombok.extern.slf4j.Slf4j;
+
+import org.hibernate.Criteria;
+import org.hibernate.Query;
+import org.hibernate.criterion.Order;
+import org.hibernate.criterion.Restrictions;
+import org.hibernate.procedure.ProcedureCall;
+import org.hibernate.type.StandardBasicTypes;
+import org.springframework.stereotype.Repository;
+
+import com.dipta.project.dao.base.orm.AbstractBaseDao;
+import com.dipta.project.dao.user.IUserDao;
+import com.dipta.project.domain.acl.RolePrivilegesDomain;
+import com.dipta.project.domain.acl.RolesDomain;
+import com.dipta.project.domain.user.ApiRequestsLogDomain;
+import com.dipta.project.domain.user.CodApiRequestDomain;
+import com.dipta.project.domain.user.StatusDomain;
+import com.dipta.project.domain.user.UserDomain;
+import com.dipta.project.dto.acl.PrivilegesDto;
+import com.dipta.project.dto.user.ApiProcessDto;
+import com.dipta.project.dto.user.CodApiRequestDto;
+import com.dipta.project.dto.user.RolesDto;
+import com.dipta.project.dto.user.StatusDTOCollection;
+import com.dipta.project.dto.user.StatusDto;
+import com.dipta.project.dto.user.UserDTO;
+import com.dipta.project.dto.user.UserDTOCollection;
+import com.dipta.project.exception.common.ObjectNotSupportedException;
+import com.dipta.project.exception.common.ProcessFailedException;
+import com.dipta.project.exception.subscription.SubscriptionPasswordExtendException;
+import com.dipta.project.exception.user.RegistrationFailedException;
+import com.dipta.project.security.configuration.RolesEnum;
+import com.dipta.project.utility.CommonUtils;
+import com.dipta.project.utility.constants.ApplicationConstants;
+import com.dipta.project.utility.constants.CommonConstants;
+import com.dipta.project.utility.constants.StatusConstants;
+
+/**
+ * 
+ * @author Saurabh.Agarwal
+ *
+ */
+@Slf4j
+@Repository("userDao")
+public class UserDaoImpl extends AbstractBaseDao implements IUserDao{
+	private static final int NINTY_DAYS = 90;
+	private static final int FIFTEEN_DAYS = 15;
+	private static final int FORTYFIVE_DAYS = 45;
+	private static String GET_USER_CLIENT_FAILED = "Fetch Users with specific role for a Client Failed.";
+	private static final String EXCEPTION = "Exception in UserDaoImpl"; 
+	
+	public UserDaoImpl() {
+		this(ApplicationConstants.SUPERUSEREMAIL.getValue());
+	}
+
+	public UserDaoImpl(String userEmail) {
+		super(userEmail);
+	}
+
+	public UserDaoImpl(Long tenentID) {
+		super(tenentID);
+	}
+	@Override
+	public boolean exists(String emailId) {
+		boolean response = false;
+		requestPlatinumConnection();
+		beginTransaction();
+		Criteria user = createCriteria(UserDomain.class);
+		user.add(Restrictions.eq("email", emailId));
+		List<UserDomain> result = user.list();
+		if(result != null && result.size()>0){
+			response = true;
+		}
+		endTransaction();
+		releasePlatinumConnection();
+		return response;
+	}
+
+	@Override
+	public boolean updatePasswordAndStatus(UserDTO userDTO) throws ProcessFailedException, ObjectNotSupportedException {
+		UserDomain userDomain = getUserDomain(userDTO.getEmail());
+		userDomain.getStatus().setStatusId(userDTO.getStatus().getStatusId());
+		userDomain.getStatus().setPassword(userDTO.getStatus().getPassword());
+		if(userDTO.getStatus().getLastLogin()==null) {
+			userDomain.getStatus().setLastLogin(new Timestamp(new Date().getTime()));	
+		}
+		return updateUserDomain(userDomain);
+
+	}
+
+	@Override
+	public Long getUserID(String emailId)  {
+		
+		Long id = 0L;
+		requestPlatinumConnection();
+		beginTransaction();
+	
+			String statementQuery = "SELECT user_id FROM user_info WHERE email_id = '"+emailId+"'";
+			Query query = hibernatePersistenceManager.createSQLQuery(statementQuery);
+		
+			//query.setResultTransformer(AliasToEntityOrderedMapResultTransformer.INSTANCE);
+
+			List<Object[]> rows = query.list();
+            
+			//BigDecimal count = ((BigDecimal)rowArray[0]);
+			if(rows != null && rows.size()>0){
+				Object rowArray = rows.get(0);
+				id = ((BigDecimal)rowArray).longValue();
+			}
+			
+		endTransaction();
+		releasePlatinumConnection();
+		return id;
+		
+
+}
+
+	@Override
+	public UserDTO getUser(String emailId ,  boolean loadRoles) throws ObjectNotSupportedException {
+		UserDomain userDomain=getUserDomain(emailId);
+
+		if(userDomain!=null){
+			UserDTO convertObject = CommonUtils.convertObject(userDomain, UserDTO.class);
+			convertObject.getStatusMaster().setStatusId(userDomain.getStatusMaster().getId());
+
+			if(loadRoles){
+				// set user privileges also
+				convertObject.getUserRole().setPrivilegeDtos(extractPrivilegesFromDomain(userDomain));
+				
+			}
+			
+			
+			Timestamp passwordExpiry = convertObject.getStatus().getPasswordExpiry();
+			if(passwordExpiry!=null){
+				Date password_expiryDate = CommonUtils.toDate(passwordExpiry);
+				Date CurrentDate = new Date();
+				long daysBetween = CommonUtils.daysBetween(CurrentDate, password_expiryDate);
+				convertObject.getStatus().setDaysLeft(daysBetween);
+				
+			}
+			
+			return convertObject;
+		}else{
+			return null;
+		}
+	}
+
+
+	/**
+	 * To get role from ROLE table
+	 * @return
+	 * @throws ObjectNotSupportedException
+	 */
+	private RolesDomain getRole(Long roleid) throws ObjectNotSupportedException{
+		RolesDomain rolesDomain=new RolesDomain();
+	
+			requestPlatinumConnection();
+			beginTransaction();
+			Criteria role = hibernatePersistenceManager.createCriteria(RolesDomain.class);
+			role.add(Restrictions.eq("roleId", roleid));
+			List<RolesDomain> result = role.list();
+			try {
+			log.info("getAdminRole...Result size is.." + result.size());
+			}catch (NullPointerException e) {
+				//Removing from Find Bug report
+			}
+			if(result != null && result.size()>0){
+				rolesDomain = result.get(0);
+			}
+			endTransaction();
+		
+
+		return rolesDomain;
+	}
+
+	/**
+	 * This method is used to login with given loginId and password.
+	 * If valid, then it returns authorization token.
+	 * If invalid, it gives maximum 10 chances to login. Otherwise, user account is blocked. 
+	 */
+	@Override
+	public boolean login(String loginId, String password) throws ProcessFailedException {
+		boolean response;
+		requestPlatinumConnection();
+		beginTransaction();
+		Criteria user = hibernatePersistenceManager.createCriteria(UserDomain.class);
+		user.add(Restrictions.eq("email", loginId));
+		List<UserDomain> result = user.list();
+		if(result != null && result.size()>0){
+			UserDomain userDomain = result.get(0);
+			if(userDomain.getWrongCount()>10){
+				endTransaction();
+				throw new ProcessFailedException("User account is Blocked. Please contact administrator");
+			}else{
+				if(password.equals(userDomain.getStatus().getPassword())){
+					response = true;
+				}else{
+					userDomain.setWrongCount(userDomain.getWrongCount()+1);
+					hibernatePersistenceManager.saveOrUpdate(userDomain);
+					endTransaction();
+					throw new ProcessFailedException("Invalid LoginID / Password. Only:"+(11-userDomain.getWrongCount())+" attempts Left");
+				}
+			}
+		}else{
+			throw new ProcessFailedException("Invalid login credentials.");
+		}
+		endTransaction();
+		return response;
+
+	}
+
+	@Override
+	public boolean logout(UserDTO userDTO) throws ObjectNotSupportedException {
+
+		CommonUtils.convertObject(userDTO, UserDomain.class);
+		return false;
+
+	}
+
+	@Override
+	public boolean register(UserDTO userDto) throws RegistrationFailedException, ObjectNotSupportedException {
+		boolean result= false;
+		UserDomain user = CommonUtils.convertObject(userDto, UserDomain.class);
+
+		String status = null;
+		if(userDto.getStatusMaster()!=null){
+			status = userDto.getStatusMaster().getStatus();
+		}else{
+			if(userDto.getStatus().getStatusId()== StatusConstants.ACTIVE.getID()){
+				status = "ACTIVE";	
+			}
+			status = "ACTIVATION PENDING";	
+		}
+		StatusDomain statusDomain = getStatus(status);
+
+		Long roleId = null;
+		if(userDto.getUserRole()!=null){
+			roleId = userDto.getUserRole().getRoleId();
+		}/*else{
+			roleId = UserRolesType.ADMIN.getRoleId();
+		}*/
+
+		user.setStatusMaster(statusDomain);
+		user.getStatus().setUser(user);
+		user.setDateCreated(new Date());
+
+		try {
+			requestPlatinumConnection();
+			beginTransaction();
+
+			RolesDomain roleDomain = hibernatePersistenceManager.getPersistentObject(RolesDomain.class,roleId );
+			user.setUserRole(roleDomain);
+
+			UserDomain persistedUser = (UserDomain) hibernatePersistenceManager.save(user);
+
+			/*if(roleId==10002){
+				ClientDomain client = CommonUtils.convertObject(userDto.getClient(), ClientDomain.class);
+				client.setUserId(persistedUser.getId());
+				hibernatePersistenceManager.save(client);
+			}*/
+			//hibernatePersistenceManager.save(saveUserRole(persistedUser, UserRolesType.ADMIN.getRoleId()));
+
+			result = true;
+			endTransaction();;
+		} catch (Exception e) {
+			e.printStackTrace();
+			hibernatePersistenceManager.rollback();
+			throw new RegistrationFailedException("User Registration Failed.");
+		}
+		return result;
+
+	}
+
+	
+	@Override
+	public boolean apiRegister(UserDTO userDto) throws RegistrationFailedException, ObjectNotSupportedException {
+		boolean result= false;
+		UserDomain user = CommonUtils.convertObject(userDto, UserDomain.class);
+		String status =  "ACTIVE";	
+		StatusDomain statusDomain = getStatus(status);
+		Long roleId = null;
+		if(userDto.getUserRole()!=null){
+			roleId = userDto.getUserRole().getRoleId();
+		}/*else{
+			roleId = UserRolesType.ADMIN.getRoleId();
+		}*/
+
+		user.setStatusMaster(statusDomain);
+		user.getStatus().setUser(user);
+		user.setDateCreated(new Date());
+
+		try {
+			requestPlatinumConnection();
+			beginTransaction();
+			RolesDomain roleDomain = hibernatePersistenceManager.getPersistentObject(RolesDomain.class,roleId );
+			user.setUserRole(roleDomain);
+			hibernatePersistenceManager.save(user);
+			result = true;
+			endTransaction();;
+		} catch (Exception e) {
+			e.printStackTrace();
+			hibernatePersistenceManager.rollback();
+			throw new RegistrationFailedException("User Registration Failed.");
+		}
+		return result;
+
+	}
+
+
+	/**
+	 * To set Role as ADMIN for new user
+	 * @param userDomain
+	 * @return
+	 * @throws ObjectNotSupportedException
+	 * @throws ProcessFailedException
+	 * @throws RegistrationFailedException
+	 */
+
+	/* NOT IN USE*******************
+
+	private UserRolesDomain saveUserRole(UserDomain userDomain, Long roleId) throws ObjectNotSupportedException, ProcessFailedException, RegistrationFailedException{
+
+		RolesDomain rolesDomain = new RolesDomain();
+		UserRolesDomain userRolesDomain = new UserRolesDomain();
+		UserRoleCompositeId userRoleCompositeId = new UserRoleCompositeId();
+
+		userRoleCompositeId.setRoleId(userDomain.getUserRole().getRoleId());
+		userRoleCompositeId.setUserId(userDomain.getId());
+
+		userRolesDomain = hibernatePersistenceManager.load(UserRolesDomain.class, userRoleCompositeId);
+
+
+
+		rolesDomain = getRole(UserRolesType.ADMIN.getRoleId());  // to get admin role from ROLE tablefrom database
+
+		log.info("saveAdminRole...role is.." + rolesDomain.getRoleId() + "|" + rolesDomain.getType());
+
+		userRolesDomain.setDateCreated(new Date());
+		userRolesDomain.setUserIdCreated(userDomain.getId());   // to set  user id who assign the role
+
+		userRoleCompositeId.setRoleId(rolesDomain.getRoleId());
+		userRoleCompositeId.setUserId(userDomain.getId());
+
+		log.info("saveAdminRole...user id is..." + userDomain.getId());
+
+		userRolesDomain.setUserAndRole(userRoleCompositeId);
+
+		return userRolesDomain;
+
+	}*/
+
+	@Override
+	public int getStatusId(String status) {
+		StatusDomain userDomain=getStatus(status);
+		if(userDomain!=null){
+			return userDomain.getId();
+		}
+		return -1;
+	}
+
+
+	@Override
+	public StatusDomain getStatus(String status) {
+		StatusDomain userDomain=null;
+		requestPlatinumConnection();
+		beginTransaction();
+		Criteria user = hibernatePersistenceManager.createCriteria(StatusDomain.class);
+		user.add(Restrictions.eq("status", status.toUpperCase()));
+		List<StatusDomain> result = user.list();
+		if(result != null && result.size()>0){
+			userDomain = result.get(0);
+		}
+		endTransaction();
+		return userDomain;
+	}
+
+
+
+
+
+
+
+	public UserDTO findById(int id) {
+		return null;
+	}
+
+
+	public UserDTO findBySignInId(String signInId,  boolean loadRoles) throws ObjectNotSupportedException {
+
+		return getUser(signInId, loadRoles);
+
+	}
+
+
+	private UserDomain getUserDomain(String emailId) {
+		UserDomain userDomain=null;
+		requestPlatinumConnection();
+		beginTransaction();
+		Criteria user = createCriteria(UserDomain.class);
+		user.add(Restrictions.eq("email", emailId));
+		List<UserDomain> result = user.list();
+		if(result != null && result.size()>0){
+			userDomain = result.get(0);
+		}
+
+		endTransaction();
+		releasePlatinumConnection();
+		return userDomain;
+	}
+	
+	
+	public boolean updateUserDomain(UserDomain userDomain) throws ProcessFailedException{
+		boolean result = false;
+		try {
+			requestPlatinumConnection();
+			beginTransaction();
+			//			userDomain.setStatus(getStatus(userDomain.getStatus().getId()));
+			hibernatePersistenceManager.saveOrUpdate(userDomain);
+			result = true;
+			endTransaction();
+		} catch (Exception e) {
+			e.printStackTrace();
+			hibernatePersistenceManager.rollback();
+			throw new ProcessFailedException("Update user Failed.");
+		}
+		return result;
+	}
+
+
+
+/*	@Override
+	public UserDTO getUserByProjectId(long projectId) throws ProjectIdNotSupportedException {
+		beginTransaction();
+		UserProjectDomain userProject = hibernatePersistenceManager.getPersistentObject(UserProjectDomain.class, Long.valueOf(projectId));
+
+		UserDomain user = hibernatePersistenceManager.getPersistentObject(UserDomain.class, userProject.getUserCreated());
+
+		try {
+
+			return CommonUtils.convertObject(user, UserDTO.class);
+		} catch (ObjectNotSupportedException e) {
+			throw new ProjectIdNotSupportedException("Project Id is nor supported. Exact message:"+e);
+		}
+	}*/
+
+	/*public UserDomain getUserDomainByProjectId(long projectId) {
+		hibernatePersistenceManager.beginTransaction();
+		UserProjectDomain userProject = hibernatePersistenceManager.getPersistentObject(UserProjectDomain.class, Long.valueOf(projectId));
+
+		UserDomain user = hibernatePersistenceManager.getPersistentObject(UserDomain.class, userProject.getUserCreated());
+
+		return user;
+	}
+
+	@Override
+	public long getUserIdByProjectId(long projectId) {
+		hibernatePersistenceManager.beginTransaction();
+		UserProjectDomain userProject = hibernatePersistenceManager.getPersistentObject(UserProjectDomain.class, Long.valueOf(projectId));
+
+		UserDomain user = hibernatePersistenceManager.getPersistentObject(UserDomain.class, userProject.getUserCreated());
+
+		return user.getId();
+	}*/
+
+
+	@Override
+	public boolean updateUserProfile(UserDTO userDto) throws ObjectNotSupportedException, ProcessFailedException{
+		boolean result = false;
+		UserDomain userDomain = getUserForUpdate(userDto);
+		try {
+			beginTransaction();
+			RolesDomain roleDomain = hibernatePersistenceManager.getPersistentObject(RolesDomain.class, userDto.getUserRole().getRoleId() );
+			userDomain.setUserRole(roleDomain);
+			UserDomain persistedUser = (UserDomain) hibernatePersistenceManager.saveOrUpdate(userDomain);
+
+			result = true;
+			endTransaction();;
+		} catch (Exception e) {
+			e.printStackTrace();
+			hibernatePersistenceManager.rollback();
+			throw new ProcessFailedException("Profile Update Failed.");
+		}
+		return result;
+	}
+
+
+	/**
+	 * This method returns user domain object for update.
+	 * @param userDto
+	 * @return
+	 */
+	private UserDomain getUserForUpdate(UserDTO userDto) {
+		UserDomain userDomain = getUserDomain(userDto.getEmail());
+		userDomain.setFirstName(userDto.getFirstName());
+		userDomain.setLastName(userDto.getLastName());
+		userDomain.setMobile(userDto.getMobile());
+
+		StatusDomain statusDomain = getStatus(userDto.getStatusMaster().getStatus());
+		userDomain.setStatusMaster(statusDomain);
+
+		return userDomain;
+	}
+
+
+	/*public UserDTO getUsersCreated(String emailId) throws ObjectNotSupportedException {
+		UserDomain userDomain=getUserDomain(emailId);
+		long userId = userDomain.getId();
+		userDomain=getUserDomainCreated(userId);
+		if(userDomain!=null){
+			return CommonUtils.convertObject(userDomain, UserDTO.class);
+		}else{
+			return null;
+		}
+	}
+
+	public UserDomain getUserDomainCreated(long userId) {
+		UserDomain userDomain=null;
+		hibernatePersistenceManager.beginTransaction();
+		Criteria user = hibernatePersistenceManager.createCriteria(UserDomain.class);
+		user.add(Restrictions.eq("id", userId));
+		List<UserDomain> result = user.list();
+		if(result != null && result.size()>0){
+			userDomain = result.get(0);
+		}
+		return userDomain;
+	}*/
+
+	@Override
+	public List<UserDTO> getUsersCreated(String emailId) throws ObjectNotSupportedException {
+		//UserDomain userDomain=getUserDomain(emailId);
+		//Long userId = getUserID(emailId);
+		requestPlatinumConnection();
+			beginTransaction();
+				Criteria user = hibernatePersistenceManager.createCriteria(UserDomain.class);
+				List<UserDTO> userDTOs = new ArrayList<>();
+		
+				try {
+					user.add(Restrictions.eq("companyId", getClientId()));
+					user.addOrder(Order.desc("dateCreated"));
+					//user.add(Restrictions.eq("createdBy", userId.toString()));
+					List<UserDomain> result = user.list();
+		
+					for (UserDomain userObject : result) {
+						
+						if((userObject.getUserRole() != null) &&
+								!(userObject.getUserRole().getRoleId().equals(RolesEnum.INSUPER.getRoleId())
+								|| userObject.getUserRole().getRoleId().equals(RolesEnum.EXSUPER.getRoleId()))){
+							UserDTO userDTO;
+							userDTO = CommonUtils.convertObject(userObject, UserDTO.class);
+							userDTOs.add(userDTO);
+							
+						}
+					}
+				} catch (ObjectNotSupportedException e) {
+					e.printStackTrace();
+				}
+			endTransaction();
+		releasePlatinumConnection();
+		return userDTOs;
+	}
+
+	@Override
+	public List<StatusDto> getStatusMasterList() throws ObjectNotSupportedException {
+		requestPlatinumConnection();
+		beginTransaction();
+		Criteria status = hibernatePersistenceManager.createCriteria(StatusDomain.class);
+		List<StatusDto> statusDTOs = new ArrayList<>();
+
+		try {
+			ArrayList<Object> values = new ArrayList<>();
+			values.add(1);
+			values.add(6);
+			status.add(Restrictions.in("id", values));
+			List<StatusDomain> result = status.list();
+
+			for (StatusDomain statusDomain : result) {
+
+				StatusDto statusDTO;
+				statusDTO = CommonUtils.convertObject(statusDomain, StatusDto.class);
+				statusDTOs.add(statusDTO);
+			}
+		} catch (ObjectNotSupportedException e) {
+			e.printStackTrace();
+		}
+		endTransaction();
+		return statusDTOs;
+	}
+
+	@Override
+	public StatusDTOCollection getStatusMasterList(int moduleId) throws ObjectNotSupportedException {
+		StatusDTOCollection statusDTOCollection=new StatusDTOCollection();
+		requestPlatinumConnection();
+		beginTransaction();
+		Criteria status = hibernatePersistenceManager.createCriteria(StatusDomain.class);
+		List<StatusDto> statusDTOs = new ArrayList<>();
+
+		try {
+			status.add(Restrictions.eq("moduleId", moduleId));
+			List<StatusDomain> result = status.list();
+
+			for (StatusDomain statusDomain : result) {
+
+				StatusDto statusDTO;
+				statusDTO = CommonUtils.convertObject(statusDomain, StatusDto.class);
+				statusDTO.setStatusId(statusDomain.getId());
+				statusDTOs.add(statusDTO);
+			}
+		} catch (ObjectNotSupportedException e) {
+			throw e;
+		}
+		endTransaction();
+		
+		statusDTOCollection.setStatusDTOs(statusDTOs);
+		return statusDTOCollection;
+	}
+	
+	@Override
+	public List<RolesDto> getRoleMasterList() throws ObjectNotSupportedException {
+		requestPlatinumConnection();
+		beginTransaction();
+		Criteria role = hibernatePersistenceManager.createCriteria(RolesDomain.class);
+		List<RolesDto> roleDTOs = new ArrayList<>();
+
+		try {
+			role.add(Restrictions.gt("roleId", 20000L));
+			List<RolesDomain> result = role.list();
+
+			for (RolesDomain roleDomain : result) {
+
+				RolesDto roleDto;
+				roleDto = CommonUtils.convertObject(roleDomain, RolesDto.class);
+				roleDTOs.add(roleDto);
+			}
+		} catch (ObjectNotSupportedException e) {
+			e.printStackTrace();
+		}
+
+		endTransaction();
+		return roleDTOs;
+	}
+
+	@Override
+	public UserDomain userDomainById(long id) {
+		beginTransaction();
+		Criteria crit = hibernatePersistenceManager.createCriteria(UserDomain.class);
+		crit.add(Restrictions.eq("id", id));
+		UserDomain userInfo =  (UserDomain) crit.uniqueResult();
+		endTransaction();
+		return userInfo;
+	}
+
+
+	@Override
+	public boolean registerCompany(String userEmail, Long companyID,boolean isGuest) throws ProcessFailedException {
+		UserDomain userDomain = getUserDomain(userEmail);
+		userDomain.setCompanyId(companyID);
+
+		/*if(!isGuest){*/
+			
+			/*requestPlatinumConnection();
+			beginTransaction();
+			RolesDomain roleDomain = hibernatePersistenceManager.getPersistentObject(RolesDomain.class,RolesEnum.EXSUPER.getRoleId());
+			userDomain.setUserRole(roleDomain);
+			endTransaction();*/
+		
+			/*}*/
+
+//		userDomain.setStatusMaster(getStatus(StatusConstants.ACTIVE.getStatus()));
+		//userDomain.setStatusMaster(getStatus(StatusConstants.CHANGEPASSWORDPENDING.getStatus()));
+		updateUserDomain(userDomain);
+		return true;
+	}
+
+	@Override
+	public boolean updateCompany(String userEmail, Long companyID) throws ProcessFailedException {
+		UserDomain userDomain = getUserDomain(userEmail);
+		userDomain.setCompanyId(companyID);
+		/*code commented as user will get activated at the end. in case of subscribe user*/
+		/*	userDomain.setStatusMaster(getStatus(StatusConstants.ACTIVE.getStatus()));*/
+		updateUserDomain(userDomain);
+		return true;
+	}
+	@Override
+	public boolean updateStatus(String userEmail) throws ProcessFailedException {
+		UserDomain userDomain = getUserDomain(userEmail);
+			userDomain.setStatusMaster(getStatus(StatusConstants.ACTIVE.getStatus()));
+		updateUserDomain(userDomain);
+		return true;
+	}
+	@Override
+	public boolean activateUser(String emailId, String password, Integer statusId) throws ProcessFailedException, RegistrationFailedException {
+
+		boolean result = false;
+		try{
+
+			UserDomain userDomain = getUserDomain(emailId);
+
+			userDomain.getStatus().setPassword(password);
+			userDomain.getStatus().setStatusId(statusId);
+			userDomain.getStatus().setDateCreated(new java.sql.Timestamp(new Date().getTime()));
+			Date expiryDate = CommonUtils.addDay(CommonUtils.toDate(userDomain.getStatus().getDateCreated()),FORTYFIVE_DAYS);
+			userDomain.getStatus().setPasswordExpiry(new java.sql.Timestamp(expiryDate.getTime()));
+			
+			
+
+			userDomain.setStatusMaster(getStatus(StatusConstants.NEW.getStatus()));
+
+
+			/*.setId(statusId);
+			userDomain.getStatusMaster().setStatus(StatusConstants.NEW.getStatus());
+
+			String status = "NEW";	
+
+			StatusDomain statusDomain = getStatus(status);
+
+			userDomain.setStatusMaster(statusDomain);*/
+
+			updateUserDomain(userDomain);
+
+			/*hibernatePersistenceManager.saveOrUpdate(userDomain);
+			hibernatePersistenceManager.commit();*/
+			result =  true;
+		} catch (Exception e) {
+			e.printStackTrace();
+			hibernatePersistenceManager.rollback();
+			throw new RegistrationFailedException("User Registration Failed.");
+		}
+
+
+		return result;
+
+	}
+
+
+	/**
+	 * This function is used to fetch user list for a particular clientId. Role Id is an optional parameter.
+	 * If passed user list with specific role type will be returned, else the whole list will be returned
+	 * @param clientId
+	 * @param roleId
+	 * @return
+	 * @throws ProcessFailedException
+	 */
+	@Override
+	public ArrayList<UserDTO> getUsersForClient(Long clientId, Long roleId) throws ProcessFailedException{
+		ArrayList<UserDTO> users=new ArrayList<>();
+		try{
+			requestPlatinumConnection();
+			beginTransaction();
+			Criteria criteria = hibernatePersistenceManager.createCriteria(UserDomain.class);
+			criteria.add(Restrictions.eq("companyId", clientId));
+			if(null != roleId){
+				criteria.add(Restrictions.eq("userRole.roleId", roleId));
+			}
+			List<UserDomain> result = criteria.list();
+				for(UserDomain userDom:result){
+					UserDTO user = CommonUtils.convertObject(userDom, UserDTO.class);
+					users.add(user);
+				}
+			endTransaction();
+			releasePlatinumConnection();
+		}catch(Exception e){
+			throw new ProcessFailedException(GET_USER_CLIENT_FAILED);
+		}
+		
+		return users;
+	}
+
+
+	private List<PrivilegesDto> extractPrivilegesFromDomain(UserDomain userDomain){
+		List<PrivilegesDto> privilegesDtos = new ArrayList<PrivilegesDto>();
+
+		
+		
+		if(userDomain.getCompanyId()==null || userDomain.getCompanyId().equals(0L)){
+			
+			// get privileges from Platinum 
+			List<RolePrivilegesDomain> roleModuleprivileges = userDomain.getUserRole().getRoleModuleprivileges();
+			for (RolePrivilegesDomain rolePrivilegesDomain : roleModuleprivileges) {
+				String module =  rolePrivilegesDomain.getModule().getModuleTextValue();
+				String privilege = rolePrivilegesDomain.getPrivilege().getPrivilegeString();
+
+				PrivilegesDto privilegesDto = new PrivilegesDto();
+				privilegesDto.setRoleType(module.concat("_").concat(privilege));
+				privilegesDtos.add(privilegesDto);
+			}
+
+		}else{
+			
+			// get privileges from Tenent 
+			List<RolePrivilegesDomain> roleModuleprivileges = getPrivilegesByRoleId(userDomain.getUserRole().getRoleId());
+			if(roleModuleprivileges!=null){
+				
+				for (RolePrivilegesDomain rolePrivilegesDomain : roleModuleprivileges) {
+					String module =  rolePrivilegesDomain.getModule().getModuleTextValue();
+					String privilege = rolePrivilegesDomain.getPrivilege().getPrivilegeString();
+					
+					PrivilegesDto privilegesDto = new PrivilegesDto();
+					privilegesDto.setRoleType(module.concat("_").concat(privilege));
+					privilegesDtos.add(privilegesDto);
+				}
+			}
+			
+		}
+		
+		
+		return privilegesDtos;
+	}
+	
+	
+	
+	
+	 private List<RolePrivilegesDomain> getPrivilegesByRoleId(Long roleId){
+			beginTransaction();
+			Criteria privileges = hibernatePersistenceManager.createCriteria(RolePrivilegesDomain.class);
+			privileges.add(Restrictions.eq("roleId", roleId));
+			privileges.add(Restrictions.eq("active", 'Y'));
+			List<RolePrivilegesDomain> result = privileges.list();
+			endTransaction();
+			return result;
+	}
+	 
+	 
+	 @Override
+	 
+	 public String getUserEmailIdForClientId(Long clientId) throws ProcessFailedException{
+		 String emailId=null;
+		 try{
+				requestPlatinumConnection();
+				beginTransaction();
+				Query query = hibernatePersistenceManager.createQuery("select a.email from UserDomain a, RolesDomain b, UserRolesDomain c where a.id=c.userAndRole.userId and c.userAndRole.roleId=b.roleId and b.roleId = :rid and  a.companyId= :cid");
+				query.setString("rid", RolesEnum.EXSUPER.getRoleId().toString());
+				query.setLong("cid", clientId);
+				emailId = (String)query.uniqueResult();
+				endTransaction();
+				releasePlatinumConnection();
+			}catch(Exception e){
+				throw new ProcessFailedException("Failed in getting email id fro given client id");
+			}
+			
+		 
+		return emailId;
+		 
+		 
+	 }
+
+	@Override
+	public boolean updateCreatedAndPasswordExpiryDate(String emailId)
+			throws ProcessFailedException {
+		boolean result = false;
+		try{
+
+			UserDomain userDomain = getUserDomain(emailId);
+
+			userDomain.getStatus().setDateCreated(new java.sql.Timestamp(new Date().getTime()));
+			Date expiryDate = CommonUtils.addDay(CommonUtils.toDate(userDomain.getStatus().getDateCreated()),NINTY_DAYS);
+			userDomain.getStatus().setPasswordExpiry(new java.sql.Timestamp(expiryDate.getTime()));
+			
+			updateUserDomain(userDomain);
+
+			result =  true;
+		} catch (Exception e) {
+			e.printStackTrace();
+			hibernatePersistenceManager.rollback();
+			throw new SubscriptionPasswordExtendException();
+//			throw new ProcessFailedException("User updateCreatedAndPasswordExpiryDate Failed.");
+		}
+
+
+		return result;
+	}
+	
+	private List<UserDTO> getExternalWithSubUserList(String emailId)throws ObjectNotSupportedException {
+		List<UserDTO> exSuperWithSubUsersList = new ArrayList<>();
+		try {
+			UserDomain userDomain = getUserDomain(emailId);
+			if (userDomain != null) {
+				requestPlatinumConnection();
+				beginTransaction();
+				Criteria user = hibernatePersistenceManager.createCriteria(UserDomain.class);
+				user.add(Restrictions.eq("companyId", userDomain.getCompanyId()));
+				user.addOrder(Order.desc("dateCreated"));
+				List<UserDomain> externalUsersList = user.list();
+				if (externalUsersList != null && !externalUsersList.isEmpty()) {
+					for (UserDomain userObject : externalUsersList) {
+						UserDTO userDTO;
+						userDTO = CommonUtils.convertObject(userObject,UserDTO.class);
+						exSuperWithSubUsersList.add(userDTO);
+					}
+					endTransaction();
+					releasePlatinumConnection();
+				} else {
+					log.info("externalUsersList Found Null from getExternalWithSubUserList Method");
+				}
+			} else {
+				log.info("userDomain Found Null from getExternalWithSubUserList Method");
+			}
+		} catch (Exception e) {
+			log.error("Exception in getExternalWithSubUserList Method", e);
+		}
+		return exSuperWithSubUsersList;
+	}
+
+	private List<UserDTO> getInternalWithSubUserList()throws ObjectNotSupportedException {
+		List<UserDTO> inSuperWithSubUsersList = new ArrayList<>();
+		try {
+			requestPlatinumConnection();
+			beginTransaction();
+			Criteria user = hibernatePersistenceManager.createCriteria(UserDomain.class);
+			user.add(Restrictions.eq("companyId", 1l));
+			user.addOrder(Order.desc("dateCreated"));
+			List<UserDomain> internalUsersList = user.list();
+			if (internalUsersList != null && !internalUsersList.isEmpty()) {
+				for (UserDomain userObject : internalUsersList) {
+					UserDTO userDTO;
+					userDTO = CommonUtils.convertObject(userObject,UserDTO.class);
+					inSuperWithSubUsersList.add(userDTO);
+				}
+				endTransaction();
+				releasePlatinumConnection();
+			} else {
+				log.info("internalUsersList Found Null from getInternalWithSubUserList Method");
+			}
+
+		} catch (Exception e) {
+			log.error("Exception in getInternalWithSubUserList Method", e);
+		}
+		return inSuperWithSubUsersList;
+	}
+
+	@Override
+	public UserDTOCollection getUserListForXorChat(String emailId)throws ObjectNotSupportedException {
+		UserDTOCollection userDTOCollection = new UserDTOCollection();
+		try {
+			UserDomain userDomain = getUserDomain(emailId);
+			if (userDomain != null) {
+				if (!CommonUtils.isInternalUser(userDomain.getCompanyId())) {
+					userDTOCollection.setExSuparWithSubUsersList(getExternalWithSubUserList(userDomain.getEmail()));
+					userDTOCollection.setInSuparWithSubUsersList(getInternalWithSubUserList());
+				} else {
+					userDTOCollection.setInSuparWithSubUsersList(getInternalWithSubUserList());
+				}
+			} else {
+				log.info("userDomain Found Null from getUserListForXorChat Method");
+			}
+		} catch (Exception e) {
+			log.error("Exception in getUserListForXorChat Method", e);
+		}
+		return userDTOCollection;
+	}
+	
+	@Override
+	public boolean updatLastLogin(UserDTO userDTO) throws ProcessFailedException, ObjectNotSupportedException {
+		UserDomain userDomain = getUserDomain(userDTO.getEmail());
+		userDomain.getStatus().setLastLogin(new Timestamp(new Date().getTime()));
+		return updateUserDomain(userDomain);
+	}
+	
+	@Override
+    public long createApiUserAccessToken(CodApiRequestDto dto)throws ObjectNotSupportedException {
+           long accessToken = 0l;
+           if (null != dto && null != dto.getEmail() && !dto.getEmail().isEmpty()) {
+                  try{
+                        beginTransaction();
+                        accessToken = (long) hibernatePersistenceManager.createSQLQuery("select SEQ_ACCESS_TOKEN.nextval as num from dual").addScalar("num", StandardBasicTypes.LONG).uniqueResult();
+                        CodApiRequestDomain domain = CommonUtils.convertObject(dto,CodApiRequestDomain.class);
+                        domain.setTokenExpiredFlag(CommonConstants.N);
+                        domain.setAccessToken(accessToken);
+                        hibernatePersistenceManager.save(domain);
+                        ProcedureCall procCall = hibernatePersistenceManager.getTenantProcedureCall("PROC_USER_CREATE");
+            			procCall.registerParameter(1, Long.class, ParameterMode.IN).bindValue(accessToken);
+            			procCall.getOutputs();
+            			endTransaction();
+                  }catch(Exception e){
+                        log.error(EXCEPTION,e);
+                        rollBack();
+                  }
+           } else {
+                  log.info("codApiRequestDto Found Null");
+           }
+           return accessToken;
+    }
+    
+    @Override
+    public boolean updateApiUserAccessToken(CodApiRequestDto dto)throws ObjectNotSupportedException {
+           boolean result = false;
+           if (null != dto.getEmail() && !dto.getEmail().isEmpty() && null != dto.getAccessToken() && dto.getAccessToken() != 0 && null != dto.getTokenExpiredFlag() && !dto.getTokenExpiredFlag().isEmpty()) {
+                  try{
+                        beginTransaction();
+                        Criteria requestCriteria = hibernatePersistenceManager.createCriteria(CodApiRequestDomain.class);
+                        requestCriteria.add(Restrictions.eq("email", dto.getEmail()));
+                        requestCriteria.add(Restrictions.eq("accessToken", dto.getAccessToken()));
+                        CodApiRequestDomain uniqueResult = (CodApiRequestDomain) requestCriteria.uniqueResult();
+                        if(null != uniqueResult){
+                               uniqueResult.setTokenExpiredFlag(dto.getTokenExpiredFlag());
+                               hibernatePersistenceManager.saveOrUpdate(uniqueResult);
+                               result = true;
+                        }
+                        endTransaction();
+                  }catch(Exception e){
+                        log.error(EXCEPTION,e);
+                        rollBack();
+                  }
+           }else{
+                  log.info("codApiRequestDto Found Null");
+           }
+           return result;
+    }
+    
+    @Override
+    public ApiProcessDto isProcessRunning(CodApiRequestDto dto){
+           ApiProcessDto apiProcessDto = new ApiProcessDto();
+           if (null != dto.getEmail() && !dto.getEmail().isEmpty() && null != dto.getAccessToken() && dto.getAccessToken() != 0) {
+                  try{
+                        beginTransaction();
+                        Criteria requestCriteria = hibernatePersistenceManager.createCriteria(CodApiRequestDomain.class);
+                        requestCriteria.add(Restrictions.eq("email", dto.getEmail()));
+                        requestCriteria.add(Restrictions.eq("accessToken", dto.getAccessToken()));
+                        CodApiRequestDomain uniqueResult = (CodApiRequestDomain) requestCriteria.uniqueResult();
+                        if(null != uniqueResult){
+                               apiProcessDto.setRequestStatus(uniqueResult.getRequestStatus());
+                               apiProcessDto.setComments(uniqueResult.getComments());
+                               apiProcessDto.setTokenExpiredFlag(CommonConstants.N);
+                               if(CommonConstants.API_REQUEST_STATUS.equalsIgnoreCase(uniqueResult.getRequestStatus())){
+                                      apiProcessDto.setTokenExpiredFlag(CommonConstants.Y);
+                               }
+                        }
+                        endTransaction();
+                  }catch(Exception e){
+                        log.error(EXCEPTION,e);
+                        endTransaction();
+                  }
+           }else{
+                  log.info("codApiRequestDto Found Null");
+           }
+           return apiProcessDto;
+    }
+    
+    @Override
+    public boolean createApiRequestsLog(CodApiRequestDto dto) throws ObjectNotSupportedException{
+           boolean result = false;
+           if (null != dto && null != dto.getEmail() && !dto.getEmail().isEmpty()) {
+                  try{
+                        beginTransaction();
+                        ApiRequestsLogDomain domain = CommonUtils.convertObject(dto,ApiRequestsLogDomain.class);
+                        domain.setRequestDate(new Date());
+                        hibernatePersistenceManager.save(domain);
+                        result = true;
+                        endTransaction();
+                  }catch(Exception e){
+                        log.error(EXCEPTION,e);
+                        rollBack();
+                  }
+           }else{
+                  log.info("codApiRequestDto Found Null");
+           }
+           return result;
+    }
+    
+    @Override
+    public boolean isRequestPerDayReached(CodApiRequestDto dto,String requestThreshold){
+           boolean result = false;
+           try{
+                  beginTransaction();
+                  Criteria requestLogCriteria = hibernatePersistenceManager.createCriteria(ApiRequestsLogDomain.class);
+                  requestLogCriteria.add(Restrictions.ge("requestDate",getFormattedFromDateTime(new Date())));
+                  requestLogCriteria.add(Restrictions.le("requestDate",getFormattedToDateTime(new Date())));
+                  List<ApiRequestsLogDomain> apiRequestsLogDomainList = requestLogCriteria.list();
+                  if(apiRequestsLogDomainList.size()>=Integer.parseInt(requestThreshold)){
+                        result = true;
+                  }
+                  endTransaction();
+           }catch(Exception e){
+                  log.error(EXCEPTION,e);
+                  endTransaction();
+           }
+           return result;
+    }
+    
+    private Date getFormattedFromDateTime(Date date) {
+        Calendar cal = Calendar.getInstance();
+        cal.setTime(date);
+        cal.set(Calendar.HOUR_OF_DAY, 0);
+        cal.set(Calendar.MINUTE, 0);
+        cal.set(Calendar.SECOND, 0);
+        return cal.getTime();
+    }
+    
+    private Date getFormattedToDateTime(Date date) {
+        Calendar cal = Calendar.getInstance();
+        cal.setTime(date);
+        cal.set(Calendar.HOUR_OF_DAY, 23);
+        cal.set(Calendar.MINUTE, 59);
+        cal.set(Calendar.SECOND, 59);
+        return cal.getTime();
+    }
+
+
+
+	
+	
+}

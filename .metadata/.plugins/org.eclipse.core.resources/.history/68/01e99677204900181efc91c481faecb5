@@ -1,0 +1,50 @@
+package com.lei.dto.crossReference;
+
+import java.util.List;
+import java.util.TreeMap;
+
+import javax.xml.bind.annotation.XmlAccessType;
+import javax.xml.bind.annotation.XmlAccessorType;
+import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlRootElement;
+import javax.xml.bind.annotation.XmlSeeAlso;
+
+import lombok.Getter;
+import lombok.Setter;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonRootName;
+
+@XmlRootElement(name = "EtlCreateMappingDto")
+@JsonRootName(value = "EtlCreateMappingDto")
+@XmlAccessorType(XmlAccessType.NONE)
+@XmlSeeAlso({EtlStageFieldMapDto.class})
+public class EtlCreateMappingDto {
+	
+
+
+	@Getter
+	@Setter
+	@XmlElement(name = "FeedId")
+	@JsonProperty(value = "FeedId")
+	private long feedId;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "PrestageColumns")
+	@JsonProperty(value = "PrestageColumns")
+	private List<String> prestageColumns;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "StageColumns")
+	@JsonProperty(value = "StageColumns")
+	private List<EtlStageFieldMapDto> stageColumns;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "PrestageTabName")
+	@JsonProperty(value = "PrestageTabName")
+	private String prestageTabName;
+
+}

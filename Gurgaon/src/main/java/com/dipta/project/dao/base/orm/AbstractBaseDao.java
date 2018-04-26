@@ -1,0 +1,108 @@
+package com.dipta.project.dao.base.orm;
+
+import org.hibernate.Criteria;
+import org.springframework.transaction.NestedTransactionNotSupportedException;
+
+import com.dipta.project.domain.base.orm.ConnectionDetailDomain;
+import com.dipta.project.utility.PropertyUtility;
+import com.dipta.project.utility.constants.ApplicationConstants;
+
+public abstract class AbstractBaseDao {
+	protected HibernatePersistenceManager hibernatePersistenceManager =null;
+	private static final String SUPERTENANTSCHEMA;
+	private boolean transactionStarted = false;
+	private ConnectionDetailDomain tenantConnectionDetails;
+	private static final String schemaPrefix = "ondemand_";
+	private boolean tenantExists = false;
+	private String tenantEmail=null;
+
+	static{
+		SUPERTENANTSCHEMA = PropertyUtility.getValueString(ApplicationConstants.CONFIGURATIONSBUNDLE.getValue(), "SUPERTENANTSCHEMA","ondemand_1");
+	}
+
+	public AbstractBaseDao(String tenantEmail) {
+		tenantConnectionDetails = TenantPool.getConnectionDetail(tenantEmail);
+		if(tenantConnectionDetails==null){
+			tenantExists = false;
+			return;
+		}
+		tenantExists = true;
+		this.tenantEmail = tenantEmail;
+		hibernatePersistenceManager = new HibernatePersistenceManager(schemaPrefix+tenantConnectionDetails.getClientId());
+	}
+	
+	
+	public AbstractBaseDao(Long tenantId) {
+		String tenantEmail = TenantPool.getEmailByTenantId(tenantId);
+		tenantConnectionDetails = TenantPool.getConnectionDetail(tenantEmail);
+		if(tenantConnectionDetails==null){
+			tenantExists = false;
+			return;
+		}
+		tenantExists = true;
+		this.tenantEmail = tenantEmail;
+		hibernatePersistenceManager = new HibernatePersistenceManager(schemaPrefix+tenantConnectionDetails.getClientId());
+	}
+	
+	
+	public boolean tenantExists(){
+		return tenantExists;
+	}
+	public void beginTransaction(){
+		hibernatePersistenceManager.beginTransaction();
+		transactionStarted = true;
+	}
+	public void endTransaction(){
+		hibernatePersistenceManager.commit();
+		hibernatePersistenceManager.closeSession();
+		transactionStarted = false;
+	}
+
+	public void rollBack(){
+		hibernatePersistenceManager.rollback();
+		transactionStarted = false;
+	}
+
+	public Criteria createCriteria(Class criteriaClass){
+		return hibernatePersistenceManager.createCriteria(criteriaClass);
+	}
+
+	public void refresh(Object domainObject){
+		hibernatePersistenceManager.refresh(domainObject);
+	}
+
+	protected void requestPlatinumConnection(){
+		if(transactionStarted){
+			throw new NestedTransactionNotSupportedException("Complete previous connection transactions");
+		}
+		hibernatePersistenceManager = new HibernatePersistenceManager(SUPERTENANTSCHEMA);
+	}
+	protected void releasePlatinumConnection(){
+		if(transactionStarted){
+			throw new NestedTransactionNotSupportedException("Complete previous connection transactions");
+		}
+		if(tenantConnectionDetails!=null){
+			
+			hibernatePersistenceManager = new HibernatePersistenceManager(schemaPrefix+tenantConnectionDetails.getClientId());
+		}
+	}
+
+	public Long getClientId(){
+		if(tenantExists){
+			return tenantConnectionDetails.getClientId();
+		}
+		return 0L;
+	}
+	
+	public String getTenantEmail() {
+		return tenantEmail;
+	}
+	
+	
+	public String getTenantEmailById() {
+		return tenantEmail;
+	}
+
+
+
+}

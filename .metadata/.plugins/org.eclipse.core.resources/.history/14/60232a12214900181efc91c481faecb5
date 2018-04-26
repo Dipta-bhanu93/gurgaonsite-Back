@@ -1,0 +1,556 @@
+package com.dipta.project.dao.ticketManagement.orm;
+
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.List;
+
+import javax.persistence.ParameterMode;
+
+import org.hibernate.Criteria;
+import org.hibernate.criterion.Order;
+import org.hibernate.criterion.Restrictions;
+import org.hibernate.procedure.ProcedureCall;
+import org.hibernate.result.Output;
+
+import com.dipta.project.dao.ticketManagement.ITicketMaintenanceDao;
+import com.lei.dao.base.DaoManager;
+import com.lei.dao.base.orm.AbstractBaseDao;
+import com.lei.dao.base.orm.TenantWorkflowPool;
+import com.lei.dao.workflow.IWorkFlowDao;
+import com.lei.domain.ticketManagement.TicketDomain;
+import com.lei.domain.ticketManagement.gantt.GanttDataDomain;
+import com.lei.domain.user.StatusDomain;
+import com.lei.dto.ticketManagement.TicketDto;
+import com.lei.dto.ticketManagement.TicketFilterDto;
+import com.lei.dto.ticketManagement.gantt.GanttDataDTO;
+import com.lei.dto.ticketManagement.gantt.GanttTask;
+import com.lei.dto.workflow.ProjectDTO;
+import com.lei.dto.workflow.WorkFlowMasterDto;
+import com.lei.exception.common.ObjectNotSupportedException;
+import com.lei.exception.common.ProcessFailedException;
+import com.lei.maintenance.ticketManagement.ITicketMaintenance;
+import com.lei.maintenance.ticketManagement.TicketMaintenanceImpl;
+import com.lei.utility.CommonUtils;
+import com.lei.utility.PropertyUtility;
+import com.lei.utility.constants.ApplicationConstants;
+import com.lei.utility.constants.CommonConstants;
+import com.lei.utility.constants.GanttConstant;
+import com.lei.utility.constants.StatusConstants;
+
+public class TicketMaintenanceDaoImpl extends AbstractBaseDao implements ITicketMaintenanceDao  {
+
+	public static final String WORKFLOW_ASSIGNMENT_FAIL="Workflow update failed";
+	public static final String TICKET_RETRIVAL_FAIL="Ticket retrieval failed";
+	public static final String FILTERED_TICKET_RETRIVAL_FAIL="Filtered Tickets retrieval failed";
+	public static final String TICKET_STATUS_UPDATE_FAILED ="Ticket status update failed";
+	private static final String DATEMODIFIED = "dateModified";
+	private static final String WORKFLOW_ID = "workFlowId";
+	private static final String STATUS_ID = "id";
+	private static final String TKT_ID ="ticketId";
+	private static final String WRKFLW_CYCL_COMPLETED ="workflowCycleCompleted";
+	
+	
+	
+	public TicketMaintenanceDaoImpl(String tenantEmail) {
+		super(tenantEmail);
+	}
+	
+	public TicketMaintenanceDaoImpl(Long clientId) {
+		super(clientId);
+	}
+
+	@Override
+	public ArrayList<TicketDto> getTickets(Long clientId, int recordCount)
+			throws ProcessFailedException, ObjectNotSupportedException {
+		ArrayList<TicketDto> tickets=new ArrayList<>();
+		try{
+			requestPlatinumConnection();
+			beginTransaction();
+			Criteria criteria = hibernatePersistenceManager.createCriteria(TicketDomain.class);
+			criteria.add(Restrictions.eq("companyDomain.id", clientId));
+			criteria.addOrder(Order.desc("dateCreated"));
+			criteria.setMaxResults(recordCount);
+			List<TicketDomain> result = criteria.list();
+			for(TicketDomain ticketDomain:result){
+
+				TicketDto ticketDto;
+				ticketDto = CommonUtils.convertObject(ticketDomain, TicketDto.class);
+				ticketDto.setStatus(ticketDomain.getStatusMaster().getStatus());
+				ticketDto.setStatusId(ticketDomain.getStatusMaster().getId());
+				tickets.add(ticketDto);
+			}
+			endTransaction();
+			releasePlatinumConnection();
+		}catch(ObjectNotSupportedException objectNotSupportedException){
+			rollBack();
+			throw objectNotSupportedException;
+		}catch(Exception e){
+			throw new ProcessFailedException(TICKET_RETRIVAL_FAIL);
+		}
+		return tickets;
+	}
+	@Override
+	public ArrayList<TicketDto> getTickets(TicketFilterDto ticketFilter)
+			throws ProcessFailedException, ObjectNotSupportedException {
+		ArrayList<TicketDto> tickets=new ArrayList<>();
+		try{
+			requestPlatinumConnection();
+			beginTransaction();
+			Criteria criteria = hibernatePersistenceManager.createCriteria(TicketDomain.class);
+			/*Filter Restriction*/
+			if(ticketFilter!=null){
+				if(ticketFilter.getTicketIdAsLong()!=null ){
+					criteria.add(Restrictions.eq("ticketId", ticketFilter.getTicketIdAsLong())); 
+				}
+				if(ticketFilter.getClientIdAsLong()!=null && !ticketFilter.getClientIdAsLong().equals(1L)){
+					criteria.add(Restrictions.eq("companyDomain.id", ticketFilter.getClientIdAsLong())); 
+				}
+				if(ticketFilter.getStartDateAsDate()!=null && ticketFilter.getEndDateAsDate()!=null){
+					//criteria.add(Restrictions.eq("dateCreated", ticketFilter.getStartDateAsDate())); 
+					//criteria.add(Restrictions.ge("dateCreated", ticketFilter.getStartDateAsDate())); 
+					//criteria.add(Restrictions.le("dateCreated", ticketFilter.getEndDateAsDate()));
+					criteria.add(Restrictions.between("dateCreated",ticketFilter.getStartDateAsDate(), ticketFilter.getEndDateAsDate()));
+
+
+
+				}
+				if(ticketFilter.getStatusId()!=0){
+					criteria.add(Restrictions.eq("statusMaster.id", ticketFilter.getStatusId())); 
+				}
+			}
+			/*Filter Restriction*/
+			criteria.addOrder(Order.desc("dateCreated"));
+
+			List<TicketDomain> result = criteria.list();
+			ProjectDTO project=null;
+			for(TicketDomain ticketDomain:result){
+
+				TicketDto ticketDto;
+				ticketDto = CommonUtils.convertObject(ticketDomain, TicketDto.class);
+				ticketDto.setStatus(ticketDomain.getStatusMaster().getStatus());
+				ticketDto.setStatusId(ticketDomain.getStatusMaster().getId());
+				
+				String statusDesc = ticketDomain.getStatusMaster().getDescription() !=null ? ticketDomain.getStatusMaster().getDescription().replace("Status ", ""):""; 
+				statusDesc = statusDesc.replace(" for ticket", "");
+				ticketDto.setStatusDesc(statusDesc);
+				
+	
+				ticketDto.setProgress("View");
+				tickets.add(ticketDto);
+			}
+			endTransaction();
+			releasePlatinumConnection();
+		}catch(ObjectNotSupportedException objectNotSupportedException){
+			rollBack();
+			throw objectNotSupportedException;
+		}catch(Exception e){
+			throw new ProcessFailedException(FILTERED_TICKET_RETRIVAL_FAIL);
+		}
+		return tickets;
+	}
+
+	/* (non-Javadoc)
+	 * @see com.lei.dao.ticketManagement.ITicketMaintenanceDao#getTicket(java.lang.Long)
+	 */
+	@Override
+	public TicketDto getTicket(Long ticketId) throws ProcessFailedException, ObjectNotSupportedException {
+		TicketDto ticket=new TicketDto();
+		try{
+			requestPlatinumConnection();
+			beginTransaction();
+			Criteria criteria = hibernatePersistenceManager.createCriteria(TicketDomain.class);
+			criteria.add(Restrictions.eq("ticketId", ticketId));
+
+			TicketDomain ticketDom = (TicketDomain)criteria.uniqueResult();
+
+			ticket = CommonUtils.convertObject(ticketDom, TicketDto.class);
+			ticket.setStatus(ticketDom.getStatusMaster().getStatus());
+			ticket.setStatusId(ticketDom.getStatusMaster().getId());
+			
+			endTransaction();
+			releasePlatinumConnection();
+		}catch(ObjectNotSupportedException objectNotSupportedException){
+			rollBack();
+			throw objectNotSupportedException;
+		}catch(Exception e){
+			throw new ProcessFailedException();
+		}
+		return ticket;
+	}
+
+	public TicketDto saveOrUpdateTicket(TicketDto ticketDto)  throws ProcessFailedException, ObjectNotSupportedException{
+		TicketDto finalTicketDto=new TicketDto();
+		try{
+			//TicketDomain ticketDomain=	CommonUtils.convertObject(ticketDto, TicketDomain.class);
+			requestPlatinumConnection();
+			beginTransaction();
+			
+			
+			/*StatusDomain.class, (Long)StatusConstants.OPEN.getID()*/
+			/*List<Object> statusMasters = hibernatePersistenceManager.get(StatusDomain.class,Long.valueOf(StatusConstants.OPEN.getID().longValue()));
+			   ticketDomain.setStatusMaster((StatusDomain)statusMasters.get(0));*/
+			//ticketDomain = (TicketDomain)hibernatePersistenceManager.saveOrUpdate(ticketDomain);
+
+			/*Query query = hibernatePersistenceManager.getNamedQuery("callAssignWorkflow");
+
+			query.setParameter(0, ticketDto.getTicketId());
+			query.setParameter(1, ticketDto.getWorkFlowId());
+			query.setParameter(2, ticketDto.getUserModified());
+			Object ticket=query.uniqueResult();
+			ticketDto=	CommonUtils.convertObject(ticket, TicketDto.class);*/
+			Output output;
+			//TicketDomain ticketDomain=new TicketDomain();
+			ProcedureCall procCall = hibernatePersistenceManager.getProcedureCall("PRC_UPDT_WRKFLOW_ID_FRMGOLD");
+			procCall.registerParameter(1, Long.class, ParameterMode.IN).bindValue(ticketDto.getTicketId());
+			procCall.registerParameter(2, Long.class, ParameterMode.IN).bindValue(ticketDto.getWorkFlowId());
+			procCall.registerParameter(3, Long.class, ParameterMode.IN).bindValue(ticketDto.getUserModified());
+			procCall.getOutputs();
+			//procCall.registerParameter(4, Class.class,  ParameterMode.REF_CURSOR);
+			/*			ProcedureOutputs procedureResult =procCall.getOutputs();
+			Output currentOutput = procedureResult.getCurrent();
+			 if (currentOutput.isResultSet()) {
+                List<TicketDomain> result = ((org.hibernate.result.ResultSetOutput) currentOutput).getResultList();
+
+			 }*/
+			/*procCall.registerParameter(1, void.class, ParameterMode.REF_CURSOR).bindValue(ticketDomain);
+
+			 */
+			endTransaction();
+			releasePlatinumConnection();
+			
+				//ITicketMaintenanceDao ticketdao = DaoManager.TICKETMAINTENANCEDAO.getDao(ticketDto.getCompanyDomain().getId(), ITicketMaintenanceDao.class);
+				//ticketdao.populateGanttTables(ticketDto.getTicketId(),GanttConstant.TICKET_ID.getValue());
+			
+				ITicketMaintenanceDao ticketdao = DaoManager.TICKETMAINTENANCEDAO.getDao(ticketDto.getCompanyDomain().getId(), ITicketMaintenanceDao.class);
+				ticketdao.updateGanttStartDate(ticketDto.getTicketId(),GanttConstant.TICKET_ID.getValue());
+			
+			
+				//Adding code for Dynamic workflow - START
+				IWorkFlowDao iWorkFlowDao = DaoManager.WORKFLOWDAO.getDao(ticketDto.getCompanyDomain().getId(), IWorkFlowDao.class);
+				WorkFlowMasterDto wfDto = iWorkFlowDao.getWorkFlowMasterDataById(ticketDto.getWorkFlowId());
+				TenantWorkflowPool.addWorkflowRoleObj(ticketDto.getCompanyDomain().getId(), wfDto.getWorkFlowId(), wfDto.getWorkFlowLevel());
+				//Adding code for Dynamic workflow - END
+			finalTicketDto= getTicket(ticketDto.getTicketId()) ;
+		}catch(ObjectNotSupportedException objectNotSupportedException){
+			rollBack();
+			throw objectNotSupportedException;
+		}
+		catch(Exception e){
+			rollBack();
+			throw new ProcessFailedException(WORKFLOW_ASSIGNMENT_FAIL);
+		}
+		return finalTicketDto;
+	}
+
+	@Override
+	public TicketDto getLatestTicket(Long projectId) throws ProcessFailedException {
+		Long clientId = getClientId();
+		TicketDto ticketDto=null;
+		try{
+			requestPlatinumConnection();
+			beginTransaction();
+
+			Criteria criteria = hibernatePersistenceManager.createCriteria(TicketDomain.class);
+			criteria.add(Restrictions.eq("companyDomain.id", clientId));
+			criteria.add(Restrictions.eq("projectId", projectId));
+			criteria.addOrder(Order.desc("dateCreated"));
+			TicketDomain latestTicketDomain=null;
+			List<TicketDomain> result = criteria.list();
+			if(result!=null && result.size()>0){
+				for(TicketDomain ticketDomain:result){
+					latestTicketDomain=ticketDomain;
+					break;
+				}
+				ticketDto=CommonUtils.convertObject(latestTicketDomain, TicketDto.class);
+				ticketDto.setStatus(latestTicketDomain.getStatusMaster().getStatus());
+				ticketDto.setStatusId(latestTicketDomain.getStatusMaster().getId());
+			}
+			endTransaction();
+			releasePlatinumConnection();
+		}catch(Exception e){
+			throw new ProcessFailedException("Latest Ticket revrival process failed.");
+		}
+		return ticketDto;
+	}
+	
+	@Override
+	public boolean updateTicketStatus(Long wfId, Integer statusId, Long ticketId) throws ProcessFailedException{
+		boolean result = false;
+		try{
+			requestPlatinumConnection();
+			beginTransaction();
+			Criteria criteria = hibernatePersistenceManager.createCriteria(TicketDomain.class);
+			criteria.add(Restrictions.eq(WORKFLOW_ID, wfId));
+			criteria.addOrder(Order.desc(DATEMODIFIED));
+			
+			if(ticketId !=null){
+				criteria.add(Restrictions.eq(TKT_ID, ticketId));
+			}
+			
+			TicketDomain ticket=(TicketDomain)criteria.setFirstResult(0).setMaxResults(1).uniqueResult();
+			
+			Criteria statusCriteria = hibernatePersistenceManager.createCriteria(StatusDomain.class);
+			statusCriteria.add(Restrictions.eq(STATUS_ID,statusId));
+			StatusDomain statusObj = (StatusDomain)statusCriteria.uniqueResult();
+			
+			ticket.setStatusMaster(statusObj);
+			ticket.setDateModified(new Timestamp(new Date().getTime()));
+			hibernatePersistenceManager.saveOrUpdate(ticket);
+			endTransaction();
+			releasePlatinumConnection();
+			result = true;
+		}catch(Exception e){
+			endTransaction();
+			releasePlatinumConnection();
+			throw new ProcessFailedException(TICKET_STATUS_UPDATE_FAILED);
+		}
+		return result;
+	}
+	
+	
+	
+	@Override
+	public TicketDto getLatestTicketByWorkFlowId(Long wfId) throws ObjectNotSupportedException{
+		TicketDto ticketDto = null;
+		try{
+			requestPlatinumConnection();
+			beginTransaction();
+			Criteria criteria = hibernatePersistenceManager.createCriteria(TicketDomain.class);
+			criteria.add(Restrictions.eq(WORKFLOW_ID, wfId));
+			criteria.addOrder(Order.desc(DATEMODIFIED));
+		//	criteria.add(Restrictions.ne("statusMaster.id", StatusConstants.RESOLVED.getID()));
+			TicketDomain ticket = null;
+			ticket=(TicketDomain)criteria.setFirstResult(0).setMaxResults(1).uniqueResult();
+			if(null != ticket){
+				ticketDto = CommonUtils.convertObject(ticket, TicketDto.class);
+				ticketDto.setStatus(ticket.getStatusMaster().getStatus());
+				ticketDto.setStatusId(ticket.getStatusMaster().getId());
+				
+			}
+			
+			endTransaction();
+			releasePlatinumConnection();
+		}catch(Exception e){
+			endTransaction();
+			releasePlatinumConnection();
+		}
+		return ticketDto;
+	}
+	
+	
+	
+	
+	@Override
+	public List<Long> getTicketsInWorkFlow(Long wfId) {
+		TicketDto ticketDto = null;
+		List<Long>  tickets= new ArrayList<>();
+		try{
+			requestPlatinumConnection();
+			beginTransaction();
+			Criteria criteria = hibernatePersistenceManager.createCriteria(TicketDomain.class);
+			criteria.add(Restrictions.eq(WORKFLOW_ID, wfId));
+			criteria.add(Restrictions.eq(WRKFLW_CYCL_COMPLETED, CommonConstants.N.charAt(0)));
+			List<TicketDomain> result= criteria.list();
+			
+			//tickets = new Long[result.size()];
+			int i=0;
+			if(result!=null && result.size()>0){
+				for(TicketDomain ticketDomain:result){
+					tickets.add(ticketDomain.getTicketId());
+				}
+			}
+			
+			endTransaction();
+			releasePlatinumConnection();
+		}catch(Exception e){
+			endTransaction();
+			releasePlatinumConnection();
+		}
+		return tickets;
+	}
+	
+
+	@Override
+	public ArrayList<TicketDto> getTickets(boolean allTickets) throws ProcessFailedException, ObjectNotSupportedException {
+		ArrayList<TicketDto> tickets=new ArrayList<>();
+		try{
+			requestPlatinumConnection();
+			beginTransaction();
+			Criteria criteria = hibernatePersistenceManager.createCriteria(TicketDomain.class);
+			criteria.add(Restrictions.eq("companyDomain.id", getClientId()));
+			if(!allTickets){
+			criteria.add(Restrictions.eq("statusMaster.id",StatusConstants.INPROGRESS.getID()))
+				.add(Restrictions.isNotNull(DATEMODIFIED))
+				.addOrder(Order.desc(DATEMODIFIED));
+//				.setMaxResults(Integer.parseInt(PropertyUtility.getValueString(ApplicationConstants.APPLICATION_BUNDLE.getValue(), "MAX_TICKET_ON_SCREEN")));
+			}
+			
+			TicketDto ticket=new TicketDto();
+			List<TicketDomain> result= criteria.list();
+				if(result!=null && result.size()>0){
+					for(TicketDomain ticketDomain:result){
+					ticket = CommonUtils.convertObject(ticketDomain, TicketDto.class);
+					ticket.setStatus(ticketDomain.getStatusMaster().getStatus());
+					ticket.setStatusId(ticketDomain.getStatusMaster().getId());
+					tickets.add(ticket);
+				}
+			}
+			endTransaction();
+			releasePlatinumConnection();
+		}catch(ObjectNotSupportedException objectNotSupportedException){
+			rollBack();
+			throw objectNotSupportedException;
+		}catch(Exception e){
+			throw new ProcessFailedException();
+		}
+		return tickets;
+	}
+	
+
+	@Override
+	public ArrayList<GanttTask> getTaskInfo(long id,String idType ) throws Exception{
+		ArrayList<GanttTask> taskList=new ArrayList<>();
+		List<GanttDataDomain> dataDomainList=new ArrayList<>();
+		ITicketMaintenance ticketMaintenance=new TicketMaintenanceImpl();
+		try{
+			beginTransaction();
+		dataDomainList = hibernatePersistenceManager.createCriteria(GanttDataDomain.class).
+							createAlias("masterObj", "masterObj").
+							add(Restrictions.eq("masterObj."+idType,id)).
+//							add(Restrictions.eq("masterObj.tktId",ticketNumber)).
+							addOrder(Order.asc("id")).
+							list();
+		
+		long actualDeliveredRecord=0;
+	
+		for(GanttDataDomain obj:dataDomainList){
+			GanttTask task = new GanttTask();
+			GanttTask estimatedTask=new GanttTask();
+			long deliverCycle=obj.getMasterObj().getDeliveryCycle()*obj.getMasterObj().getNumberResourcePerDay()*obj.getMasterObj().getNumberRecordPerDayPerResource();;
+			task.setName(PropertyUtility.getValueString(ApplicationConstants.APPLICATION_BUNDLE.getValue(), "GANTT_WEEK_LABLE")+" "+obj.getWeekId());
+			task.setEarliestCompletionTime(obj.getEstStartDate());
+			task.setLatestCompletionTime(obj.getEstEndDate());
+		
+			if((null==obj.getActtEndDate())&&(null!=obj.getActStartDate())){
+				task.setTo(Calendar.getInstance().getTime());
+				task.setFrom(obj.getActStartDate());
+			}else{
+			task.setTo(obj.getActtEndDate());
+			task.setFrom(obj.getActStartDate());
+			}
+			
+			long recordRemaining=(obj.getMasterObj().getTotal()-actualDeliveredRecord);
+			if(recordRemaining<deliverCycle){
+				deliverCycle=recordRemaining;
+			}else{
+			if(deliverCycle>obj.getMasterObj().getTotal()){
+				deliverCycle=obj.getMasterObj().getTotal();
+			}
+			
+			}
+			if((obj.getDeliveredRecord()!=null)){
+				float percentage=0;
+				percentage=((float)obj.getDeliveredRecord()/deliverCycle)*100;
+//				System.out.println("Percent : "+percentage);
+				
+				task.setProgressPercentage((percentage));
+			}
+			actualDeliveredRecord=obj.getMasterObj().getDeliveryCycle()*obj.getMasterObj().getNumberRecordPerDayPerResource()*obj.getMasterObj().getNumberResourcePerDay()*obj.getWeekId();
+			GanttDataDTO data=new GanttDataDTO();
+			data=ticketMaintenance.chooseColorGanttChart(task, obj.getMasterObj().getDeliveryCycle());
+			
+			task.setColor(data.getColor());
+			task.setPriority(10);
+			
+			
+			data.setDeliveredRecords((obj.getDeliveredRecord()!=null?obj.getDeliveredRecord():0));
+			data.setRecordInBucket(deliverCycle);
+			data.setRecourceCount(obj.getMasterObj().getNumberResourcePerDay()+"");
+			data.setResolutionRate(obj.getMasterObj().getNumberRecordPerDayPerResource()+"");
+			data.setWorkingDays(obj.getMasterObj().getDeliveryCycle()+"");
+			
+			data.setTktId(obj.getMasterObj().getTktId());
+			data.setTotalRecord(obj.getMasterObj().getTotal());
+			task.setData(data);		
+			
+			if((null==obj.getActStartDate())){
+				task.setFrom(obj.getEstStartDate());
+				task.setTo(obj.getEstEndDate());
+			}
+			
+			estimatedTask.setFrom(task.getFrom());
+			estimatedTask.setTo(obj.getEstEndDate());     
+			estimatedTask.setColor(PropertyUtility.getValueString(ApplicationConstants.APPLICATION_BUNDLE.getValue(), "GANTT_NOTSTARTED"));
+			estimatedTask.setPriority(1);
+//			estimatedTask.setName("Week : "+obj.getWeekId());
+			estimatedTask.setEarliestCompletionTime(obj.getEstStartDate());
+			estimatedTask.setLatestCompletionTime(obj.getEstEndDate());
+			estimatedTask.setData(data);
+			estimatedTask.setProgressPercentage(task.getProgressPercentage());
+			taskList.add(task);
+			taskList.add(estimatedTask);
+		}
+		}catch (Exception e) {
+			e.printStackTrace();
+//			throw e;
+		}finally {
+			endTransaction();			
+		}
+		return taskList;
+	}
+
+	
+	@Override	
+	public void updateGanttStartDate(Long id,String idType){
+		List<GanttDataDomain> dataDomainList=new ArrayList<>();
+			try{
+				beginTransaction();
+				
+				dataDomainList=(List<GanttDataDomain>) hibernatePersistenceManager.createCriteria(GanttDataDomain.class).
+							createAlias("masterObj", "masterObj").
+							add(Restrictions.eq("masterObj."+idType,id)).
+							add(Restrictions.eq("weekId",1)).
+							list();
+				dataDomainList.get(0).setActStartDate(Calendar.getInstance().getTime());
+				hibernatePersistenceManager.saveOrUpdate(dataDomainList.get(0));
+				}catch(Exception e){
+					e.printStackTrace();
+				}finally{
+					endTransaction();
+				}
+		}
+	
+	
+	@Override	
+	public void populateGanttTables(Long id,String idType){
+			try{
+				beginTransaction();
+	
+	ProcedureCall procCall = hibernatePersistenceManager.getProcedureCall("PROC_GANTT_CHART_POPULATE");
+	if(idType.equals(GanttConstant.TICKET_ID.getValue())){
+	procCall.registerParameter(1, Long.class, ParameterMode.IN).bindValue(id);	
+	procCall.registerParameter(2, Long.class, ParameterMode.IN).bindValue(0L);
+	}else if(idType.equals(GanttConstant.BATCH_ID.getValue())){
+		procCall.registerParameter(1, Long.class, ParameterMode.IN).bindValue(0L);	
+		procCall.registerParameter(2, Long.class, ParameterMode.IN).bindValue(id);
+	
+	}
+	
+	procCall.registerParameter(3, Long.class, ParameterMode.IN).bindValue(Long.parseLong(PropertyUtility.getValueString(ApplicationConstants.APPLICATION_BUNDLE.getValue(), "GANTT_PERDAY")));
+	procCall.registerParameter(4, Long.class, ParameterMode.IN).bindValue(Long.parseLong(PropertyUtility.getValueString(ApplicationConstants.APPLICATION_BUNDLE.getValue(), "GANTT_RESOUCE")));
+	procCall.registerParameter(5, Long.class, ParameterMode.IN).bindValue(Long.parseLong(PropertyUtility.getValueString(ApplicationConstants.APPLICATION_BUNDLE.getValue(), "GANTT_DELIVERY_CYCLE")));
+	procCall.getOutputs();
+}catch(Exception e){
+	rollBack();
+	e.printStackTrace();
+}finally{
+	
+	endTransaction();
+}
+}
+
+
+	
+}

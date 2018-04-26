@@ -1,0 +1,136 @@
+package com.dipta.project.dao.report;
+
+import java.sql.Timestamp;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+import com.dipta.project.domain.project.GeneratedReportsDomain;
+import com.dipta.project.domain.project.UserProjectDomain;
+import com.dipta.project.dto.dashboard.DashboardDto;
+import com.dipta.project.dto.dashboard.GoldDataCoverageDtoCollection;
+import com.dipta.project.dto.dashboard.GoldDataTypeDto;
+import com.dipta.project.dto.dashboard.PlatinumDataCoverageDtoCollection;
+import com.dipta.project.dto.dashboard.PlatinumDataTypeDto;
+import com.dipta.project.dto.file.FileDataDTO;
+import com.dipta.project.dto.report.RecordCountsDto;
+import com.dipta.project.dto.report.generate.GeneratedReportsDto;
+import com.dipta.project.exception.common.ObjectNotSupportedException;
+import com.dipta.project.exception.common.ProcessFailedException;
+import com.dipta.project.exception.project.ProjectConfigNotFoundException;
+import com.dipta.project.report.ReportDataTable;
+
+/**
+ * Reporting module dao layer interface. 
+ * @author Vinay.Kumar1
+ *
+ */
+public interface IReportDao {
+
+	/**
+	 * Fetches project and reports
+	 * @param userName
+	 * @return
+	 */
+	public List<UserProjectDomain> getProjectAndReports(String userName);
+	
+	/**
+	 * 
+	 * @param projectId
+	 * @param isFetchDataInChunk
+	 * @return
+	 * @throws ProjectConfigNotFoundException
+	 * @throws ObjectNotSupportedException 
+	 * @throws NumberFormatException 
+	 * @throws ProcessFailedException 
+	 */
+	public ReportDataTable getReportsData( String projectId,String isFetchDataInChunk) throws  ProjectConfigNotFoundException, NumberFormatException, ObjectNotSupportedException, ProcessFailedException;
+
+	
+	/**
+	 * @author Rajender.Kumar
+	 * @param startingIndex
+	 * @param chunkSize
+	 * @param projectId
+	 * @return
+	 * @throws ProjectConfigNotFoundException
+	 * @throws ObjectNotSupportedException 
+	 * @throws NumberFormatException 
+	 * @throws ProcessFailedException 
+	 */
+	public  List<LinkedHashMap<String, Object>> getReportsData(int startingIndex, int chunkSize,String projectId) throws ProjectConfigNotFoundException,NumberFormatException, ObjectNotSupportedException,ProcessFailedException;
+	
+	/**
+	 * 
+	 * @param projectId
+	 * @return
+	 */
+	Map<Timestamp, List<GeneratedReportsDomain>> getAllReportsByProjectId(long projectId);
+	
+	
+	/**
+	 * 
+	 * @param generatedReportsDomain
+	 * @return
+	 * @throws ProcessFailedException
+	 */
+	public boolean saveGeneratedReports(GeneratedReportsDomain generatedReportsDomain) throws ProcessFailedException;
+	
+	
+	
+	
+	/**
+	 * 
+	 * @param userEmailId
+	 * @return
+	 * @throws ObjectNotSupportedException
+	 */
+	public DashboardDto getDashboardData(String userEmailId) throws ObjectNotSupportedException;
+	
+	
+	public RecordCountsDto getProjectStats(Long projectId);
+	
+	public List<RecordCountsDto> getProjectStatsForFeeds(Long projectId) throws ObjectNotSupportedException;
+
+	public List<GeneratedReportsDto> getAllReportsByExecutionId(Long projectId, Long executionId) throws ObjectNotSupportedException;
+	
+	
+	/**
+	 * DAO method to get Platinum data coverage
+	 * @param type
+	 * @return
+	 * @throws ObjectNotSupportedException
+	 */
+	public PlatinumDataCoverageDtoCollection getDashboardPlatinumCoverageData(String type) throws ObjectNotSupportedException;
+	
+	
+	/**
+	 * DAO method to get Platinum data coverage Data Type
+	 * @return
+	 * @throws ObjectNotSupportedException
+	 */
+	public List<PlatinumDataTypeDto> getDashboardPlatinumCoverageDataType() throws ProcessFailedException;
+	
+	/**
+	 * DAO method to get Gold data coverage Data Type
+	 * @return
+	 * @throws ObjectNotSupportedException
+	 */
+	public List<GoldDataTypeDto> getDashboardGoldCoverageDataType() throws ProcessFailedException;
+
+	GoldDataCoverageDtoCollection getDashboardGoldCoverageData(String type)
+			throws ObjectNotSupportedException;
+	
+	/**
+	 * To get bad records from client_data where status='CRITICAL'
+	 * @param projectId
+	 * @return
+	 * @throws ObjectNotSupportedException
+	 * @author saurabh.agarwal
+	 */
+	public List<FileDataDTO> getBadRecords(long projectId) throws ObjectNotSupportedException ;
+
+//	RecordCountsDto getProjectStatsForDashboard(Long projectId);
+
+
+}

@@ -1,0 +1,63 @@
+//package com.dipta.project.utility.queue.jobcategory;
+//
+//import com.lei.dao.project.IProjectDao;
+//import com.lei.dto.hierarchy.HierarchyDataCollection;
+//import com.lei.exception.common.ProcessFailedException;
+//import com.lei.utility.constants.StatusConstants;
+//import com.lei.utility.queue.CallableQueueJob;
+//import com.lei.utility.queue.ProjectExecutionQueueManager;
+//
+//import lombok.extern.slf4j.Slf4j;
+//
+///**
+// * 
+// * @author Saurabh Agarwal
+// *
+// */
+//@Slf4j
+//public class ProjectExecutionQueueJob extends CallableQueueJob<Boolean> {
+//	public ProjectExecutionQueueJob(IProjectDao dao, Long projectId) {
+//		super(dao, projectId);
+//	}
+//
+//	public ProjectExecutionQueueJob(IProjectDao dao, Long projectId, HierarchyDataCollection list) {
+//		super(dao, projectId, list);
+//	}
+//
+//	@Override
+//	public Boolean execute(Object[] userData) throws ProcessFailedException {
+//
+//		IProjectDao dao = (IProjectDao) userData[0];
+//		Long projectId = (Long) userData[1];
+//
+//		long projUnderExecution = ((ProjectExecutionQueueManager) ProjectExecutionQueueManager
+//				.getClientsQueue(dao.getClientId())).getProjectUnderExecution();
+//		if (projUnderExecution != 0 && projectId == projUnderExecution) {
+//			return false;
+//		} else {
+//			if (userData.length == 2) {
+//				ProjectExecutionQueueManager.setProjectUnderExecution(dao.getClientId(), projectId);
+//				dao.updateProjectExecutionStatus(projectId, StatusConstants.PROCESSING.getID(), "Execution Started.", null);
+//				// Enter into rows
+//				dao.execute(projectId);
+//				ProjectExecutionQueueManager.setProjectUnderExecution(dao.getClientId(), 0L);
+//			} else if (userData.length == 3 && userData[2]!=null){
+//				HierarchyDataCollection list = (HierarchyDataCollection) userData[2];
+//				ProjectExecutionQueueManager.setProjectUnderExecution(dao.getClientId(), projectId);
+//				dao.updateProjectExecutionStatus(projectId, StatusConstants.PROCESSING.getID(), "Execution Started.",null);
+//				try {
+//						dao.hierarchyStageTable(projectId, list.getHierarcyEntityList());
+//				} catch (Exception e) {
+//						e.printStackTrace();
+//					}
+//					 dao.addToGoldexecute(projectId);
+//				}else {
+//					log.error("Process Failed due unhandled condition, Project ID : "+projectId);
+//					throw new ProcessFailedException();
+//				}
+//		}
+//				ProjectExecutionQueueManager.setProjectUnderExecution(dao.getClientId(), 0L);
+//		return true;
+//
+//	}
+//}

@@ -1,0 +1,61 @@
+package com.dipta.project.domain.user;
+
+import javax.persistence.Column;
+import javax.persistence.Entity;
+import javax.persistence.GeneratedValue;
+import javax.persistence.GenerationType;
+import javax.persistence.Id;
+import javax.persistence.SequenceGenerator;
+import javax.persistence.Table;
+
+import lombok.Getter;
+import lombok.Setter;
+
+@Entity
+@Table(name="COMPANY_REGISTRATION")
+public class ClientDomain {
+	
+	@Getter
+	@Setter
+	@Id
+	@Column(name="CO_ID")
+	@GeneratedValue(strategy=GenerationType.AUTO, generator="SEQ_CLIENT")
+	@SequenceGenerator(name="SEQ_CLIENT", sequenceName="SEQ_CLIENT")
+	private int companyId;
+	
+	@Getter
+	@Setter
+	@Column(name="Name")
+	private String name;
+	
+	@Getter
+	@Setter
+	@Column(name="COUNTRY")
+	private String country;
+	
+	@Getter
+	@Setter
+	@Column(name="ADDRESS")
+	private String address;
+	
+	@Getter
+	@Setter
+	@Column(name="CITY")
+	private String city;
+	
+	@Getter
+	@Setter
+	@Column(name="CONTACT")
+	private String contact;
+	
+	@Getter
+	@Setter
+	@Column(name="WEB_ADDRESS")
+	private String webAddress;
+	
+	@Getter
+	@Setter
+	@Column(name="USER_ID")
+	private long userId;
+
+	}

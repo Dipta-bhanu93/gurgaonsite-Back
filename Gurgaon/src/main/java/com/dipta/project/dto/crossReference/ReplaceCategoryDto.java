@@ -1,0 +1,105 @@
+package com.dipta.project.dto.crossReference;
+
+import java.io.Serializable;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.TreeMap;
+
+import javax.xml.bind.annotation.XmlAccessType;
+import javax.xml.bind.annotation.XmlAccessorType;
+import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlRootElement;
+import javax.xml.bind.annotation.XmlSeeAlso;
+
+import lombok.Getter;
+import lombok.Setter;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonRootName;
+
+/**
+ * @author Ashish.Patel
+ *
+ */
+@XmlRootElement(name = "ReplaceCategoryInformation")
+@JsonRootName(value = "ReplaceCategoryInformation")
+@XmlAccessorType(XmlAccessType.NONE)
+@XmlSeeAlso({HashSet.class,HashMap.class,TreeMap.class,BuiltInFunctionCategoryRulesHeader.class,BuiltInFunctionCategoryRulesData.class,CountryCodeCategoryRulesHeader.class,CountryCodeCategoryRulesData.class,CategoryRulesHeader.class,CategoryRulesData.class})
+public class ReplaceCategoryDto implements Serializable {
+
+	private static final long serialVersionUID = 1L;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "ReplaceCategoryId")
+	@JsonProperty(value = "ReplaceCategoryId")
+	private long replaceCategoryId;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "OrderOfExecution")
+	@JsonProperty(value = "OrderOfExecution")
+	private long orderOfExecution;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "ReplaceCategoryDesc")
+	@JsonProperty(value = "ReplaceCategoryDesc")
+	private String replaceCategoryDesc;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "Remarks")
+	@JsonProperty(value = "Remarks")
+	private String remarks;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "CategoryRuleStatus")
+	@JsonProperty(value = "CategoryRuleStatus")
+	private String categoryRuleStatus;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "ReplaceCategoryMapDropDown", nillable=true)
+	@JsonProperty(value = "ReplaceCategoryMapDropDown")
+	private HashMap<String,Long> replaceCategoryMapDropDown;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "BuiltInFunctionCategoryRulesHeaders")
+	@JsonProperty(value = "BuiltInFunctionCategoryRulesHeaders")
+	private List<BuiltInFunctionCategoryRulesHeader> builtInFunctionCategoryRulesHeaders;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "BuiltInFunctionCategoryRulesDatas")
+	@JsonProperty(value = "BuiltInFunctionCategoryRulesDatas")
+	private List<BuiltInFunctionCategoryRulesData> builtInFunctionCategoryRulesDatas;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "CountryCodeCategoryRulesHeaders")
+	@JsonProperty(value = "CountryCodeCategoryRulesHeaders")
+	private List<CountryCodeCategoryRulesHeader> countryCodeCategoryRulesHeaders;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "CountryCodeCategorRulesDatas")
+	@JsonProperty(value = "CountryCodeCategorRulesDatas")
+	private List<CountryCodeCategoryRulesData> countryCodeCategorRulesDatas;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "CategoryRulesHeaders")
+	@JsonProperty(value = "CategoryRulesHeaders")
+	private List<CategoryRulesHeader> categoryRulesHeaders;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "CategoryRulesDatas")
+	@JsonProperty(value = "CategoryRulesDatas")
+	private List<CategoryRulesData> categoryRulesDatas;
+
+}

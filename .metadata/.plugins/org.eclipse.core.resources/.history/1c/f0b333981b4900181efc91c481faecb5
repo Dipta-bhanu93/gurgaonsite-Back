@@ -1,0 +1,84 @@
+package com.dipta.project.dao.base.orm;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+
+import org.hibernate.Criteria;
+import org.hibernate.criterion.Restrictions;
+
+import com.lei.domain.base.orm.ConnectionDetailDomain;
+import com.lei.utility.PropertyUtility;
+import com.lei.utility.constants.ApplicationConstants;
+import com.lei.utility.constants.StatusConstants;
+
+public final class TenantPool {
+	private static final String SUPERTENANTSCHEMA;
+
+	private static Map<String, ConnectionDetailDomain> connectionDetails;
+
+	static {
+		SUPERTENANTSCHEMA = PropertyUtility.getValueString(ApplicationConstants.CONFIGURATIONSBUNDLE.getValue(), "SUPERTENANTSCHEMA", "ondemand_1");
+
+		init();
+	}
+
+	private static void init() {
+		connectionDetails = new HashMap<>();
+		HibernatePersistenceManager hpm = new HibernatePersistenceManager(SUPERTENANTSCHEMA);
+
+		hpm.beginTransaction();
+		Criteria user = hpm.createCriteria(ConnectionDetailDomain.class);
+		user.add(Restrictions.eq("status", StatusConstants.ACTIVE.getID()));
+		List<ConnectionDetailDomain> result = user.list();
+		if (result != null && result.size() > 0) {
+			for (ConnectionDetailDomain connectionDetail : result) {
+				connectionDetails.put(connectionDetail.getEmail(), connectionDetail);
+			}
+		}
+		hpm.commit();
+	}
+
+	public static ConnectionDetailDomain getConnectionDetail(String emailId) {
+		return connectionDetails.get(emailId);
+	}
+
+	public static boolean registerNewConnectionForUser(String userEmail) {
+		HibernatePersistenceManager hpm = new HibernatePersistenceManager(SUPERTENANTSCHEMA);
+		hpm.beginTransaction();
+
+		Criteria user = hpm.createCriteria(ConnectionDetailDomain.class);
+		user.add(Restrictions.eq("status", StatusConstants.ACTIVE.getID()));
+		user.add(Restrictions.eq("email", userEmail));
+		List<ConnectionDetailDomain> result = user.list();
+		if (result != null && result.size() > 0) {
+			ConnectionDetailDomain connectionDetail = result.get(0);
+			connectionDetails.put(userEmail, connectionDetail);
+		}
+		hpm.commit();
+		return true;
+	}
+	
+	
+
+	public static String getEmailByTenantId(Long tenantId) {
+		String email = null;
+		if (tenantId == null) {
+			return null;
+		} else {
+
+			for (Entry<String, ConnectionDetailDomain> tenant : connectionDetails.entrySet()) {
+				if(tenant.getValue().getClientId()!=null){
+					if (tenant.getValue().getClientId().equals(tenantId)) {
+						email = tenant.getValue().getEmail();
+						break;
+					}
+				}	
+			}
+		}
+		
+		return email;
+	}
+
+}

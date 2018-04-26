@@ -1,0 +1,105 @@
+package com.dipta.project.configuration;
+
+import java.io.IOException;
+
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.web.authentication.SimpleUrlAuthenticationSuccessHandler;
+import org.springframework.security.web.savedrequest.HttpSessionRequestCache;
+import org.springframework.security.web.savedrequest.RequestCache;
+import org.springframework.stereotype.Component;
+
+import com.dipta.project.dto.user.UserDTO;
+import com.dipta.project.exception.common.ObjectNotSupportedException;
+import com.dipta.project.exception.common.ProcessFailedException;
+import com.dipta.project.exception.user.LoginIDFormatException;
+import com.dipta.project.maintenance.user.IUserMaintenance;
+import com.dipta.project.maintenance.user.UserMaintenanceImpl;
+import com.dipta.project.utility.CommonUtils;
+import com.dipta.project.utility.constants.HttpStatusCodes;
+import com.dipta.project.utility.constants.StatusConstants;
+
+@Component("codAuthenticationSuccessHandler")
+public class CodAuthenticationSuccessHandler extends SimpleUrlAuthenticationSuccessHandler {
+	@Autowired
+	UserMaintenanceImpl UserImpl;
+	
+	private RequestCache requestCache = new HttpSessionRequestCache();
+
+	@Override
+	public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response, Authentication authentication) throws IOException, ServletException {
+		
+		String userEmail = ((org.springframework.security.core.userdetails.User)authentication.getPrincipal()).getUsername();
+		
+		IUserMaintenance userMaintenance = new UserMaintenanceImpl();
+		boolean isExpired = false;
+		try {
+			UserDTO userDto = userMaintenance.getUser(userEmail, true);
+									
+			long daysBetween = userDto.getStatus().getDaysLeft();
+			
+			if(daysBetween <= 0){
+				isExpired = true;
+			}
+			
+			
+			/*Code changed added for handling subscribed user - Added condition  userDto.getStatus().getStatusId()!=StatusConstants.NEW.getID()*/
+			/*Direct login*/
+			if(userDto.getCompanyId()!=null && userDto.getCompanyId()>0 && !new Integer(userDto.getStatusMaster().getStatusId()).equals(StatusConstants.NEW.getID())){
+				if(isExpired){  // in case subscribed user password is expired
+					CommonUtils.prepareSuccessResponse(request, response, HttpStatusCodes.LOGINSUCCESSWITHPWDEXPIRE.getCode(), "Password Expired.", false,userDto);
+				}else{
+					try {
+						
+						if(userDto.getStatus().getLastLogin()!=null) {
+							UserImpl.updatLastLogin(userDto);
+						}
+					} catch (ProcessFailedException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
+				CommonUtils.prepareSuccessResponse(request, response, HttpStatusCodes.LOGINSUCCESS.getCode(), "Login Successful.", false,userDto);
+//				UPdate Login
+	
+//				userDto.getId();
+				}
+			}
+			/*Subscription page*/
+			else{
+				try {
+					if(userDto.getStatus().getLastLogin()!=null) {
+						UserImpl.updatLastLogin(userDto);
+					}
+				} catch (ProcessFailedException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+				
+				CommonUtils.prepareSuccessResponse(request, response, HttpStatusCodes.LOGINSUCCESSCOMPANYPENDING.getCode(), "Login Successful but company registration is pending.", false,userDto);
+				
+//				UPdate Login
+			}
+			
+			
+		}catch (ObjectNotSupportedException | LoginIDFormatException e) {
+			CommonUtils.prepareErrorResponse(request, response, HttpStatusCodes.LOGINFAILED.getCode(), "Login Failed.", false);
+			e.printStackTrace();
+		}
+		
+		
+		
+//		CommonUtils.prepareErrorResponse(request, response, HttpStatusCodes.LOGINSUCCESS.getCode(), "Login Successful.", false);
+	
+		
+		clearAuthenticationAttributes(request);
+	}
+
+	public void setRequestCache(RequestCache requestCache) {
+		this.requestCache = requestCache;
+	}
+
+}

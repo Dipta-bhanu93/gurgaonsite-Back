@@ -1,0 +1,86 @@
+package com.lei.report;
+
+import java.io.IOException;
+import java.sql.Timestamp;
+import java.text.SimpleDateFormat;
+
+import com.lei.domain.project.GeneratedReportsDomain;
+import com.lei.dto.workflow.ProjectDTO;
+import com.lei.exception.common.ObjectNotSupportedException;
+import com.lei.exception.common.ProcessFailedException;
+import com.lei.exception.project.ProjectDoesNotExistsException;
+import com.lei.exception.user.LoginIDFormatException;
+import com.lei.maintenance.file.FileMaintenanceImpl;
+import com.lei.maintenance.file.IFileMaintenance;
+import com.lei.maintenance.project.IProjectMaintenance;
+import com.lei.maintenance.project.ProjectMaintenanceImpl;
+import com.lei.maintenance.user.IUserMaintenance;
+import com.lei.maintenance.user.UserMaintenanceImpl;
+import com.lei.maintenence.report.IReportsMaintenence;
+import com.lei.maintenence.report.ReportsMaintenenceImpl;
+import com.lei.utility.constants.CommonConstants;
+import com.lei.utility.constants.FileSourceConstants;
+
+public class TxtReportGeneratorImpl extends DelimitedFileAbstractReportGenerator implements IReportGenerator {
+	
+	 private static final String FILE_DELIMITER = "|";
+	 private static final String TXT_FILE_EXTN = ".txt";
+	@Override
+	public Long generateReport(ReportDataTable reportDataTable) throws IOException, ObjectNotSupportedException, ProjectDoesNotExistsException, ProcessFailedException, LoginIDFormatException {
+		
+	long projectId = Long.valueOf(reportDataTable.getProjectId());
+		
+		
+		// get project details
+		IProjectMaintenance projectMaintenance = new ProjectMaintenanceImpl();
+		ProjectDTO projectDetail = projectMaintenance.getProject(reportDataTable.getTenentEmail(), projectId);
+		
+		// get user details
+		IUserMaintenance userMaintenance  = new UserMaintenanceImpl();
+		long userId =  userMaintenance.getUser(reportDataTable.getTenentEmail(), false).getId();
+		
+		
+
+		// get data bytes and SAVE file
+		IFileMaintenance fileMaintenance =new FileMaintenanceImpl();
+		byte[] data=createReportFileFromData(reportDataTable, FILE_DELIMITER, TXT_FILE_EXTN);
+		//Timestamp reportGenOn = new Timestamp(new java.util.Date().getTime());
+		long fileID= fileMaintenance.saveFile(reportDataTable.getTenentEmail(), getFileName(projectDetail.getProjectName(), projectDetail.getTemplateID(), reportDataTable.getExecutedOn()), data, FileSourceConstants.REPORT);
+
+
+		//Call to save into Generated Report
+		IReportsMaintenence reportsMaintenence = new ReportsMaintenenceImpl();
+		GeneratedReportsDomain generatedReportsDomain=new GeneratedReportsDomain();
+		generatedReportsDomain.setFileId(fileID);
+		generatedReportsDomain.setProjectId(projectId);
+		generatedReportsDomain.setUserId(userId);
+		generatedReportsDomain.setGeneratedDate(reportDataTable.getExecutedOn());
+		generatedReportsDomain.setExecutionId(reportDataTable.getExecutedId());
+		if(reportsMaintenence.saveGeneratedReports(reportDataTable.getTenentEmail(), generatedReportsDomain)){
+			return fileID;
+		}else{
+			return 0L;
+		}
+	
+	
+	
+	}
+	
+
+	@Override
+	public String getFileName(String projectName, long templateId, Timestamp reportGenOn) {
+		
+		if(CommonConstants.INSTRUMENTS_ISSUER_MAPPING == templateId){
+			return CommonConstants.FILE_PREFIX_INSTISS +projectName + new SimpleDateFormat("_dd-MMM-yyyy_(HH-mm-ss").format(reportGenOn)+"Hrs)_TXT.zip";
+		}else if(CommonConstants.DATA_CROSS_REFERENCING == templateId){
+			return CommonConstants.FILE_PREFIX_XREF +projectName + new SimpleDateFormat("_dd-MMM-yyyy_(HH-mm-ss").format(reportGenOn)+"Hrs)_TXT.zip";
+		}else if(CommonConstants.ENRICH == templateId){
+			return CommonConstants.FILE_PREFIX_CHY_ENRICH +projectName + new SimpleDateFormat("_dd-MMM-yyyy_(HH-mm-ss").format(reportGenOn)+"Hrs)_TXT.zip";
+		}else if(CommonConstants.BUILD == templateId){
+			return CommonConstants.FILE_PREFIX_CHY_BUILD +projectName + new SimpleDateFormat("_dd-MMM-yyyy_(HH-mm-ss").format(reportGenOn)+"Hrs)_TXT.zip";
+		}else{
+			return CommonConstants.FILE_PREFIX_REFDATA +projectName + new SimpleDateFormat("_dd-MMM-yyyy_(HH-mm-ss").format(reportGenOn)+"Hrs)_TXT.zip";
+		}
+	}
+
+}

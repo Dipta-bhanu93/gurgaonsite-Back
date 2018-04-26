@@ -1,0 +1,67 @@
+/**
+ * 
+ */
+package com.dipta.project.domain.company;
+
+import java.util.Date;
+
+import javax.persistence.Column;
+import javax.persistence.Entity;
+import javax.persistence.FetchType;
+import javax.persistence.Id;
+import javax.persistence.JoinColumn;
+import javax.persistence.OneToOne;
+import javax.persistence.Table;
+
+import org.hibernate.annotations.Cascade;
+import org.hibernate.annotations.Formula;
+
+import com.lei.domain.project.CodAttributesDomain;
+
+import lombok.Getter;
+import lombok.Setter;
+
+/**
+ * @author aditya.julka
+ *
+ */
+
+@Entity
+@Table(name = "GOLD_DATA_COMPLETENESS")
+public class GoldDataCompletenessDomain {
+
+	
+	@Getter
+	@Setter
+	@Id
+	@Column(name="ID")
+	private int id;
+	
+	@Getter
+	@Setter
+	@Column(name="DATE_GENERATED")
+	private Date dateGenerated;
+	
+	@Getter
+	@Setter
+	@Column(name="GOLD_COUNT")
+	private int completeRecord;	
+	
+	@Getter
+	@Setter
+	@OneToOne(fetch = FetchType.EAGER)
+    @Cascade(value=org.hibernate.annotations.CascadeType.ALL)
+    @JoinColumn(name="ATTRIBUTE_TYPE",  referencedColumnName="attribute")
+	private CodAttributesDomain  attributeObj;	
+	
+	@Getter
+	@Setter
+	@Column(name="TOTAL_COUNT")
+	private int totalCount;	
+	
+	@Getter
+	@Setter
+	@Formula("(GOLD_COUNT/TOTAL_COUNT)*100")
+	private float percentage;	
+	
+}

@@ -1,0 +1,48 @@
+package com.dipta.project.dao.ticketManagement;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import com.dipta.project.dao.base.DaoBaseInterface;
+import com.dipta.project.dto.ticketManagement.TicketDto;
+import com.dipta.project.dto.ticketManagement.TicketFilterDto;
+import com.dipta.project.dto.ticketManagement.gantt.GanttTask;
+import com.dipta.project.exception.common.ObjectNotSupportedException;
+import com.dipta.project.exception.common.ProcessFailedException;
+
+
+public interface ITicketMaintenanceDao  extends DaoBaseInterface {
+	public ArrayList<TicketDto> getTickets(Long clientId, int recordCount) throws ProcessFailedException, ObjectNotSupportedException;
+	public ArrayList<TicketDto> getTickets(TicketFilterDto ticketFilter) throws ProcessFailedException, ObjectNotSupportedException;
+	
+	
+	/**
+	 * This function fetches ticket detail for a particular ticketId
+	 * 
+	 * @param ticketId
+	 * @return
+	 * @throws ProcessFailedException
+	 * @throws ObjectNotSupportedException TODO
+	 */
+	public TicketDto getTicket(Long ticketId) throws ProcessFailedException, ObjectNotSupportedException; 
+	/**
+	 * This method is used to save or update ticket details.
+	 * @param ticketDto
+	 * @return TicketDto
+	 * @throws ProcessFailedException
+	 * @throws ObjectNotSupportedException
+	 */
+	public TicketDto saveOrUpdateTicket(TicketDto ticketDto)  throws ProcessFailedException, ObjectNotSupportedException;
+	
+	public  TicketDto getLatestTicket(Long projectId) throws ProcessFailedException;
+	public boolean updateTicketStatus(Long wfId, Integer statusId, Long ticketId) throws ProcessFailedException;
+	
+	public TicketDto getLatestTicketByWorkFlowId(Long wfId) throws ObjectNotSupportedException;
+//	public List<TicketDto> getTickets() throws ProcessFailedException,ObjectNotSupportedException; 
+	void updateGanttStartDate(Long id, String idType);
+	void populateGanttTables(Long id, String idType);
+	ArrayList<GanttTask> getTaskInfo(long id, String idType) throws Exception;
+	public List<Long> getTicketsInWorkFlow(Long wfId);
+	ArrayList<TicketDto> getTickets(boolean allTickets) throws ProcessFailedException, ObjectNotSupportedException;
+
+}

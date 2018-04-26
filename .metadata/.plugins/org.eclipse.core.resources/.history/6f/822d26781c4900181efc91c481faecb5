@@ -1,0 +1,98 @@
+package com.lei.dto.project.template;
+
+import java.util.Date;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+
+import javax.persistence.Column;
+import javax.xml.bind.annotation.XmlAccessType;
+import javax.xml.bind.annotation.XmlAccessorType;
+import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlRootElement;
+import javax.xml.bind.annotation.XmlSeeAlso;
+
+import lombok.Getter;
+import lombok.Setter;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonInclude.Include;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonRootName;
+
+/**
+ * 
+ * @author Ashish.Patel
+ * 
+ */
+
+@XmlRootElement(name = "ProjectTemplateMasterInformation")
+@JsonRootName(value = "ProjectTemplateMasterInformation")
+@XmlAccessorType(XmlAccessType.NONE)
+@JsonInclude(Include.NON_NULL)
+@XmlSeeAlso({HashMap.class,LinkedHashMap.class})
+public class ProjectTemplateMasterDto implements java.io.Serializable {
+
+	private static final long serialVersionUID = 1L;
+	
+	@Getter
+	@Setter
+	@JsonProperty(value = "TemplateId")
+	@XmlElement(name = "TemplateId")
+	private Long templateId;
+	
+	@Getter
+	@Setter
+	@JsonProperty(value = "Description")
+	@XmlElement(name = "Description")
+	private String description;
+	
+	@Getter
+	@Setter
+	@JsonProperty(value = "UserID")
+	@XmlElement(name = "UserID")
+	private String userID;
+	
+	@Getter
+	@Setter
+	@JsonProperty(value = "DateCreated")
+	@XmlElement(name = "DateCreated")
+	private Date dateCreated;
+	
+	@Getter
+	@Setter
+	@JsonProperty(value = "ProjectTemplateCount")
+	@XmlElement(name = "ProjectTemplateCount")
+	private Long projectTemplateCount;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "ProjectTemplateMasterMapDropDown", nillable=true)
+	@JsonProperty(value = "ProjectTemplateMasterMapDropDown")
+	private LinkedHashMap<String,ProjectTemplateMasterDto> projectTemplateMasterMapDropDown;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "TemplateServiceMasterMapDropDown", nillable=true)
+	@JsonProperty(value = "TemplateServiceMasterMapDropDown")
+	private LinkedHashMap<String,Long> templateServiceMasterMapDropDown;
+	
+	@Getter
+	@Setter
+	@JsonProperty(value = "ParentTemplateId")
+	@XmlElement(name = "ParentTemplateId")
+	private long parentTemplateId;
+
+	@Override
+	public String toString() {
+		return "ProjectTemplateMasterDto [templateId=" + templateId
+				+ ", description=" + description + ", userID=" + userID
+				+ ", dateCreated=" + dateCreated
+				+ ", projectTemplateMasterMapDropDown="
+				+ projectTemplateMasterMapDropDown + "]";
+	}
+
+	
+
+	
+	
+}

@@ -1,0 +1,103 @@
+/**
+ * 
+ */
+package com.lei.domain.workflow;
+
+import java.sql.Timestamp;
+import java.util.HashSet;
+import java.util.Set;
+
+import javax.persistence.Column;
+import javax.persistence.Entity;
+import javax.persistence.FetchType;
+import javax.persistence.GeneratedValue;
+import javax.persistence.GenerationType;
+import javax.persistence.Id;
+import javax.persistence.JoinColumn;
+import javax.persistence.OneToMany;
+import javax.persistence.OneToOne;
+import javax.persistence.SequenceGenerator;
+import javax.persistence.Table;
+
+import lombok.Getter;
+import lombok.Setter;
+
+import com.lei.domain.project.TemplateServiceMasterDomain;
+
+/**
+ * @author Ashish.Patel
+ *
+ */
+
+@Entity
+@Table(name = "WORKFLOW_MASTER")
+public class WorkFlowMasterDomain {
+
+	@Getter
+	@Setter
+	@Id
+	@Column(name = "WF_ID")
+	@GeneratedValue(strategy=GenerationType.AUTO, generator="SEQ_WF_ID")
+	@SequenceGenerator(name="SEQ_WF_ID", sequenceName="SEQ_WF_ID")
+	private long workFlowId;
+	
+	@Getter
+	@Setter
+	@Column(name = "WF_NAME")
+	private String workFlowName;
+	
+
+/*	@Getter
+	@Setter
+	@Column(name = "TKT_ID")
+	private Long tktId;
+	
+	@Getter
+	@Setter
+	@Column(name="CLIENT_ID")
+	private Long companyId;
+	*/
+	@Getter
+	@Setter
+	@Column(name="USERID_CREATED")
+	private Long userId;
+	
+	@Getter
+	@Setter
+	@Column(name="DATE_CREATED")
+	private Timestamp dateCreated;
+	
+	@Getter
+	@Setter
+	@Column(name="WF_LEVEL")
+	private Long workFlowLevel;
+	
+	@Getter
+	@Setter
+	@OneToOne
+	@JoinColumn(name="TEMPLATE_SERVICE_ID") 
+	private TemplateServiceMasterDomain templateServiceMasterDomain;
+	
+	@Getter
+	@Setter
+	@OneToMany(fetch = FetchType.EAGER, mappedBy = "workFlowMaster")
+	private Set<WorkFlowDetailsDomain> workFlowDetailsSet = new HashSet<WorkFlowDetailsDomain>();
+
+	@Override
+	public String toString() {
+		return "WorkFlowMasterDomain [workFlowId=" + workFlowId
+				+ ", workFlowName=" + workFlowName + ", userId=" + userId
+				+ ", dateCreated=" + dateCreated + ", workFlowLevel="
+				+ workFlowLevel + ", templateServiceMasterDomain="
+				+ templateServiceMasterDomain + ", workFlowDetailsSet="
+				+ workFlowDetailsSet + "]";
+	}
+
+
+	
+
+
+	
+	
+	
+}

@@ -1,0 +1,224 @@
+//package com.dipta.project.utility.queue.jobcategory;
+//
+//import java.io.ByteArrayOutputStream;
+//import java.io.IOException;
+//import java.sql.Timestamp;
+//import java.text.SimpleDateFormat;
+//import java.util.ArrayList;
+//import java.util.List;
+//
+//import org.apache.poi.hssf.usermodel.HSSFWorkbook;
+//import org.apache.poi.ss.usermodel.BorderStyle;
+//import org.apache.poi.ss.usermodel.CellStyle;
+//import org.apache.poi.ss.usermodel.FillPatternType;
+//import org.apache.poi.ss.usermodel.IndexedColors;
+//import org.apache.poi.ss.usermodel.Row;
+//import org.apache.poi.ss.usermodel.Sheet;
+//import org.apache.poi.ss.usermodel.Workbook;
+//import org.apache.poi.xssf.usermodel.XSSFCellStyle;
+//import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+//
+//import com.lei.dto.common.FileReportDto;
+//import com.lei.dto.common.RowDto;
+//import com.lei.dto.project.config.ConfigAttributesDto;
+//import com.lei.dto.workflow.ProjectDTO;
+//import com.lei.exception.common.ProcessFailedException;
+//import com.lei.maintenance.file.FileMaintenanceImpl;
+//import com.lei.maintenance.file.IFileMaintenance;
+//import com.lei.maintenance.project.IProjectMaintenance;
+//import com.lei.maintenance.project.ProjectMaintenanceImpl;
+//import com.lei.report.ReportDataTable;
+//import com.lei.utility.constants.CommonConstants;
+//import com.lei.utility.constants.FileSourceConstants;
+//import com.lei.utility.queue.CallableQueueJob;
+//
+//public class ProjectCatalogGenerationProcess extends CallableQueueJob<Long>{
+//
+//	
+//	private static final String XLSX="xlsx";
+//	private static final String XLS="xls";
+//
+//	public ProjectCatalogGenerationProcess(ReportDataTable reportDataTable) {
+//		super(reportDataTable);
+//	}
+//
+//
+//	
+//	
+//	@Override
+//	public Long execute(Object[] userData) throws ProcessFailedException {
+//		try{
+//			
+//			ReportDataTable reportDataTable = (ReportDataTable)userData[0];
+//			
+//			FileReportDto fileReportDto = reportDataTable.getCatalogData();
+//
+//			
+//			
+//			
+//			Workbook wb =getWorkbook(XLSX);
+//			Sheet sheet = wb.createSheet(fileReportDto.getReportName());
+//			int rowId=0;
+//			Row rowhead = sheet.createRow(rowId);
+//			for(int cellIndex=0;cellIndex<fileReportDto.getHeader().columnsCount();cellIndex++){
+//				rowhead.createCell(cellIndex).setCellValue(fileReportDto.getHeader().getColumn(cellIndex));
+//				rowhead.getCell(cellIndex).setCellStyle(getCellStyle(wb));
+//			}
+//			RowDto dataRow= new RowDto();
+//			int	cellIndex=0;
+//			Row row;
+//			for(int rowIndex=0;rowIndex<fileReportDto.getDataRows().size();rowIndex++){
+//				rowId++;
+//				 row = sheet.createRow(rowId);
+//				cellIndex=0;
+//				dataRow =fileReportDto.getDataRows().get(rowIndex);
+//				for(String columnData:dataRow.getColumns()){
+//				row.createCell(cellIndex).setCellValue(columnData);
+//				cellIndex++;}
+//			}
+//			
+//			
+//			
+//			
+//			long projectId = Long.valueOf(reportDataTable.getProjectId());
+//
+//			//IUserMaintenance userMaintenance  = new UserMaintenanceImpl();
+//			//long userId =  userMaintenance.getUser(reportDataTable.getTenentEmail(), false).getId();
+//
+//			IProjectMaintenance projectMaintenance = new ProjectMaintenanceImpl();
+//			ProjectDTO projectDetail = projectMaintenance.getProject(reportDataTable.getTenentEmail(), projectId);
+//
+//
+//			IFileMaintenance fileMaintenance =new FileMaintenanceImpl();
+//			
+//			//Workbook preparedWorkbook = getWorkbook(requestedData);
+//			ByteArrayOutputStream baos = new ByteArrayOutputStream();
+//			//preparedWorkbook.write(baos);
+//			wb.write(baos);
+//			
+//			//byte[] data = getFileData(reportDataTable.getBadRecords(),projectDetail.getSourceId())/*Excel utility data will come here*/;
+//			
+//			byte[] data = baos.toByteArray();
+//			
+//					
+//			long fileID= fileMaintenance.saveFile(reportDataTable.getTenentEmail(), getFileName(projectDetail.getProjectName(), projectDetail.getTemplateID(), reportDataTable.getExecutedOn()), data, FileSourceConstants.CATALOG);
+//
+//			
+//			return fileID;
+//
+//			/*IReportsMaintenence reportsMaintenence = new ReportsMaintenenceImpl();
+//			GeneratedReportsDomain generatedReportsDomain=new GeneratedReportsDomain();
+//
+//			generatedReportsDomain.setFileId(fileID);
+//			generatedReportsDomain.setProjectId(projectId);
+//			generatedReportsDomain.setUserId(userId);
+//			generatedReportsDomain.setGeneratedDate(reportDataTable.getExecutedOn());
+//			generatedReportsDomain.setExecutionId(reportDataTable.getExecutedId());
+//			generatedReportsDomain.setBadRecordsFileFlag("Y");
+//			if(reportsMaintenence.saveGeneratedReports(reportDataTable.getTenentEmail(), generatedReportsDomain)){
+//				return fileID;
+//			}else{
+//				return 0L;
+//			}*/
+//
+//		}catch(Exception e){
+//			throw new ProcessFailedException(e.getMessage());
+//		}
+//	}
+//	
+//	
+//	
+//	private Workbook getWorkbook(String fileType) 
+//			throws IOException {
+//		Workbook workbook = null;
+//		
+//		if (fileType.equalsIgnoreCase(XLSX)) {
+//			workbook = new XSSFWorkbook();
+//		} else if (fileType.equalsIgnoreCase(XLS)) {
+//			workbook = new HSSFWorkbook();
+//		} else {
+//			throw new IllegalArgumentException("The specified file is not Excel file");
+//		}
+//		
+//		return workbook;
+//	}
+//	
+//	private FileReportDto getGenericObject(List<ConfigAttributesDto> configAttributesDtos){
+//		FileReportDto fileReportDto=new FileReportDto();
+//		fileReportDto.setReportName(PROJECT_CATALOG);
+//		fileReportDto.setHeader(getGenericHeaders(getHeaders()));
+//		List<RowDto> dataRows=new ArrayList<>();
+//		RowDto dataRow=new RowDto();
+//		for(ConfigAttributesDto configAttributesDto:configAttributesDtos){
+//			 dataRow=new RowDto();
+//			 dataRow.getColumns().add(configAttributesDto.getAttribute());
+//			 dataRow.getColumns().add(configAttributesDto.getDescription());
+//			 dataRows.add(dataRow);
+//		}
+//		fileReportDto.setDataRows(dataRows);
+//		return fileReportDto;
+//	}
+//	
+//	
+//	private static final String PROJECT_CATALOG = "Project Catalog";
+//
+//
+//	private static final String DESCRIPTION = "Description";
+//
+//	private static final String ATTRIBUTE = "Data attribute(Corporate profile)";
+//	
+//	private List<String> getHeaders(){
+//		List<String>  headers= new ArrayList<>();
+//		headers.add(ATTRIBUTE);
+//		headers.add(DESCRIPTION);
+//		return headers;
+//	}
+//	private RowDto getGenericHeaders(List<String> headers){
+//		RowDto  rowHeader=new RowDto();
+//		for(String header:headers){
+//			rowHeader.getColumns().add(header);
+//		}
+//		return rowHeader;
+//	}
+//	
+//	
+//	private CellStyle getCellStyle(Workbook wb){
+//		
+//		CellStyle cellStyle = wb.createCellStyle();
+//				
+//	/*	cellStyle.setBorderTop((short) 1); // double lines border
+//		cellStyle.setBorderBottom((short) 1); // single line border
+//		cellStyle.setBorderLeft((short) 1); // single line border
+//		cellStyle.setBorderRight((short) 1); // single line border
+//		
+//		
+//*/		
+//		cellStyle.setBorderTop(BorderStyle.DOUBLE);//short) 1); // double lines border
+//		cellStyle.setBorderBottom( BorderStyle.DOUBLE);   //(short) 1); // single line border
+//		cellStyle.setBorderLeft(BorderStyle.DOUBLE); //(short) 1); // single line border
+//		cellStyle.setBorderRight(BorderStyle.DOUBLE); //(short) 1); // single line border
+//		
+//		
+//		cellStyle.setBorderRight(BorderStyle.valueOf((short)1));
+//		
+//		cellStyle.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
+//		cellStyle.setFillPattern( FillPatternType.SOLID_FOREGROUND); //XSSFCellStyle.SOLID_FOREGROUND);
+//		cellStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+//		return cellStyle;
+//	}
+//
+//	
+//	
+//	private String getFileName(String projectName, 	long templateId, Timestamp reportGenOn){
+//
+//		if(templateId == 2){
+//			return "Catalog_"+CommonConstants.FILE_PREFIX_INSTISS +projectName + new SimpleDateFormat("_dd-MMM-yyyy_(HH-mm-ss").format(reportGenOn)+"Hrs).xlsx";
+//		}else if(templateId == 3){
+//			return "Catalog_"+CommonConstants.FILE_PREFIX_XREF +projectName + new SimpleDateFormat("_dd-MMM-yyyy_(HH-mm-ss").format(reportGenOn)+"Hrs).xlsx";
+//		}else{
+//			return "Catalog_"+CommonConstants.FILE_PREFIX_REFDATA +projectName + new SimpleDateFormat("_dd-MMM-yyyy_(HH-mm-ss").format(reportGenOn)+"Hrs).xlsx";
+//		}
+//
+//	}
+//
+//}

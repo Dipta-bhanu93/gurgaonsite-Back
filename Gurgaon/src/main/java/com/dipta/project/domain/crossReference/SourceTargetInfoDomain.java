@@ -1,0 +1,108 @@
+package com.dipta.project.domain.crossReference;
+
+import java.sql.Timestamp;
+import java.util.HashSet;
+import java.util.Set;
+
+import javax.persistence.Column;
+import javax.persistence.Entity;
+import javax.persistence.FetchType;
+import javax.persistence.GeneratedValue;
+import javax.persistence.GenerationType;
+import javax.persistence.Id;
+import javax.persistence.JoinColumn;
+import javax.persistence.ManyToOne;
+import javax.persistence.OneToMany;
+import javax.persistence.SequenceGenerator;
+import javax.persistence.Table;
+
+import lombok.Getter;
+import lombok.Setter;
+
+/**
+ * @author Ashish.Patel
+ *
+ */
+@Entity
+@Table(name = "CDI_SRC_TRGT_INFO")
+public class SourceTargetInfoDomain {
+
+	@Getter                   
+	@Setter                   
+	@Id
+	@Column(name = "SRC_TRGT_ID")
+	@GeneratedValue(strategy=GenerationType.AUTO, generator="SEQ_src_trgt_info")
+	@SequenceGenerator(name="SEQ_src_trgt_info", sequenceName="SEQ_src_trgt_info")
+	private long sourceTargetid;
+	
+	@Getter
+	@Setter
+	@Column(name = "SOURCE_TABLE_NAME")
+	private String sourceTableName;
+	
+	@Getter
+	@Setter
+	@Column(name = "REMARKS")
+	private String remarks;
+	
+	@Getter
+	@Setter
+	@Column(name = "TARGET_COL_NAME")
+	private String targetColName;
+	
+	@Getter
+	@Setter
+	@Column(name = "TARGET_TABLE_NAME")
+	private String targetTableName;
+	
+	@Getter
+	@Setter
+	@Column(name = "SOURCE_COL_NAME")
+	private String sourceColName;
+	
+	@Getter
+	@Setter
+	@Column(name = "EXECUTE_INSTANCE")
+	private String executeInstance;
+	
+	@Getter
+	@Setter
+	@Column(name = "SRC_FILTER_CONDITION")
+	private String sorceFilterCondition;
+	
+	@Getter
+	@Setter
+	@Column(name = "TRGT_FILTER_CONDITION")
+	private String targetFilterCondition;
+	
+	@Getter
+	@Setter
+	@Column(name = "USERCREATED")
+	private String userIdCreated;
+	
+	@Getter                   
+	@Setter                   
+	@Column(name = "DATECREATED")
+	private Timestamp dateCreated;  
+	
+	@Getter                   
+	@Setter                   
+	@Column(name = "USERMODIFIED")
+	private String userIdModified;  
+	
+	@Getter                   
+	@Setter                   
+	@Column(name = "DATEMODIFIED")
+	private Timestamp dateModified;
+	
+	@Getter
+	@Setter
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "TRANS_DEF_SET_ID", nullable=false)
+	private EtlTransformMapDomain etlTransformMapDomain = new EtlTransformMapDomain();
+	
+	@Getter
+	@Setter
+	@OneToMany(fetch = FetchType.LAZY, mappedBy = "sourceTargetInfoDomain")
+	private Set<ReplaceTransformPerformDomain> replaceTransformPerformDomainSet = new HashSet<ReplaceTransformPerformDomain>();
+}

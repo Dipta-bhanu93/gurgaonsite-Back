@@ -1,0 +1,364 @@
+package com.dipta.project.dao.file.orm;
+
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.StringTokenizer;
+
+import lombok.extern.slf4j.Slf4j;
+
+import org.hibernate.Criteria;
+import org.hibernate.criterion.Restrictions;
+
+import com.dipta.project.dao.base.orm.AbstractBaseDao;
+import com.dipta.project.dao.file.IFileDao;
+import com.dipta.project.domain.crossReference.ReserveKeywordDomain;
+import com.dipta.project.domain.file.ClientFeedDomain;
+import com.dipta.project.domain.file.FileDomain;
+import com.dipta.project.dto.file.ClientFeedDto;
+import com.dipta.project.dto.file.FileDto;
+import com.dipta.project.exception.common.ObjectNotSupportedException;
+import com.dipta.project.exception.common.ProcessFailedException;
+import com.dipta.project.utility.CommonUtils;
+import com.dipta.project.utility.PropertyUtility;
+import com.dipta.project.utility.constants.ApplicationConstants;
+import com.dipta.project.utility.constants.DelimiterConstants;
+import com.dipta.project.utility.constants.FileConstants;
+import com.dipta.project.utility.constants.StatusConstants;
+
+/**
+ * 
+ * @author saurabh.agarwal
+ *
+ */
+@Slf4j
+public class FileDaoImpl extends AbstractBaseDao implements IFileDao{
+
+	public FileDaoImpl(String tenantEmail) {
+		super(tenantEmail);
+	}
+	public FileDaoImpl(Long tenantId) {
+		super(tenantId);
+	}
+
+	@Override
+	public FileDto saveFile(FileDto fileData,Long UserId) throws ObjectNotSupportedException, ProcessFailedException {
+		
+		FileDomain fileDomain = CommonUtils.convertObject(fileData, FileDomain.class);
+		int startIndex = 0 , endIndex = 0;
+		String replacementString=null;
+		try {
+			beginTransaction();
+			fileDomain.setUserCreated(UserId);
+			int fileNameSize = fileDomain.getFileName().length();
+			System.out.println(fileNameSize);
+			if(fileDomain.getSource()=="REPORT" && fileNameSize >= 255 ){
+				startIndex = fileDomain.getFileName().indexOf("h_");
+		    	endIndex = fileDomain.getFileName().indexOf("_(");
+		    	replacementString = fileDomain.getFileName().substring(startIndex+2, endIndex-12); 
+		    	fileDomain.setFileName(fileDomain.getFileName().replace(replacementString, ""));
+			}
+			fileDomain = (FileDomain)hibernatePersistenceManager.saveOrUpdate(fileDomain);
+			endTransaction();
+			return CommonUtils.convertObject(fileDomain, FileDto.class);	
+		}catch(Exception e){
+			hibernatePersistenceManager.rollback();
+			throw new ProcessFailedException("File creation failed: "+e.getMessage());
+		}
+	}
+	
+	
+	@Override
+	public FileDto getFileDetails(Long fileId) throws ProcessFailedException {
+		FileDomain fileDomain=getFileDomain(fileId);
+		
+		if(fileDomain!=null){
+			try {
+				return CommonUtils.convertObject(fileDomain, FileDto.class);
+			} catch (ObjectNotSupportedException e) {
+				e.printStackTrace();
+				throw new ProcessFailedException(e.getMessage());
+			}
+		}else{
+			return null;
+		}
+	}
+	
+	@Override
+	public boolean updateFileStatus(Long fileId, int statusId) throws ProcessFailedException {
+		FileDomain fileDomain = getFileDomain(fileId);
+		fileDomain.setStatusId(statusId);
+		return updateFileDomain(fileDomain);
+	}
+	
+	@Override
+	public boolean updateFilePercentage(Long fileId, int percentage,int status) throws ProcessFailedException {
+		//		System.out.println("---------------------------------------- Percentage : "+percentage);
+		FileDomain fileDomain = getFileDomain(fileId);
+		if(fileDomain.getStatusId()!=StatusConstants.FAILED.getID()){
+			fileDomain.setStatusId(status);
+			fileDomain.setProcessPercentage(percentage);
+			updateFileDomain(fileDomain);
+			return true;
+		}else{
+			return false;
+		}
+	}
+	
+	@Override
+	public void createClientFeedEntry(ClientFeedDto clientDto) throws ProcessFailedException, ObjectNotSupportedException{
+		ClientFeedDomain feedDomain=	CommonUtils.convertObject(clientDto, ClientFeedDomain.class);	
+		try{
+			beginTransaction();
+			Criteria clientfeedDomain = hibernatePersistenceManager.createCriteria(ClientFeedDomain.class);
+			clientfeedDomain.add(Restrictions.eq("projectId", clientDto.getProjectId()));
+			clientfeedDomain.add(Restrictions.eq("feedType", clientDto.getFeedType()));
+			clientfeedDomain.add(Restrictions.eq("status", StatusConstants.PSLS.getStatus()));
+			List<ClientFeedDomain> domainList = clientfeedDomain.list();
+			if(null != domainList && !domainList.isEmpty()){
+				for (ClientFeedDomain clientFeedDomain2 : domainList) {
+					clientFeedDomain2.setStatus(StatusConstants.PSLF.getStatus());
+					hibernatePersistenceManager.saveOrUpdate(clientFeedDomain2);
+				}
+			}
+			feedDomain = (ClientFeedDomain)hibernatePersistenceManager.saveOrUpdate(feedDomain);
+			endTransaction();
+		}catch(Exception e){
+			rollBack();
+			throw new ProcessFailedException("ClientFeed save failed. "+e.getMessage());
+		}
+	}
+	
+	@Override
+	public void createUpdatePrestageTables(String prestageTableName, List<String> columnList, String feedDataType) throws ProcessFailedException{
+		boolean tableExists=false;
+		tableExists = checkTableExistense(prestageTableName);
+		if (tableExists) {
+				boolean backupExists = checkTableExistense(prestageTableName+FileConstants.SUFFIX_FOR_PRESTAGE_BACKUP);
+				if (backupExists) {
+					dropTable(prestageTableName+ FileConstants.SUFFIX_FOR_PRESTAGE_BACKUP);
+				}
+				createTableAs(prestageTableName+ FileConstants.SUFFIX_FOR_PRESTAGE_BACKUP, prestageTableName);
+				dropTable(prestageTableName);
+		}
+		createPreStageTable(prestageTableName, columnList, feedDataType);
+	}
+	
+	private void createPreStageTable(String prestageTableName, List<String> columnList, String feedDataType) throws ProcessFailedException{
+		final List<String> allcolumns = new ArrayList<String>();
+		
+		final String prefixColumns = PropertyUtility.getValueString(ApplicationConstants.APPLICATION_BUNDLE.getValue(), ApplicationConstants.PRESTAGE_PREFIX_COLUMNS.getValue(),"");;
+		final StringTokenizer tokens = new StringTokenizer(prefixColumns,
+				DelimiterConstants.getSymbol(FileConstants.COMMA));
+		while (tokens.hasMoreTokens()) {
+			allcolumns.add(tokens.nextToken());
+		}
+		/* Adding columns name coming from feed. */
+		for (int i = 0; i < columnList.size(); i++) {
+			allcolumns.add(columnList.get(i).toString() + " "
+					+ FileConstants.VAR_DATATYPE + "(1024)");
+		}
+		/* Suffixing extra column */
+		if(null != feedDataType){
+			allcolumns.add(getFeedColumnName(feedDataType) + " "
+					+ FileConstants.VAR_DATATYPE + "(15)");
+		}
+		createDatabaseTable(prestageTableName, allcolumns);
+	}
+	
+	private String getFeedColumnName(final String feedDataType){
+		String columnName = "";
+		if (FileConstants.CUSTOMER.equalsIgnoreCase(feedDataType.toLowerCase())) {
+			columnName = FileConstants.ENTITYID;
+		} else if (FileConstants.SECURITY.equalsIgnoreCase(feedDataType.toLowerCase())) {
+			columnName = FileConstants.SECURITYID;
+		}
+		return columnName;
+	}
+	
+	private void createDatabaseTable(String tableName, List<String> columnList) throws ProcessFailedException{
+		StringBuilder sqlQuery = new StringBuilder();
+		StringBuilder columnQuery = new StringBuilder();
+		for (int i = 0; i < columnList.size(); i++) {
+			if (i == 0) {
+				columnQuery.append(columnList.get(i).toString());
+			} else {
+				columnQuery.append(DelimiterConstants.getSymbol(FileConstants.COMMA)).append(columnList.get(i));
+			}
+		}
+		try{
+			beginTransaction();
+			sqlQuery.append("CREATE TABLE ").append(tableName).append(" (").append(columnQuery).append(")");
+			hibernatePersistenceManager.createSQLQuery(sqlQuery.toString()).executeUpdate();
+			endTransaction();
+		}catch(Exception e){
+			endTransaction();
+			throw new ProcessFailedException("Failed to create Table");
+		}
+	}
+
+	private void createTableAs(String tableNameto, String tableNameFrom) throws ProcessFailedException{
+		StringBuilder sqlQuery = new StringBuilder();
+		try{
+			beginTransaction();
+			sqlQuery.append("CREATE TABLE ").append(tableNameto).append(" AS SELECT * FROM ").append(tableNameFrom);
+			hibernatePersistenceManager.createSQLQuery(sqlQuery.toString()).executeUpdate();
+			endTransaction();
+		}catch(Exception e){
+			endTransaction();
+			throw new ProcessFailedException("Failed to copy and create Table");
+		}
+		
+	}
+	
+	private void dropTable(String tableName) throws ProcessFailedException{
+		StringBuilder sqlQuery = new StringBuilder();
+		try{
+			beginTransaction();
+			sqlQuery.append("DROP TABLE ").append(tableName).append(" CASCADE CONSTRAINTS");
+			hibernatePersistenceManager.createSQLQuery(sqlQuery.toString()).executeUpdate();
+			endTransaction();
+		}catch(Exception e){
+			endTransaction();
+			throw new ProcessFailedException("Failed to drop Table");
+		}
+	}
+	
+	private boolean checkTableExistense(String tableName) throws ProcessFailedException{
+		StringBuilder sqlQuery = new StringBuilder();
+		BigDecimal count = BigDecimal.valueOf(0);
+		boolean tableExists = false;
+		try{
+			beginTransaction();
+			sqlQuery.append("select count(*) from user_tables where table_name ='").append(tableName).append("'");
+			log.info("SqlQuery --> " +sqlQuery.toString());
+			count = (BigDecimal) hibernatePersistenceManager.createSQLQuery(sqlQuery.toString()).uniqueResult();
+			endTransaction();
+			if (count.intValue() > 0) {
+				tableExists = true;
+			}
+		}catch(Exception e){
+			log.error("Exception",e);
+			endTransaction();
+			throw new ProcessFailedException("Error while checking table Existence");
+		}
+		return tableExists;
+	}
+	
+	
+	@Override
+	public void updateSeqInPrestage(String tableName) throws ProcessFailedException{
+		StringBuilder sqlQuery = new StringBuilder();
+		try{
+			beginTransaction();
+			sqlQuery.append("UPDATE ").append(tableName).append(" SET SEQNO=seq_prestage_seqno.nextval");
+			
+			log.info("SqlQuery --> " +sqlQuery.toString());
+			hibernatePersistenceManager.createSQLQuery(sqlQuery.toString()).executeUpdate();
+			endTransaction();
+		}catch(Exception e){
+			log.error("Exception",e);
+			endTransaction();
+			throw new ProcessFailedException("Error while updating sequence number."+e.getMessage());
+		}
+	}
+	
+	@Override
+	public void updateSeqInPrestage(String tableName, String template, Long projectId) throws ProcessFailedException{
+		StringBuilder sqlQuery = new StringBuilder();
+		try{
+			beginTransaction();
+			sqlQuery.append("UPDATE ").append(tableName).append(" SET ID=SEQ_ENTITYID.NEXTVAL where PROJECTID="+projectId);
+			
+			log.info("SqlQuery --> " +sqlQuery.toString());
+			hibernatePersistenceManager.createSQLQuery(sqlQuery.toString()).executeUpdate();
+			endTransaction();
+		}catch(Exception e){
+			log.error("Exception",e);
+			endTransaction();
+			throw new ProcessFailedException("Error while updating sequence number."+e.getMessage());
+		}
+	}
+	
+
+	
+	
+	
+	public boolean updateFileDomain(FileDomain fileDomain) throws ProcessFailedException{
+		boolean result = false;
+		try {
+			beginTransaction();
+			
+			hibernatePersistenceManager.saveOrUpdate(fileDomain);
+			result = true;
+//			hibernatePersistenceManager.refresh(fileDomain);
+			endTransaction();
+		} catch (Exception e) {
+			e.printStackTrace();
+			hibernatePersistenceManager.rollback();
+			throw new ProcessFailedException("Update file status Failed.");
+		}
+		return result;
+	}
+	public FileDomain getFileDomain(Long fileId) {
+		FileDomain fileDomain=null;
+		beginTransaction();
+//		Criteria fileCriteria = hibernatePersistenceManager.createCriteria(FileDomain.class);
+		fileDomain = hibernatePersistenceManager.getPersistentObject(FileDomain.class, fileId);
+		if(fileDomain!=null){
+			hibernatePersistenceManager.refresh(fileDomain);
+		}
+		endTransaction();
+		/*fileCriteria.add(Restrictions.eq("id", fileId));
+		List<FileDomain> result = fileCriteria.list();
+		if(result != null && result.size()>0){
+			fileDomain = result.get(0);
+		}*/
+		return fileDomain;
+	}
+	
+	
+	
+	@Override
+	public List<String> getReserveKeyword() throws ObjectNotSupportedException, ProcessFailedException {
+		List<String> emailList=new ArrayList<String>();
+		try{
+			beginTransaction();
+			List<ReserveKeywordDomain> list=hibernatePersistenceManager.createCriteria(ReserveKeywordDomain.class).list();
+			for(ReserveKeywordDomain obj:list){
+				emailList.add(obj.getKeyword());
+				}
+			}catch(Exception e){
+			return emailList;
+		}finally{
+			endTransaction();
+		}
+		return emailList;
+	}
+	
+	@Override
+	public boolean checkFileAssocaiatedWithXref(Long fileId) throws  ProcessFailedException {
+		List<Long> fileIds=new ArrayList<>();
+		try{
+			beginTransaction();
+//			 ProjectionList prjection = Projections.projectionList();
+//			 prjection.add(Projections.property("fileId"));
+//			 fileIds=					 hibernatePersistenceManager.createCriteria(ProjectFeedDomain.class)
+//					 .createAlias("userProject.templateID", "templateID")
+//					.add(Restrictions.eq("templateID.", 3))
+//					.setProjection(prjection)
+//					.list();
+			 String query="select FILE_ID from PROJECT_FEEDS where PROJECT_ID in (select PROJECT_ID from USER_PROJECTS where USER_PROJECTS.TEMPLATE_ID=3) and FILE_ID="+fileId;
+			 fileIds=hibernatePersistenceManager.createSQLQuery(query).list();
+			 
+			}catch(Exception e){
+			
+		}finally{
+			endTransaction();
+		}
+		
+		return (fileIds.size()!=0);
+	}
+
+
+}

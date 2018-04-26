@@ -1,0 +1,124 @@
+package com.lei.dto.project.template;
+
+import java.io.Serializable;
+import java.util.Date;
+
+import javax.xml.bind.annotation.XmlAccessType;
+import javax.xml.bind.annotation.XmlAccessorType;
+import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlRootElement;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonInclude.Include;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonRootName;
+
+import lombok.Getter;
+import lombok.Setter;
+
+/**
+ * 
+ * @author Ashish.Patel
+ * 
+ */
+
+@XmlRootElement(name = "ProjectTemplateGridDataInformation")
+@JsonRootName(value = "ProjectTemplateGridDataInformation")
+@XmlAccessorType(XmlAccessType.NONE)
+@JsonInclude(Include.NON_NULL)
+public class ProjectTemplateGridData implements Serializable {
+
+	private static final long serialVersionUID = 1L;
+	
+	@Getter
+	@Setter
+	@JsonProperty(value = "TemplateID")
+	@XmlElement(name = "TemplateID")
+	private Long templateID;
+	
+	@Getter
+	@Setter
+	@JsonProperty(value = "TemplateName")
+	@XmlElement(name = "TemplateName")
+	private String templateName;
+	
+	@Getter
+	@Setter
+	@JsonProperty(value = "UserProjectCount")
+	@XmlElement(name = "UserProjectCount")
+	private long userProjectCount;
+	
+	@Getter
+	@Setter
+	@JsonProperty(value = "LatestExecutionDate")
+	@XmlElement(name = "LatestExecutionDate")
+	private String latestExecutionText;
+	
+	@Getter
+	@Setter
+	/*@JsonSerialize(using=JsonDateSerializer.class)
+	@XmlJavaTypeAdapter(XmlDateAdapter.class)
+	@JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MMM-yyyy HH:mm:ss")*/
+	private Date latestExecutionDate = null;
+	
+	@Getter
+	@Setter
+	@JsonProperty(value = "ExecutedProjectsCount")
+	@XmlElement(name = "ExecutedProjectsCount")
+	private long executedProjectsCount;
+	
+	@Getter
+	@Setter
+	@JsonProperty(value = "TotalProjectsCount")
+	@XmlElement(name = "TotalProjectsCount")
+	private long totalProjectsCount;
+	
+	@Getter
+	@Setter
+	@JsonProperty(value = "TotalCount")
+	@XmlElement(name = "TotalCount")
+	private long totalCount;
+	
+	@Getter
+	@Setter
+	@JsonProperty(value = "MatchCount")
+	@XmlElement(name = "MatchCount")
+	private long matchCount;
+	
+	@Getter
+	@Setter
+	@JsonProperty(value = "PotentialMatchCount")
+	@XmlElement(name = "PotentialMatchCount")
+	private long potentialMatchCount;
+	
+	@Getter
+	@Setter
+	@JsonProperty(value = "NoMatchCount")
+	@XmlElement(name = "NoMatchCount")
+	private long noMatchCount;
+	
+	@Getter
+	@Setter
+	@JsonProperty(value = "ExceptionsCount")
+	@XmlElement(name = "ExceptionsCount")
+	private long exceptionsCount;
+	
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "ActiveCount")
+	@JsonProperty(value = "ActiveCount")
+	private Long activeCount= 0l;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "NewCount")
+	@JsonProperty(value = "NewCount")
+	private Long newCount = 0l;
+	
+	
+	
+	
+	
+
+}

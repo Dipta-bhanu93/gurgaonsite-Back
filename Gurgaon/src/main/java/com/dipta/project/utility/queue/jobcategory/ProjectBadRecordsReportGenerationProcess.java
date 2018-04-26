@@ -1,0 +1,182 @@
+//package com.dipta.project.utility.queue.jobcategory;
+//
+//import java.io.ByteArrayOutputStream;
+//import java.io.IOException;
+//import java.sql.Timestamp;
+//import java.text.SimpleDateFormat;
+//import java.util.ArrayList;
+//import java.util.List;
+//
+//import org.apache.poi.ss.usermodel.Workbook;
+//
+//import com.lei.domain.project.GeneratedReportsDomain;
+//import com.lei.dto.common.FileReportDto;
+//import com.lei.dto.common.RowDto;
+//import com.lei.dto.file.FileDataDTO;
+//import com.lei.dto.workflow.ProjectDTO;
+//import com.lei.exception.common.ProcessFailedException;
+//import com.lei.maintenance.file.FileMaintenanceImpl;
+//import com.lei.maintenance.file.IFileMaintenance;
+//import com.lei.maintenance.project.IProjectMaintenance;
+//import com.lei.maintenance.project.ProjectMaintenanceImpl;
+//import com.lei.maintenance.user.IUserMaintenance;
+//import com.lei.maintenance.user.UserMaintenanceImpl;
+//import com.lei.maintenence.report.IReportsMaintenence;
+//import com.lei.maintenence.report.ReportsMaintenenceImpl;
+//import com.lei.report.ReportDataTable;
+//import com.lei.service.files.FileDownloadService;
+//import com.lei.utility.constants.CommonConstants;
+//import com.lei.utility.constants.FileSourceConstants;
+//import com.lei.utility.queue.CallableQueueJob;
+//
+///**
+// * 
+// * @author Saurabh Agarwal
+// *
+// */
+//public class ProjectBadRecordsReportGenerationProcess extends CallableQueueJob<Long>{
+//
+//	public ProjectBadRecordsReportGenerationProcess(ReportDataTable reportDataTable) {
+//		super(reportDataTable);
+//	}
+//
+//
+//	@Override
+//	public Long execute(Object[] userData) throws ProcessFailedException {
+//		try{
+//			ReportDataTable reportDataTable = (ReportDataTable)userData[0];
+//
+//			long projectId = Long.valueOf(reportDataTable.getProjectId());
+//
+//			IUserMaintenance userMaintenance  = new UserMaintenanceImpl();
+//			long userId =  userMaintenance.getUser(reportDataTable.getTenentEmail(), false).getId();
+//
+//			IProjectMaintenance projectMaintenance = new ProjectMaintenanceImpl();
+//			ProjectDTO projectDetail = projectMaintenance.getProject(reportDataTable.getTenentEmail(), projectId);
+//
+//
+//			IFileMaintenance fileMaintenance =new FileMaintenanceImpl();
+//			byte[] data = getFileData(reportDataTable.getBadRecords(),projectDetail.getSourceId())/*Excel utility data will come here*/;
+//			long fileID= fileMaintenance.saveFile(reportDataTable.getTenentEmail(), getFileName(projectDetail.getProjectName(), projectDetail.getTemplateID(), reportDataTable.getExecutedOn()), data, FileSourceConstants.REPORT);
+//
+//
+//			IReportsMaintenence reportsMaintenence = new ReportsMaintenenceImpl();
+//			GeneratedReportsDomain generatedReportsDomain=new GeneratedReportsDomain();
+//
+//			generatedReportsDomain.setFileId(fileID);
+//			generatedReportsDomain.setProjectId(projectId);
+//			generatedReportsDomain.setUserId(userId);
+//			generatedReportsDomain.setGeneratedDate(reportDataTable.getExecutedOn());
+//			generatedReportsDomain.setExecutionId(reportDataTable.getExecutedId());
+//			generatedReportsDomain.setBadRecordsFileFlag("Y");
+//			if(reportsMaintenence.saveGeneratedReports(reportDataTable.getTenentEmail(), generatedReportsDomain)){
+//				return fileID;
+//			}else{
+//				return 0L;
+//			}
+//
+//		}catch(Exception e){
+//			throw new ProcessFailedException(e.getMessage());
+//		}
+//	}
+//	private String getFileName(String projectName, long templateId,	Timestamp reportGenOn){
+//
+//		if(templateId == 2){
+//			return "BadRecords_"+CommonConstants.FILE_PREFIX_INSTISS +projectName + new SimpleDateFormat("_dd-MMM-yyyy_(HH-mm-ss").format(reportGenOn)+"Hrs).xlsx";
+//		}else if(templateId == 3){
+//			return "BadRecords_"+CommonConstants.FILE_PREFIX_XREF +projectName + new SimpleDateFormat("_dd-MMM-yyyy_(HH-mm-ss").format(reportGenOn)+"Hrs).xlsx";
+//		}else if(templateId == 6){
+//			return "BadRecords_"+CommonConstants.FILE_PREFIX_HIRDATA +projectName + new SimpleDateFormat("_dd-MMM-yyyy_(HH-mm-ss").format(reportGenOn)+"Hrs).xlsx";
+//		}else{
+//			return "BadRecords_"+CommonConstants.FILE_PREFIX_REFDATA +projectName + new SimpleDateFormat("_dd-MMM-yyyy_(HH-mm-ss").format(reportGenOn)+"Hrs).xlsx";
+//		}
+//
+//	}
+//
+//
+//	private byte[] getFileData(List<FileDataDTO> fileData,String sourceID) throws IOException{
+//		FileReportDto requestedData = null;
+//		if(sourceID.equalsIgnoreCase("10001")){
+//			requestedData = prepareWorkbookDataCounterparty(fileData);
+//		}else if(sourceID.equalsIgnoreCase("10002")){
+//			requestedData = prepareWorkbookDataSecurity(fileData);
+//		}
+//
+//		Workbook preparedWorkbook = getWorkbook(requestedData);
+//		ByteArrayOutputStream baos = new ByteArrayOutputStream();
+//		preparedWorkbook.write(baos);
+//		
+//		return baos.toByteArray();
+//	}
+//
+//	private Workbook getWorkbook(FileReportDto requestedData) throws IOException{
+//		FileDownloadService fds = new FileDownloadService();
+//		return fds.createWorkBook(requestedData);
+//	}
+//
+//	private FileReportDto prepareWorkbookDataCounterparty(List<FileDataDTO> fileData){
+//		FileReportDto response = new FileReportDto();
+//		List<RowDto> dataRows = new ArrayList<>();
+//		
+//		RowDto headers = new RowDto();
+//
+//		headers.getColumns().add("Serial Number");
+//		headers.getColumns().add("LegalName");
+//		headers.getColumns().add("Country Name");
+//		headers.getColumns().add("Status");
+//		headers.getColumns().add("Comments");
+//		response.setHeader(headers);
+//		response.setReportName("Bad Records");
+//		
+//		for(FileDataDTO fileRow : fileData){
+//			RowDto excelRow = new RowDto();
+//			
+//			excelRow.getColumns().add(fileRow.getF0());
+//			excelRow.getColumns().add(fileRow.getF1());
+//			excelRow.getColumns().add(fileRow.getF2());
+//			excelRow.getColumns().add(fileRow.getStatus());
+//			excelRow.getColumns().add(fileRow.getComments());
+//			
+//			dataRows.add(excelRow);
+//		}
+//		response.setDataRows(dataRows);
+//		
+//		return response;
+//	}
+//	private FileReportDto prepareWorkbookDataSecurity(List<FileDataDTO> fileData){
+//		FileReportDto response = new FileReportDto();
+//		List<RowDto> dataRows = new ArrayList<>();
+//
+//		RowDto headers = new RowDto();
+//						
+//
+//		headers.getColumns().add("Serial Number");
+//		headers.getColumns().add("Security Name");
+//		headers.getColumns().add("Issue Country");
+//		headers.getColumns().add("CUSIP");
+//		headers.getColumns().add("ISIN");
+//		headers.getColumns().add("SEDOL");
+//		headers.getColumns().add("Status");
+//		headers.getColumns().add("Comments");
+//		response.setHeader(headers);
+//		response.setReportName("Bad Records");
+//		
+//		for(FileDataDTO fileRow : fileData){
+//			RowDto excelRow = new RowDto();
+//			
+//			excelRow.getColumns().add(fileRow.getF0());
+//			excelRow.getColumns().add(fileRow.getF1());
+//			excelRow.getColumns().add(fileRow.getF2());
+//			excelRow.getColumns().add(fileRow.getF3());
+//			excelRow.getColumns().add(fileRow.getF4());
+//			excelRow.getColumns().add(fileRow.getF5());
+//			excelRow.getColumns().add(fileRow.getStatus());
+//			excelRow.getColumns().add(fileRow.getComments());
+//			
+//			dataRows.add(excelRow);
+//		}
+//		response.setDataRows(dataRows);
+//		
+//		return response;
+//	}
+//}

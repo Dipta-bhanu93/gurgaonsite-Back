@@ -1,0 +1,58 @@
+/**
+ * 
+ */
+package com.dipta.project.dao.workflow.orm;
+
+import java.math.BigDecimal;
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
+
+import lombok.extern.slf4j.Slf4j;
+
+import org.hibernate.Criteria;
+import org.hibernate.criterion.Projections;
+import org.hibernate.criterion.Restrictions;
+import org.hibernate.transform.Transformers;
+import org.hibernate.type.StandardBasicTypes;
+import org.springframework.stereotype.Repository;
+
+import com.dipta.project.dao.base.DaoManager;
+import com.dipta.project.dao.base.orm.AbstractBaseDao;
+import com.dipta.project.dao.project.IProjectDao;
+import com.dipta.project.dao.ticketManagement.ITicketMaintenanceDao;
+import com.dipta.project.dao.user.IUserDao;
+import com.dipta.project.dao.workflow.IWorkFlowDao;
+import com.dipta.project.domain.acl.RolesDomain;
+import com.dipta.project.domain.company.CompanyDomain;
+
+
+/**
+ * @author Ashish.Patel
+ *
+ */
+
+@Slf4j
+@Repository("workflowdao")
+public class WorkFlowDaoImpl extends AbstractBaseDao implements IWorkFlowDao {
+
+	public WorkFlowDaoImpl() {
+		this(ApplicationConstants.SUPERUSEREMAIL.getValue());
+	}
+
+	public WorkFlowDaoImpl(String tenantEmail) {
+		super(tenantEmail);
+	}
+
+	 public WorkFlowDaoImpl(Long tenantId) {
+		 super(tenantId);
+	 }
+	 
+	
+}

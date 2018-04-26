@@ -1,0 +1,28 @@
+package com.dipta.project.utility.constants;
+
+public enum TicketExceptionConstants {
+	CONNECTIONEXCEPTION("Error While Connecting to server.Please Check the Server URL."),
+	PHPEXCEPTION("Error while executiong the php Script");
+	
+	private String constant;
+	private TicketExceptionConstants(String constant){
+		this.setConstant(constant);
+	}
+	/**
+	 * @return the constant
+	 */
+	public String getConstant() {
+		return constant;
+	}
+	/**
+	 * @param constant the constant to set
+	 */
+	public void setConstant(String constant) {
+		this.constant = constant;
+	}
+	
+	
+	
+	
+	
+}

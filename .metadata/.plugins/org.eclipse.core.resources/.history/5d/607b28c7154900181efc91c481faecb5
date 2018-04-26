@@ -1,0 +1,13 @@
+package com.lei.utility.constants;
+
+public enum ConfigSettingEnum {
+	CORPORATEACTION("CORP_ACTION_DATA_ALL");
+	private String key;
+	private ConfigSettingEnum(String key) {
+		this.key=key;
+	}
+	public String getKey() {
+		return key;
+	}
+
+}

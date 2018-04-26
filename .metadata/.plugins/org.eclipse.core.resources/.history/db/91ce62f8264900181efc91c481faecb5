@@ -1,0 +1,36 @@
+package com.lei.exception.crossReference;
+
+import javax.servlet.http.HttpServletRequest;
+
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.ControllerAdvice;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+
+import com.lei.dto.common.ResponseMessageDTO;
+import com.lei.exception.base.AbstractBaseException;
+
+/**
+ * @author Ashish.Patel
+ *
+ */
+@ControllerAdvice
+public class DuplicateMappingNameException extends AbstractBaseException {
+
+	private static final long serialVersionUID = 1L;
+
+	public DuplicateMappingNameException() {
+		super("This Mapping Name already exist. Please try another name");
+	}
+	
+	public DuplicateMappingNameException(String message) {
+		super(message);
+	}
+	
+	@ExceptionHandler(DuplicateMappingNameException.class)
+	public ResponseEntity<ResponseMessageDTO> exceptionHttpCall(
+			HttpServletRequest req, Exception e) {
+		// TODO Auto-generated method stub
+		return getHTTPResponse(req, e);
+	}
+
+}

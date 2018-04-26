@@ -1,0 +1,115 @@
+package com.lei.dao.ticketManagement.orm;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import org.hibernate.Criteria;
+import org.hibernate.criterion.Order;
+import org.hibernate.criterion.Restrictions;
+
+import com.lei.dao.base.orm.AbstractBaseDao;
+import com.lei.dao.ticketManagement.INotificationDao;
+import com.lei.domain.ticketManagement.NotificationDomain;
+import com.lei.dto.ticketManagement.NotificationDto;
+import com.lei.exception.common.ObjectNotSupportedException;
+import com.lei.exception.common.ProcessFailedException;
+import com.lei.utility.CommonUtils;
+
+public class NotificationDaoImpl extends AbstractBaseDao implements INotificationDao  {
+	private static String NOTIFICATION_SAVE_FAILURE_TXT = "Notification save failed";
+	private static String NOTIFICATION_GET_FAILURE_TXT = "Notifications retrieval failed";
+
+	public NotificationDaoImpl(String tenantEmail) {
+		super(tenantEmail);
+	}
+
+	@Override
+	public ArrayList<NotificationDto> getNotifications(Long ticketId) throws ProcessFailedException {
+		ArrayList<NotificationDto> notifications=new ArrayList<>();
+		try{
+			requestPlatinumConnection();
+			beginTransaction();
+			Criteria criteria = hibernatePersistenceManager.createCriteria(NotificationDomain.class);
+			criteria.add(Restrictions.eq("ticketId", ticketId));
+			criteria.addOrder(Order.desc("dateCreated"));
+			List<NotificationDomain> result = criteria.list();
+				for(NotificationDomain notificationDomain:result){
+					NotificationDto notificationDto = CommonUtils.convertObject(notificationDomain, NotificationDto.class);
+					notifications.add(notificationDto);
+				}
+			endTransaction();
+			releasePlatinumConnection();
+		}catch(Exception e){
+			throw new ProcessFailedException(NOTIFICATION_GET_FAILURE_TXT);
+		}
+		return notifications;
+	}
+	
+	/**
+	 * This method is used to save notification details.
+	 * @param  NotificationDto
+	 * @return NotificationDto
+	 * @throws ObjectNotSupportedException 
+	 */
+
+	@Override
+	public NotificationDto saveNotification(NotificationDto notificationDto) throws ObjectNotSupportedException,ProcessFailedException {
+		NotificationDto notificationDetail=new NotificationDto();
+		NotificationDomain notificationDomain=	CommonUtils.convertObject(notificationDto, NotificationDomain.class);	
+		try{
+			requestPlatinumConnection();
+			beginTransaction();
+			notificationDomain.setReadFlag("N");
+			notificationDomain = (NotificationDomain)hibernatePersistenceManager.saveOrUpdate(notificationDomain);
+			endTransaction();
+			releasePlatinumConnection();
+		}catch(Exception e){
+			rollBack();
+			throw new ProcessFailedException(NOTIFICATION_SAVE_FAILURE_TXT);
+		}
+		notificationDetail=  CommonUtils.convertObject(notificationDomain, NotificationDto.class);
+		return notificationDetail;
+	}
+	@Override
+	public ArrayList<NotificationDto> getNotifications(List<Long> ticketIds) throws ProcessFailedException {
+		ArrayList<NotificationDto> notifications=new ArrayList<>();
+		try{
+			requestPlatinumConnection();
+			beginTransaction();
+			Criteria criteria = hibernatePersistenceManager.createCriteria(NotificationDomain.class);
+			criteria.add(Restrictions.in("ticketId", ticketIds));
+			criteria.addOrder(Order.desc("dateCreated"));
+			List<NotificationDomain> result = criteria.list();
+				for(NotificationDomain notificationDomain:result){
+					NotificationDto notificationDto = CommonUtils.convertObject(notificationDomain, NotificationDto.class);
+					notifications.add(notificationDto);
+				}
+			endTransaction();
+			releasePlatinumConnection();
+		}catch(Exception e){
+			throw new ProcessFailedException(NOTIFICATION_GET_FAILURE_TXT);
+		}
+		return notifications;
+	}
+	@Override
+	public Boolean saveNotification(NotificationDto[] notificationList) throws ObjectNotSupportedException,ProcessFailedException {
+		ArrayList<NotificationDomain> domainList=new ArrayList<>();
+		for(NotificationDto notificationDto:notificationList){
+			domainList.add(CommonUtils.convertObject(notificationDto, NotificationDomain.class));
+		}
+		try{
+			requestPlatinumConnection();
+			beginTransaction();
+			for(NotificationDomain notificationDomain:domainList){
+				hibernatePersistenceManager.saveOrUpdate(notificationDomain);	
+			}
+			endTransaction();
+			releasePlatinumConnection();
+		}catch(Exception e){
+			rollBack();
+			throw new ProcessFailedException(NOTIFICATION_SAVE_FAILURE_TXT);
+		}
+		return true;
+	}
+	
+}

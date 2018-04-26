@@ -1,0 +1,90 @@
+package com.lei.domain.crossReference;
+
+import java.sql.Timestamp;
+import java.util.HashSet;
+import java.util.Set;
+
+import javax.persistence.Column;
+import javax.persistence.Entity;
+import javax.persistence.FetchType;
+import javax.persistence.GeneratedValue;
+import javax.persistence.GenerationType;
+import javax.persistence.Id;
+import javax.persistence.OneToMany;
+import javax.persistence.SequenceGenerator;
+import javax.persistence.Table;
+
+import lombok.Getter;
+import lombok.Setter;
+
+/**
+ * @author santosh.panigrahi
+ * 
+ * This Class will represents Domain object for linked matching id to the feed type
+ *
+ */
+@Entity
+@Table(name = "CDI_ETL_MATCHING_MAP")
+public class EtlFeedMatchingDetailDomain {
+	
+	@Getter
+	@Setter
+	@Id
+	@Column(name = "RULE_ID")
+	@GeneratedValue(strategy=GenerationType.AUTO, generator="SEQ_feed_matching_detail")
+	@SequenceGenerator(name="SEQ_feed_matching_detail", sequenceName="SEQ_feed_matching_detail")
+	private long ruleId;
+	
+	@Getter
+	@Setter
+	@Column(name = "FEEDTYPE")
+		private String feedType;
+	
+	@Getter
+	@Setter
+	@Column(name = "FILEID")
+		private long fileId;
+	
+	@Getter
+	@Setter
+	@Column(name = "REMARKS")
+		private String remarks;
+	
+	@Getter
+	@Setter
+	@Column(name = "EXECUTE_STATUS_FLAG")
+		private String executionStatusFlag;
+	
+	@Getter
+	@Setter
+	@Column(name = "USERCREATED")
+	private long userCreated;
+	
+	@Getter                   
+	@Setter                   
+	@Column(name = "DATECREATED")
+	private Timestamp dateCreated;  
+	
+	@Getter                   
+	@Setter                   
+	@Column(name = "USERMODIFIED")
+	private String userModified;  
+	
+	@Getter                   
+	@Setter                   
+	@Column(name = "DATEMODIFIED")
+	private Timestamp dateModified;
+	
+	@Getter
+	@Setter
+	@OneToMany(fetch = FetchType.LAZY, mappedBy = "etlFeedMatchingDetailDomain",cascade=javax.persistence.CascadeType.ALL)
+	private Set<EtlMatchingColumnDetailDomain> etlMatchingColumnDetails = new HashSet<EtlMatchingColumnDetailDomain>();
+	
+	@Getter
+	@Setter
+	@OneToMany(fetch = FetchType.LAZY, mappedBy = "etlFeedMatchingDetailDomain",cascade=javax.persistence.CascadeType.ALL)
+	private Set<EtlMatchingScoreDetailDomain> etlMatchingScoreDetails = new HashSet<EtlMatchingScoreDetailDomain>();
+	
+	
+
+}

@@ -1,0 +1,351 @@
+package com.dipta.project.user;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.lei.dto.common.ResponseMessageDTO;
+import com.lei.dto.user.RoleDTOCollection;
+import com.lei.dto.user.RolesDto;
+import com.lei.dto.user.StatusDTOCollection;
+import com.lei.dto.user.UserDTO;
+import com.lei.dto.user.UserDTOCollection;
+import com.lei.exception.common.EmailException;
+import com.lei.exception.common.ObjectNotSupportedException;
+import com.lei.exception.common.ProcessFailedException;
+import com.lei.exception.file.DataNotSupportedException;
+import com.lei.exception.user.ActivationPendingException;
+import com.lei.exception.user.InvalidUserException;
+import com.lei.exception.user.LoginIDFormatException;
+import com.lei.exception.user.LoginIDRegisteredException;
+import com.lei.exception.user.RegistrationFailedException;
+import com.lei.maintenance.user.IUserMaintenance;
+import com.lei.security.configuration.CodSecurityProvider;
+import com.lei.security.configuration.RolesEnum;
+import com.lei.utility.CommonUtils;
+import com.lei.utility.MessageUtils;
+import com.lei.utility.constants.HttpStatusCodes;
+
+/**
+ * 
+ * @author Saurabh.Agarwal
+ *
+ */
+@RestController
+@RequestMapping("/usermaintenance")
+public class UserMaintenanceService {
+	
+	private static final String USER_ASSOCIATED_WITH_WORKFLOW = "Role/Status cannot be changed as user already associated with Workflow.";
+	private static final String USER_PROFILE_UPDATED = "Profile updated successfully.";
+	
+	@Autowired
+	IUserMaintenance userMaintenance;
+	
+	
+	@Autowired
+	@Qualifier("codSecurityProvider")
+	private CodSecurityProvider codSecurityProvider;
+	
+
+	@RequestMapping(value = "/getMessage",
+	method = RequestMethod.GET,
+	headers="Accept=application/xml, application/json")
+	public ResponseMessageDTO getMessage(@RequestParam("MessageKey")  String messageKey) throws LoginIDRegisteredException, LoginIDFormatException, ProcessFailedException  {
+		
+		ResponseMessageDTO response = new ResponseMessageDTO();
+			response.setResponseCode(HttpStatusCodes.SUCCESS.getCode());
+			response.setData(MessageUtils.getMessage(messageKey));
+			return response;
+	}
+
+	
+	
+	@RequestMapping(value = "/exists",
+			method = RequestMethod.GET,
+			headers="Accept=application/xml, application/json")
+	public ResponseMessageDTO emailExists(@RequestParam("Email")  String email) throws LoginIDRegisteredException, LoginIDFormatException, ProcessFailedException  {
+		if(!userMaintenance.exists(email)){
+			ResponseMessageDTO response = new ResponseMessageDTO();
+			response.setResponseCode(HttpStatusCodes.AVAILABLE.getCode());
+			response.setResponseMessage("AVAILABLE and user can be created with this login ID");
+			return response;
+		}else{
+			throw new LoginIDRegisteredException("ID Already registered in the System");
+		}
+	}
+	
+	@RequestMapping(value = "/domainExists",
+			method = RequestMethod.GET,
+			headers="Accept=application/xml, application/json")
+	public ResponseMessageDTO domainExists(@RequestParam("Email")  String email) throws LoginIDRegisteredException, DataNotSupportedException ,LoginIDFormatException, ProcessFailedException  {
+		String loggedInUserId = codSecurityProvider.getLoggedInUserName();
+		if(userMaintenance.validateDomainName(loggedInUserId, email)) {
+			ResponseMessageDTO response = new ResponseMessageDTO();
+			response.setResponseCode(HttpStatusCodes.AVAILABLE.getCode());
+			response.setResponseMessage("User can be created with this login ID");
+			return response;
+		}else{
+			throw new LoginIDRegisteredException("Domain name is different");
+		}
+	}
+
+	
+	
+	@RequestMapping(value = "/register",
+			method = RequestMethod.POST,
+			headers="Accept=application/xml, application/json")
+	public ResponseMessageDTO register(@RequestBody UserDTO userDto) throws LoginIDFormatException, LoginIDRegisteredException, RegistrationFailedException, ObjectNotSupportedException, EmailException, ProcessFailedException {
+		userMaintenance.register(userDto);
+		ResponseMessageDTO dto = new ResponseMessageDTO();
+		dto.setResponseMessage("User have been registered successfully");
+		dto.setResponseCode(HttpStatusCodes.REGISTERED.getCode());
+		return dto;
+	}
+	
+	
+
+	
+	
+	@RequestMapping(value = "/changePassword",
+			method = RequestMethod.POST,
+			headers="Accept=application/xml, application/json")
+	public ResponseMessageDTO changePassword(@RequestBody UserDTO userDto,HttpServletRequest request,HttpServletResponse response)throws Exception {
+				
+		String userId = codSecurityProvider.getLoggedInUserName();
+		userDto.setEmail(userId);
+		userMaintenance.changePassword(userDto);
+		ResponseMessageDTO dto = new ResponseMessageDTO();
+		dto.setResponseMessage("Change password successfull");
+		dto.setResponseCode(HttpStatusCodes.CHANGEPASSWORDSUCCESS.getCode());
+		return dto;
+	}
+
+	@RequestMapping(value = "/forgetPassword",
+			method = RequestMethod.POST,
+			headers="Accept=application/xml, application/json")
+	public ResponseMessageDTO forgetPassword(@RequestBody UserDTO userDto) throws InvalidUserException, LoginIDFormatException, ObjectNotSupportedException, ProcessFailedException, EmailException,ActivationPendingException {
+		userMaintenance.forgetPassword(userDto);
+
+		ResponseMessageDTO dto = new ResponseMessageDTO();
+		dto.setResponseMessage("Password have been sent on email");
+		dto.setResponseCode(HttpStatusCodes.FORGETSUCCESS.getCode());
+		return dto;
+	}
+/*
+	@RequestMapping(value = "/login_rest",
+			method = RequestMethod.POST,
+			headers="Accept=application/xml, application/json")
+	public ResponseMessageDTO login(@RequestBody UserDTO userDto,HttpServletRequest request,HttpServletResponse response) throws InvalidUserException, LoginIDFormatException, ObjectNotSupportedException, ActivationPendingException, ProcessFailedException {
+		boolean loginSuccess = false;;
+ 
+		ResponseMessageDTO dto = new ResponseMessageDTO();
+		
+        try {
+	            loginSuccess = codAuthenticator.login(userDto, request, response);
+	            if(loginSuccess){
+	            	
+	            	dto.setResponseMessage("User have been logedin successfully");
+	            	dto.setResponseCode(HttpStatusCodes.LOGINSUCCESS.getCode());
+	            	
+	            	HttpSession session = request.getSession(true);
+	            	session.setAttribute("userEmail", userDto.getEmail());
+	            }else{
+	            	throw new InvalidUserException("Authentication failed!! ");
+	            }
+	    		
+	        }catch (UsernameNotFoundException ex) {
+	        	throw new InvalidUserException("Invalid Username!!");
+			}catch (AuthenticationException ex) {
+				throw new InvalidUserException("Authentication failed!! ");
+	        } 
+		
+		return dto;
+	}
+*/
+	
+	/*
+	
+	@RequestMapping(value = "/logout_rest",
+			method = RequestMethod.GET,
+			headers="Accept=application/xml, application/json")
+	public ResponseMessageDTO logout(HttpServletRequest request,HttpServletResponse response) throws SessionDoesNotExistException, ProcessFailedException {
+		
+		
+		boolean logOut = false;
+		logOut = codAuthenticator.logOut(request, response);
+		ResponseMessageDTO dto = new ResponseMessageDTO();	
+		
+		if(logOut){
+			dto.setResponseMessage("User have been logged-out successfully. Please login again to access the portal.");
+			dto.setResponseCode(HttpStatusCodes.LOGOUTSUCCESS.getCode());
+			return dto;
+		}else{
+			throw new SessionDoesNotExistException("User session does not exists");	
+		}
+	}
+	
+	*/
+	
+	
+	
+	
+	
+	@RequestMapping(value = "/getUserDetail",
+			method = RequestMethod.GET,
+			headers="Accept=application/xml, application/json")
+	public ResponseMessageDTO getUserDetails() throws LoginIDFormatException, ObjectNotSupportedException {
+		String loggedInUserId = codSecurityProvider.getLoggedInUserName();
+		UserDTO userDTO=userMaintenance.getUser(loggedInUserId, true);
+		return CommonUtils.getSuccessMessage(HttpStatusCodes.AVAILABLE.getCode(), "Process completed successfully", userDTO);
+	}
+	
+	@RequestMapping(value = "/isUserSessionActive",
+			method = RequestMethod.GET,
+			headers="Accept=application/xml, application/json")
+	public ResponseMessageDTO isUserSessionActive() throws LoginIDFormatException, ObjectNotSupportedException {
+		String loggedInUserId = codSecurityProvider.getLoggedInUserName();
+		UserDTO userDTO=userMaintenance.getUser(loggedInUserId, false);
+		return CommonUtils.getSuccessMessage(HttpStatusCodes.AVAILABLE.getCode(), "Process completed successfully",userDTO);
+	}
+	
+	
+	@RequestMapping(value = "/getUsersCreated",
+			method = RequestMethod.GET,
+			headers="Accept=application/xml, application/json")
+	public ResponseMessageDTO getUsersCreated() throws LoginIDFormatException, ObjectNotSupportedException {
+		ResponseMessageDTO response = new ResponseMessageDTO();
+		String loggedInUserId = codSecurityProvider.getLoggedInUserName();
+		UserDTOCollection userDTO=userMaintenance.getUsersCreated(loggedInUserId);
+		response.setResponseCode(HttpStatusCodes.SUCCESS.getCode());
+		response.setData(userDTO);
+		return response;
+	}
+	
+	@RequestMapping(value = "/getUserById",
+			method = RequestMethod.GET,
+			headers="Accept=application/xml, application/json")
+	public ResponseMessageDTO getUserById(@RequestParam("userId")  String userId) throws LoginIDFormatException, ObjectNotSupportedException {
+		UserDTO userDTO=userMaintenance.getUser(userId, true);
+		return CommonUtils.getSuccessMessage(HttpStatusCodes.AVAILABLE.getCode(), "Process completed successfully", userDTO);
+	}
+	
+	@RequestMapping(value = "/getStatusMaster",
+			method = RequestMethod.GET,
+			headers="Accept=application/xml, application/json")
+	public ResponseMessageDTO getStatusMaster() throws LoginIDFormatException, ObjectNotSupportedException {
+		ResponseMessageDTO response = new ResponseMessageDTO();
+		StatusDTOCollection statusDTOs=userMaintenance.getStatusMaster();
+		response.setResponseCode(HttpStatusCodes.SUCCESS.getCode());
+		response.setData(statusDTOs);
+		return response;
+	}
+	
+	@RequestMapping(value = "/getRoleMaster",
+			method = RequestMethod.GET,
+			headers="Accept=application/xml, application/json")
+	public ResponseMessageDTO getRoleMaster() throws LoginIDFormatException, ObjectNotSupportedException {
+		ResponseMessageDTO response = new ResponseMessageDTO();
+		//RoleDTOCollection rolesMasterDto=userMaintenance.getRoleMaster();
+		RoleDTOCollection rolesMasterDto=new RoleDTOCollection();
+		List<RolesDto> roleDTOs = new ArrayList<>();
+		
+		for (RolesEnum workFlowRoles : RolesEnum.values()) {
+			if(workFlowRoles.isWorkflowRole()){
+				
+				RolesDto rolesDto = new RolesDto();
+				rolesDto.setRoleId(workFlowRoles.getRoleId());
+				rolesDto.setDescription(workFlowRoles.getRoleDescription());
+				rolesDto.setType(workFlowRoles.getRoleTypeString());
+				
+				roleDTOs.add(rolesDto);
+			}
+		}
+		
+		rolesMasterDto.setRoleDTOs(roleDTOs);
+		
+		response.setResponseCode(HttpStatusCodes.SUCCESS.getCode());
+		response.setData(rolesMasterDto);
+		return response;
+	}
+	
+	@RequestMapping(value = "/registerNew",
+			method = RequestMethod.POST,
+			headers="Accept=application/xml, application/json")
+	public ResponseMessageDTO registerNew(@RequestBody UserDTO userDto) throws LoginIDFormatException, LoginIDRegisteredException, RegistrationFailedException, ObjectNotSupportedException, EmailException, ProcessFailedException {
+		String userId = codSecurityProvider.getLoggedInUserName();
+		System.out.println(userId);
+		if(userId!=null){
+			UserDTO userDTO=userMaintenance.getUser(userId, false);
+			userDto.setCreatedBy(String.valueOf(userDTO.getId()));
+			userDto.setCompanyId(userDTO.getCompanyId());
+		}
+		userDto.setEmail(userDto.getEmail().toLowerCase());//Lowercasing the email id to store in db
+		userMaintenance.register(userDto);
+		ResponseMessageDTO dto = new ResponseMessageDTO();
+		dto.setResponseMessage("User have been registered successfully");
+		dto.setResponseCode(HttpStatusCodes.REGISTERED.getCode());
+		return dto;
+	}
+	
+	@RequestMapping(value = "/updateProfile",
+			method = RequestMethod.POST,
+			headers="Accept=application/xml, application/json")
+	public ResponseMessageDTO updateProfile(@RequestBody UserDTO userDto)throws Exception {
+		boolean result = userMaintenance.updateProfile(userDto,codSecurityProvider.getLoggedInUserName());
+		ResponseMessageDTO dto = new ResponseMessageDTO();
+		if(result){
+			dto.setResponseMessage(USER_PROFILE_UPDATED);
+			dto.setResponseCode(HttpStatusCodes.PROFILEUPDATESUCCESS.getCode());
+		}else{
+			dto.setResponseMessage(USER_ASSOCIATED_WITH_WORKFLOW);
+			dto.setResponseCode(HttpStatusCodes.PROFILEUPDATEFAILED_WORKFLOWASSOCIATION.getCode());
+		}
+		return dto;
+	}
+	
+	
+	@RequestMapping(value = "/getUserListForXorChat",method = RequestMethod.GET,headers="Accept=application/xml, application/json")
+	public ResponseMessageDTO getUserListForXorChat() throws LoginIDFormatException, ObjectNotSupportedException {
+		UserDTOCollection userDTOCollection = userMaintenance.getUserListForXorChat(codSecurityProvider.getLoggedInUserName());
+		return CommonUtils.getSuccessMessage(HttpStatusCodes.SUCCESS.getCode(), "UserListForXorChat Fetched successfully!", userDTOCollection);
+	}
+	
+	
+/*	\
+	@RequestMapping(value = "/apilogin",
+			method = RequestMethod.POST,
+			headers="Accept=application/xml, application/json")
+	public ResponseMessageDTO apiLogin(@RequestBody UserDTO userDto,HttpServletRequest request) throws  ProcessFailedException {
+		if(userMaintenance.apiLogin(userDto.getEmail(), userDto.getStatus().getPassword())){
+			Authenticator auth = new Authenticator(request);
+			auth.login(userDto.getEmail());
+			
+			
+			userDto.setToken(auth.getToken());
+			userDto.setStatus(null);
+		}
+		
+		return CommonUtils.getSuccessMessage("User logged in successfully", userDto);
+	}*/
+	
+	@RequestMapping(value = "/apiregistration",
+			method = RequestMethod.POST,
+			headers="Accept=application/xml, application/json")
+	public ResponseMessageDTO apiRegistration (@RequestBody UserDTO userDto) throws Exception {
+		userMaintenance.apiRegistration(userDto);
+		ResponseMessageDTO dto = new ResponseMessageDTO();
+		dto.setResponseMessage("User have been registered successfully");
+		dto.setResponseCode(HttpStatusCodes.REGISTERED.getCode());
+		return dto;
+	}
+}

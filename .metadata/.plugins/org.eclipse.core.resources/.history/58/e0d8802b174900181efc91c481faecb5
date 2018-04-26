@@ -1,0 +1,136 @@
+package com.lei.maintenance.user;
+
+import java.util.List;
+
+import com.lei.dto.user.ApiProcessDto;
+import com.lei.dto.user.CodApiRequestDto;
+import com.lei.dto.user.RoleDTOCollection;
+import com.lei.dto.user.StatusDTOCollection;
+import com.lei.dto.user.UserDTO;
+import com.lei.dto.user.UserDTOCollection;
+import com.lei.exception.common.EmailException;
+import com.lei.exception.common.InvalidFileException;
+import com.lei.exception.common.InvalidKeyException;
+import com.lei.exception.common.ObjectNotSupportedException;
+import com.lei.exception.common.ProcessFailedException;
+import com.lei.exception.file.DataNotSupportedException;
+import com.lei.exception.user.ActivationPendingException;
+import com.lei.exception.user.ConfirmNewPasswordException;
+import com.lei.exception.user.InvalidRequestException;
+import com.lei.exception.user.InvalidUserException;
+import com.lei.exception.user.LoginIDFormatException;
+import com.lei.exception.user.LoginIDRegisteredException;
+import com.lei.exception.user.OldPasswordException;
+import com.lei.exception.user.PasswordFormatException;
+import com.lei.exception.user.RegistrationFailedException;
+import com.lei.exception.user.SessionDoesNotExistException;
+
+/**
+ * 
+ * @author Saurabh.Agarwal
+ *
+ */
+public interface IUserMaintenance {
+//	public boolean login(UserDTO userDto) throws InvalidUserException, LoginIDFormatException, ObjectNotSupportedException,ActivationPendingException;
+	public boolean logout(UserDTO userDto) throws SessionDoesNotExistException, ObjectNotSupportedException;
+	public boolean register(UserDTO userDto) throws LoginIDFormatException, LoginIDRegisteredException, RegistrationFailedException, ObjectNotSupportedException,EmailException,ProcessFailedException;
+	public boolean forgetPassword(UserDTO userDto) throws InvalidUserException, LoginIDFormatException, ObjectNotSupportedException,ProcessFailedException,EmailException,ActivationPendingException;
+	
+	public boolean apiRegistration(UserDTO userDto) throws LoginIDFormatException, LoginIDRegisteredException, RegistrationFailedException, ObjectNotSupportedException,EmailException,ProcessFailedException, Exception;
+	public boolean changePassword(UserDTO userDto) throws ConfirmNewPasswordException, OldPasswordException, PasswordFormatException, ObjectNotSupportedException, ProcessFailedException, EmailException;
+	public boolean exists(String emailId) throws LoginIDFormatException;
+	public UserDTO getUser(String emailId, boolean loadRoles) throws LoginIDFormatException, ObjectNotSupportedException;
+	public String getStatus(String emailId);
+//	public UserDTO getUserByProjectId(long projectId) throws ProjectIdNotSupportedException;
+//	public long getUserIdByProjectId(long projectId);
+	/**
+	 * Thos method is used to login in api with given loginId and password
+	 * @param loginId
+	 * @param password
+	 * @return
+	 * @throws ProcessFailedException
+	 */
+	public boolean login(String loginId, String password) throws ProcessFailedException;
+		
+	
+	// Spring security ***
+//	public UserDTO findById(int id) throws ObjectNotSupportedException;
+	public UserDTO findBySignInId(String signInId) throws ObjectNotSupportedException;
+	/**
+	 * This method is added for user profile update.
+	 * @param loggedInUser 
+	 */
+	public boolean updateProfile(UserDTO loginDto, String loggedInUser) throws ConfirmNewPasswordException,OldPasswordException, PasswordFormatException,ObjectNotSupportedException, ProcessFailedException, EmailException;
+	/**
+	 * This method is used to get list of users created by logged in user.
+	 */
+	public UserDTOCollection getUsersCreated(String emailId) throws ObjectNotSupportedException;
+	/**
+	 * This method is used to get status master list from table.
+	 */
+	public StatusDTOCollection getStatusMaster() throws ObjectNotSupportedException;
+	/**
+	 * This method is used to get role master list from table.
+	 */
+	public RoleDTOCollection getRoleMaster() throws ObjectNotSupportedException;
+	//*****
+	
+	/**
+	 * THis method is used to check whether user is already active or not.
+	 * @param emailId
+	 * @return
+	 * @throws LoginIDFormatException
+	 */
+	public boolean checkActivationEnabled(String emailId) throws LoginIDFormatException,ProcessFailedException, ObjectNotSupportedException;
+	
+	/**
+	 * This method is used to activate user
+	 * @param emailId
+	 * @return
+	 * @throws ProcessFailedException
+	 */
+	public boolean activateUser(String emailId) throws ProcessFailedException, ObjectNotSupportedException, EmailException, RegistrationFailedException;
+	/**
+	 * This method is used to validate domain name of logged in user while creating/editing user. 
+	 * @param loggedInUserId
+	 * @param emailId
+	 * @return boolean
+	 * @throws DataNotSupportedException
+	 */
+	public boolean validateDomainName(String loggedInUserId,String emailId) throws DataNotSupportedException;
+	
+	
+	/**
+	 * Get users for client (Company ID)
+	 * @param clientId
+	 * @return
+	 * @throws LoginIDFormatException
+	 * @throws ObjectNotSupportedException
+	 */
+	public List<UserDTO> getUsersForClient(Long clientId, String loggedInuserId) throws LoginIDFormatException, ObjectNotSupportedException, ProcessFailedException;
+	
+	/**
+	 * get userEmail Id for the given Client ID
+	 * @param clientId
+	 * @return
+	 * @throws LoginIDFormatException
+	 * @throws ObjectNotSupportedException
+	 * @throws ProcessFailedException
+	 */
+	public String getUserEmailIdForClientID(Long clientId, String loggedInuserId) throws LoginIDFormatException, ObjectNotSupportedException, ProcessFailedException;
+	
+	public UserDTOCollection getUserListForXorChat(String emailId)throws ObjectNotSupportedException;
+	void updatLastLogin(UserDTO userDTO) throws ProcessFailedException, ObjectNotSupportedException;
+	boolean sendAPIUserRegistrationEmail(UserDTO userDto) throws EmailException, Exception;
+	public long createApiUserAccessToken(CodApiRequestDto dto) throws ObjectNotSupportedException;
+    public boolean updateApiUserAccessToken(CodApiRequestDto dto) throws ObjectNotSupportedException;
+    public boolean isProcessRunning(CodApiRequestDto dto);
+    public boolean createApiRequestsLog(CodApiRequestDto dto) throws ObjectNotSupportedException;
+    public boolean isRequestPerDayReached(CodApiRequestDto dto) throws InvalidFileException, InvalidKeyException, InvalidUserException;
+	boolean isAPIuserAuthencated(CodApiRequestDto codApiRequestDto,	boolean isFirstLevelAuth) throws InvalidUserException;
+	boolean isRequestVerified(CodApiRequestDto codApiRequestDto) throws InvalidRequestException;
+
+	
+	
+	
+}

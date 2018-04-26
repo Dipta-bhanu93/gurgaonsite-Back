@@ -1,0 +1,21 @@
+package com.dipta.project.dao.base.orm;
+
+import javax.ejb.SessionContext;
+
+import org.hibernate.context.spi.CurrentTenantIdentifierResolver;
+
+public class TenantResolver implements CurrentTenantIdentifierResolver{
+
+	@Override
+	public String resolveCurrentTenantIdentifier() {
+//		return SessionContext.getCurrentTenant().getKey();
+		return "HELLO";
+	}
+
+	@Override
+	public boolean validateExistingCurrentSessions() {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+}

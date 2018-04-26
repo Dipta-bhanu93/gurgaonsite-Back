@@ -1,0 +1,16 @@
+package com.dipta.project.dao.api;
+
+import com.lei.dao.base.DaoBaseInterface;
+import com.lei.dto.user.CodApiRequestDto;
+import com.lei.exception.common.ObjectNotSupportedException;
+import com.lei.exception.common.ProcessFailedException;
+
+public interface IClientRequestedDao extends DaoBaseInterface{
+
+	CodApiRequestDto executeClientRequestedData(CodApiRequestDto codApiRequests) throws ProcessFailedException;
+
+	boolean executePostMATGProcess(long accessToken, String matchingType)throws ObjectNotSupportedException;
+
+	CodApiRequestDto matchingRequestedData(CodApiRequestDto codApiRequests)	throws ProcessFailedException;
+
+}

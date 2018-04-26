@@ -1,0 +1,83 @@
+package com.dipta.project.dto.dashboard;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import javax.xml.bind.annotation.XmlAccessType;
+import javax.xml.bind.annotation.XmlAccessorType;
+import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlRootElement;
+import javax.xml.bind.annotation.XmlSeeAlso;
+
+import lombok.Getter;
+import lombok.Setter;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonRootName;
+import com.dipta.project.dto.user.StatusDto;
+import com.dipta.project.dto.workflow.ProjectDTO;
+import com.dipta.project.dto.workflow.WorkFlowDetailsDto;
+import com.dipta.project.dto.workflow.WorkFlowMasterDto;
+
+/**
+ * 
+ * @author Saurabh Agarwal
+ *
+ */
+@XmlRootElement(name = "TemplateProjects")
+@JsonRootName(value =  "TemplateProjects")
+@XmlAccessorType(XmlAccessType.NONE)
+@XmlSeeAlso({WorkFlowDetailsDto.class,ProjectDTO.class})
+public class ProjectTemplateProjectsDTO {
+	
+	public ProjectTemplateProjectsDTO() {
+		workflows = new ArrayList<>();
+	}
+	@Getter
+	@Setter
+	@XmlElement(name = "SrNo")
+	@JsonProperty(value = "SrNo")
+	private Integer srNo;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "Workflows")
+	@JsonProperty(value = "Workflows")
+	private List<WorkFlowMasterDto> workflows;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "ProjectInfo")
+	@JsonProperty(value = "ProjectInfo")
+	private ProjectDTO projectInfo;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "Status")
+	@JsonProperty(value = "Status")
+	private StatusDto status;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "WorkCompletedPercentage")
+	@JsonProperty(value = "WorkCompletedPercentage")
+	private Integer workCompletedPercentage;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "TotalRecords")
+	@JsonProperty(value = "TotalRecords")
+	private Long totalRecords;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "CompletedRecords")
+	@JsonProperty(value = "CompletedRecords")
+	private Long completedRecords;
+	
+	@Getter
+	@Setter
+	@XmlElement(name = "UnassignedRecords")
+	@JsonProperty(value = "UnassignedRecords")
+	private Long unassignedRecords;
+}

@@ -1,0 +1,58 @@
+package com.dipta.project.scheduler;
+
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
+import java.util.List;
+
+import lombok.extern.slf4j.Slf4j;
+
+import com.dipta.project.dao.base.DaoManager;
+//import com.dipta.project.dao.company.CompanyDao;
+import com.dipta.project.dao.scheduler.ISchedulerDao;
+//import com.dipta.project.dto.company.CompanyDto;
+import com.dipta.project.dto.scheduler.SchedulerJobDto;
+import com.dipta.project.exception.common.ProcessFailedException;
+import com.dipta.project.exception.scheduler.SchedulingFailedException;
+import com.dipta.project.utility.constants.ApplicationConstants;
+
+/**
+ * 
+ * @author Saurabh Agarwal
+ *
+ */
+@Slf4j
+public class SchedulerServerStartupProcess {
+	public void init() throws ProcessFailedException, ClassNotFoundException, NoSuchMethodException, SecurityException, InstantiationException, IllegalAccessException, IllegalArgumentException, InvocationTargetException, SchedulingFailedException{
+		CompanyDao companyDao = DaoManager.COMPANYREGISTRATIONDAO.getDao(ApplicationConstants.SUPERUSEREMAIL.getValue(),CompanyDao.class);
+
+		List<CompanyDto> companies= companyDao.getAllCompanies();
+
+		for(CompanyDto company : companies){
+			try{
+				long companyID = company.getId();
+				System.out.println("-----------------------------------------------------------------");
+				System.out.println("Jobs scheduling process for Tenant ID: "+companyID);
+				ISchedulerDao schedulerDao = DaoManager.SCHEDULERDAO.getDao(companyID,ISchedulerDao.class);
+				if(schedulerDao.getClientId()>0){
+					List<SchedulerJobDto> scheduledJobs = schedulerDao.getAllScheduledJobs();
+					for(SchedulerJobDto scheduledJob : scheduledJobs){
+
+						Class jobClass = Class.forName(scheduledJob.getJobCategory());
+						Class jobDtoClass = Class.forName(scheduledJob.getCategory());
+
+						Constructor cunstrConstructor = jobClass.getConstructor(String.class,jobDtoClass);
+						SchedulerJob job = (SchedulerJob)cunstrConstructor.newInstance(scheduledJob.getUserEmail(),scheduledJob.getData());
+
+						System.out.println("Sechduling Job Id : "+scheduledJob.getJobId());
+						ScheduleManager.schedule(job);
+						System.out.println("Scheduled Successfully!");
+					}
+				}
+			}catch(Exception e){
+				e.printStackTrace();
+				log.error("Jobs failed to start for Tenant Id = "+company.getId()+"  . Due to exception : "+e);
+			}
+			System.out.println("-----------------------------------------------------------------\n\n");
+		}
+	}
+}

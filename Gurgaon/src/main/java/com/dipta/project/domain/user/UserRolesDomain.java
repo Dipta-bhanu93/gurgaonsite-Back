@@ -1,0 +1,34 @@
+package com.dipta.project.domain.user;
+
+import java.util.Date;
+
+import javax.persistence.Column;
+import javax.persistence.EmbeddedId;
+import javax.persistence.Entity;
+import javax.persistence.Table;
+
+import lombok.Getter;
+import lombok.Setter;
+
+import com.dipta.project.domain.acl.UserRoleCompositeId;
+
+@Entity
+@Table(name="USER_ROLES")
+public class UserRolesDomain {
+	
+	@EmbeddedId
+	@Getter
+	@Setter
+	private UserRoleCompositeId userAndRole;
+	
+	@Getter
+	@Setter
+	@Column(name = "DATECREATED")
+	private Date dateCreated;
+	
+	@Column(name = "USER_ID_CREATED")
+	@Getter
+	@Setter
+	private Long userIdCreated;
+
+	}

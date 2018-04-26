@@ -1,0 +1,73 @@
+package com.dipta.project.domain.acl;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import javax.persistence.Column;
+import javax.persistence.Entity;
+import javax.persistence.FetchType;
+import javax.persistence.GeneratedValue;
+import javax.persistence.GenerationType;
+import javax.persistence.Id;
+import javax.persistence.JoinColumn;
+import javax.persistence.JoinTable;
+import javax.persistence.OneToMany;
+import javax.persistence.Table;
+
+import lombok.Getter;
+import lombok.Setter;
+
+import com.dipta.project.domain.user.UserDomain;
+import com.dipta.project.security.configuration.RolesEnum;
+
+@Entity
+@Table(name = "ROLES")
+public class RolesDomain {
+	/*
+	 * @Id @GeneratedValue(strategy=GenerationType.IDENTITY) private int id;
+	 */
+
+	@Id
+	@GeneratedValue(strategy = GenerationType.IDENTITY)
+	@Column(name = "ROLE_ID")
+	@Getter
+	@Setter
+	private Long roleId;
+
+	@Column(name = "TYPE")
+	@Getter
+	@Setter
+	private String type;
+	
+	
+	@Column(name = "DESCRIPTION")
+	@Getter
+	@Setter
+	private String typeDesc;
+	
+
+		
+	@OneToMany(fetch = FetchType.LAZY)
+	@JoinTable(name = "user_roles", 
+             joinColumns = { @JoinColumn(name = "ROLE_ID") }, 
+             inverseJoinColumns = { @JoinColumn(name = "USER_ID") })
+	@Getter
+	@Setter
+	private List<UserDomain> users = new ArrayList<UserDomain>();
+
+	
+	
+	@Getter
+	@Setter
+	@OneToMany(cascade=javax.persistence.CascadeType.ALL, fetch=FetchType.EAGER,  orphanRemoval = true)
+	@JoinColumn(name="ROLE_ID")
+	private List<RolePrivilegesDomain> roleModuleprivileges;
+	
+	@Column(name = "ROLE_LEVEL")
+	@Getter
+	@Setter
+	private Long roleLevel;
+	
+	
+	
+}

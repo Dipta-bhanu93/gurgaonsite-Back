@@ -1,0 +1,286 @@
+package com.dipta.project.dao.api.orm;
+
+
+import java.util.LinkedHashMap;
+import java.util.List;
+
+import javax.persistence.ParameterMode;
+
+import org.hibernate.Criteria;
+import org.hibernate.Query;
+import org.hibernate.criterion.Restrictions;
+import org.hibernate.procedure.ProcedureCall;
+import org.hibernate.type.StandardBasicTypes;
+
+import com.dipta.project.dao.api.IClientRequestedDao;
+import com.dipta.project.dao.base.AliasToEntityOrderedMapResultTransformer;
+import com.dipta.project.dao.base.orm.AbstractBaseDao;
+import com.dipta.project.domain.api.ClientDataDomain;
+import com.dipta.project.dto.user.CodApiRequestDto;
+import com.dipta.project.dto.user.OutputData;
+import com.dipta.project.exception.common.ObjectNotSupportedException;
+import com.dipta.project.exception.common.ProcessFailedException;
+import com.dipta.project.service.api.CodApiRequest;
+import com.dipta.project.utility.CommonUtils;
+import com.dipta.project.utility.constants.ApplicationConstants;
+
+public class ClientRequestedDaoImpl extends AbstractBaseDao implements IClientRequestedDao {
+	
+	public ClientRequestedDaoImpl() {
+		this(ApplicationConstants.SUPERUSEREMAIL.getValue());
+	}
+	
+	public ClientRequestedDaoImpl(String userEmail) {
+		super(userEmail);
+	}
+	
+	
+	public ClientRequestedDaoImpl(Long tenantID) {
+		super(tenantID);
+	}
+	
+	
+
+	@Override
+	public CodApiRequestDto executeClientRequestedData(CodApiRequestDto codApiRequests) throws ProcessFailedException{
+		String matgQuery = "SELECT QUERY FROM FILE_GENERATION_QUERY WHERE USERID='"+codApiRequests.getAccessToken()+"' AND MATCH_STATUS ='MATG'";
+		String matgoutputQuery=null;
+		try {
+			beginTransaction();
+			insertClientData(codApiRequests);
+			
+			ProcedureCall procCall = hibernatePersistenceManager.getTenantProcedureCall("PROC_BOFA_MATG ");
+			procCall.registerParameter(1, Long.class, ParameterMode.IN).bindValue(codApiRequests.getAccessToken());
+			procCall.registerParameter(2, String.class, ParameterMode.IN).bindValue(codApiRequests.getMatchingType());
+			procCall.getOutputs();
+			matgoutputQuery = (String) hibernatePersistenceManager.createSQLQuery(matgQuery).addScalar("QUERY", StandardBasicTypes.STRING).uniqueResult();
+            codApiRequests=getClientData(codApiRequests);
+			
+			if(matgoutputQuery!=null){
+				Query query = hibernatePersistenceManager.createSQLQuery(matgoutputQuery);
+				query.setResultTransformer(AliasToEntityOrderedMapResultTransformer.INSTANCE);
+				List<LinkedHashMap<String,Object>> records = query.list();
+				setInnerJoinSet(codApiRequests,records,"MATG");
+			}
+			endTransaction();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return codApiRequests;
+	}
+	
+	private CodApiRequestDto insertClientData(CodApiRequestDto codApiRequestDto) throws ObjectNotSupportedException{
+		for(CodApiRequest codApiRequest:codApiRequestDto.getCodApiRequests()){
+			if(codApiRequestDto.getMatchingType().equalsIgnoreCase("CDID")){
+				codApiRequest.setUniqueId(codApiRequest.getCdid());
+			}
+			if(codApiRequestDto.getMatchingType().equalsIgnoreCase("LEI")){
+				codApiRequest.setUniqueId(codApiRequest.getLeiCode());
+			}
+			ClientDataDomain clientDataDomain = CommonUtils.convertObject(codApiRequest, ClientDataDomain.class);
+			clientDataDomain.setUserID(codApiRequestDto.getAccessToken());
+			hibernatePersistenceManager.save(clientDataDomain);
+		}
+		return codApiRequestDto;
+	}
+	
+	private CodApiRequestDto getClientData(CodApiRequestDto codApiRequestDto) throws ObjectNotSupportedException{
+		codApiRequestDto.getCodApiRequests().clear();
+		Criteria clientdatacCriteria = hibernatePersistenceManager.createCriteria(ClientDataDomain.class);
+		clientdatacCriteria.add(Restrictions.eq("userID", codApiRequestDto.getAccessToken()));
+		List<ClientDataDomain> result = clientdatacCriteria.list();
+		for(ClientDataDomain clientDataDomain:result){
+			CodApiRequest codApiRequest = CommonUtils.convertObject(clientDataDomain, CodApiRequest.class);
+			codApiRequestDto.getCodApiRequests().add(codApiRequest);
+		}
+		return codApiRequestDto;
+	}
+	
+	private void setInnerJoinSet(CodApiRequestDto codApiRequestDto,List<LinkedHashMap<String,Object>> records,String status){
+		for(CodApiRequest codApiRequest:codApiRequestDto.getCodApiRequests()){
+			OutputData output=setAbstractedRecords(codApiRequest,records,status);
+			if(output!=null){
+				output.setRecordsCount(output.getEnrichedRecords().size());
+				codApiRequestDto.getOutputData().add(output);
+			}
+		}
+	}
+	
+	
+	
+	private OutputData setAbstractedRecords(CodApiRequest codApiRequestDto,List<LinkedHashMap<String,Object>> records,String status){
+		OutputData outputData=null;
+		switch(status){
+		case "MATG":
+			for(LinkedHashMap<String,Object> obj:records){
+				
+				if(obj.get("ID") !=null && Long.parseLong(String.valueOf(obj.get("ID")))== codApiRequestDto.getId()){	
+					outputData=new OutputData();
+					outputData.setInputRequest(codApiRequestDto);
+					outputData.setMatchStatus("EXACT");
+					outputData.getEnrichedRecords().add(obj);
+					break;
+				}
+			}
+			break;
+		case "MATP":
+			boolean flag=false;
+			for(LinkedHashMap<String,Object> obj:records){
+				if(obj.get("ID") !=null && Long.parseLong(String.valueOf(obj.get("ID")))== codApiRequestDto.getId()){	
+						if(!flag){
+						outputData=new OutputData();
+						outputData.setInputRequest(codApiRequestDto);
+						outputData.setMatchStatus("PROBABLE");
+						flag=true;
+					}
+					outputData.getEnrichedRecords().add(obj);
+				}
+			}	
+			break;
+		case "MATE":
+			for(LinkedHashMap<String,Object> obj:records){
+				if(obj.get("ID") !=null && Long.parseLong(String.valueOf(obj.get("ID")))== codApiRequestDto.getId()){	
+						outputData=new OutputData();
+					outputData.setInputRequest(codApiRequestDto);
+					outputData.setMatchStatus("NO MATCH");
+					outputData.getEnrichedRecords().add(obj);
+					break;
+				}
+				
+			}	
+			break;	
+		}
+		return outputData;
+	}
+	
+	
+	
+	
+	@Override
+	public CodApiRequestDto matchingRequestedData(CodApiRequestDto codApiRequests) throws ProcessFailedException{
+		String matgQuery = "SELECT QUERY FROM FILE_GENERATION_QUERY WHERE USERID=:accessToken AND MATCH_STATUS ='MATG'";
+		String matpQuery = "SELECT QUERY FROM FILE_GENERATION_QUERY WHERE USERID=:accessToken AND MATCH_STATUS ='MATP'";
+		String mateQuery = "SELECT QUERY FROM FILE_GENERATION_QUERY WHERE USERID=:accessToken AND MATCH_STATUS ='MATE'";
+		String matpoutputQuery=null;
+		String mateoutputQuery=null;
+		String matgoutputQuery=null;
+		try {
+			beginTransaction();
+			
+			// Set Input records with Requested Object
+			codApiRequests=getClientData(codApiRequests);
+						
+			List<String> queryResult = hibernatePersistenceManager.createSQLQuery(matgQuery).setLong("accessToken",codApiRequests.getAccessToken()).list();
+			for(String v : queryResult){
+				matgoutputQuery=v;
+			}
+			if(matgoutputQuery!=null){
+				Query query = hibernatePersistenceManager.createSQLQuery(matgoutputQuery);
+				query.setResultTransformer(AliasToEntityOrderedMapResultTransformer.INSTANCE);
+				List<LinkedHashMap<String,Object>> records = query.list();
+				setInnerJoinSet(codApiRequests,records,"MATG");
+				//codApiRequests.setEnrichedRecords(records);
+			}
+			
+			
+			queryResult = hibernatePersistenceManager.createSQLQuery(matpQuery).setLong("accessToken",codApiRequests.getAccessToken()).list();
+			for(String v : queryResult){
+				matpoutputQuery=v;
+			}
+			if(matpoutputQuery!=null){
+				Query query = hibernatePersistenceManager.createSQLQuery(matpoutputQuery);
+				query.setResultTransformer(AliasToEntityOrderedMapResultTransformer.INSTANCE);
+				List<LinkedHashMap<String,Object>> records = query.list();
+				setInnerJoinSet(codApiRequests,records,"MATP");
+				//codApiRequests.setPotentialRecords(records);
+			}
+			
+			queryResult = hibernatePersistenceManager.createSQLQuery(mateQuery).setLong("accessToken",codApiRequests.getAccessToken()).list();
+			for(String v : queryResult){
+				mateoutputQuery=v;
+			}
+			if(mateoutputQuery!=null){
+				Query query = hibernatePersistenceManager.createSQLQuery(mateoutputQuery);
+				query.setResultTransformer(AliasToEntityOrderedMapResultTransformer.INSTANCE);
+				List<LinkedHashMap<String,Object>> records = query.list();
+				//codApiRequests.setNoEnrichedRecords(records);
+				setInnerJoinSet(codApiRequests,records,"MATE");
+				
+			}
+			endTransaction();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return codApiRequests;
+	}
+	
+	
+	/*
+	@Override
+	public boolean insertEnrichRecords(List<CodApiRequest> codApiRequests,long userID) throws ObjectNotSupportedException{
+		boolean process=false;
+		try{
+			beginTransaction();
+			for(CodApiRequest codApiRequest:codApiRequests){
+				ClientDataDomain clientDataDomain = CommonUtils.convertObject(codApiRequest, ClientDataDomain.class);
+				clientDataDomain.setUserID(userID);
+				hibernatePersistenceManager.save(clientDataDomain);
+			}
+			process=true;
+		}catch(Exception exception){
+			exception.printStackTrace();
+			hibernatePersistenceManager.rollback();
+			process=false;
+		}finally{
+			endTransaction();
+		}
+		return process;
+	}
+	
+	@Override
+	public boolean executeTablePortision(long accessToken) throws ObjectNotSupportedException{
+		try {
+			beginTransaction();
+			ProcedureCall procCall = hibernatePersistenceManager.getProcedureCall("PROC_USER_CREATE");
+			procCall.registerParameter(1, Long.class, ParameterMode.IN).bindValue(accessToken);
+			procCall.getOutputs();
+			endTransaction();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return true;
+	}
+	
+	@Override
+	public boolean executePreMATGProcess(long accessToken) throws ObjectNotSupportedException{
+		try {
+			beginTransaction();
+			ProcedureCall procCall = hibernatePersistenceManager.getProcedureCall("PROC_BOFA_MATG ");
+			procCall.registerParameter(1, Long.class, ParameterMode.IN).bindValue(accessToken);
+			procCall.getOutputs();
+			endTransaction();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return true;
+	}*/
+	
+	@Override
+	public boolean executePostMATGProcess(long accessToken, String matchingType) throws ObjectNotSupportedException{
+		try {
+			beginTransaction();
+			ProcedureCall procCall = hibernatePersistenceManager.getTenantProcedureCall("PROC_BOFA_MATP");
+			procCall.registerParameter(1, Long.class, ParameterMode.IN).bindValue(accessToken);
+			procCall.registerParameter(2, String.class, ParameterMode.IN).bindValue(matchingType);
+			procCall.getOutputs();
+			endTransaction();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return true;
+	}
+	
+	
+	
+	
+}

@@ -1,0 +1,109 @@
+package com.dipta.project.domain.crossReference;
+
+import java.sql.Timestamp;
+
+import javax.persistence.CascadeType;
+import javax.persistence.Column;
+import javax.persistence.Entity;
+import javax.persistence.FetchType;
+import javax.persistence.GeneratedValue;
+import javax.persistence.GenerationType;
+import javax.persistence.Id;
+import javax.persistence.JoinColumn;
+import javax.persistence.ManyToOne;
+import javax.persistence.OneToOne;
+import javax.persistence.SequenceGenerator;
+import javax.persistence.Table;
+
+import lombok.Getter;
+import lombok.Setter;
+
+/**
+ * @author Ashish.Patel
+ *
+ */
+@Entity
+@Table(name = "REPLACE_TRANSFORM_PERFORM")
+public class ReplaceTransformPerformDomain {
+	
+	@Getter                   
+	@Setter                   
+	@Id
+	@Column(name = "ID")
+	@GeneratedValue(strategy=GenerationType.AUTO, generator="SEQ_replace_transform_perform")
+	@SequenceGenerator(name="SEQ_replace_transform_perform", sequenceName="SEQ_replace_transform_perform")
+	private Long id;
+	
+	@Getter                   
+	@Setter                   
+	@Column(name = "TRANSFORM_PERFORM_ORDER")
+	private Long transformPerformOrder;
+	
+	@Getter                   
+	@Setter                   
+	@Column(name = "TRANS_DEF_SET_ID")
+	private Long transformMapId;
+	
+	@Getter                   
+	@Setter                   
+	@Column(name = "REPLACE_CATEGORY_ID")
+	private Long replaceCategoryid;
+	
+	@Getter                   
+	@Setter                   
+	@OneToOne(cascade = CascadeType.ALL)
+	@JoinColumn(name = "RULE_ID",insertable=false, updatable=false) 
+	private TransRulesDomain ruleDomain;
+	
+	@Getter                   
+	@Setter                   
+	@Column(name = "RULE_ID")
+	private Long ruleId;
+	
+	@Getter
+	@Setter
+	@Column(name = "TRANS_DEF_SET_NAME")
+	private String transformSetName;
+	
+	@Getter
+	@Setter
+	@Column(name = "RULE_STATUS")
+	private String ruleStatus;
+	
+	@Getter
+	@Setter
+	@Column(name = "REMARKS")
+	private String remarks;
+	
+	@Getter
+	@Setter
+	@Column(name = "RULE_TABLE_NAME")
+	private String ruleTableName;
+	
+	@Getter
+	@Setter
+	@Column(name = "USERCREATED")
+	private String userIdCreated;
+	
+	@Getter                   
+	@Setter                   
+	@Column(name = "DATECREATED")
+	private Timestamp dateCreated;  
+	
+	@Getter                   
+	@Setter                   
+	@Column(name = "USERMODIFIED")
+	private String userIdModified;  
+	
+	@Getter                   
+	@Setter                   
+	@Column(name = "DATEMODIFIED")
+	private Timestamp dateModified;
+	
+	@Getter
+	@Setter
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "SRC_TRGT_ID", nullable=false)
+	private SourceTargetInfoDomain sourceTargetInfoDomain = new SourceTargetInfoDomain();
+
+}

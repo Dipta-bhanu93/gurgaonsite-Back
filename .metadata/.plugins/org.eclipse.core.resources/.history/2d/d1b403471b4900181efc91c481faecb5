@@ -1,0 +1,140 @@
+package com.dipta.project.report;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+
+import com.lei.dto.crossReference.ProjectFeedDto;
+import com.lei.dto.file.FileDto;
+import com.lei.dto.user.UserDTO;
+import com.lei.dto.workflow.ProjectDTO;
+import com.lei.exception.common.EmailException;
+import com.lei.exception.common.ObjectNotSupportedException;
+import com.lei.exception.common.ProcessFailedException;
+import com.lei.exception.file.FileIdNotSupportedException;
+import com.lei.exception.project.ProjectConfigNotFoundException;
+import com.lei.exception.project.ProjectDoesNotExistsException;
+import com.lei.exception.project.ProjectIdNotSupportedException;
+import com.lei.exception.user.LoginIDFormatException;
+import com.lei.maintenance.file.FileMaintenanceImpl;
+import com.lei.maintenance.file.IFileMaintenance;
+import com.lei.maintenance.project.IProjectMaintenance;
+import com.lei.maintenance.project.ProjectMaintenanceImpl;
+import com.lei.maintenance.user.IUserMaintenance;
+import com.lei.maintenance.user.UserMaintenanceImpl;
+import com.lei.utility.MessageUtils;
+import com.lei.utility.constants.EmailEvent;
+import com.lei.utility.constants.MessageKeyConstants;
+import com.lei.utility.email.SendMail;
+import com.lei.utility.queue.QueueManager;
+import com.lei.utility.queue.jobcategory.ProjectBadRecordsReportGenerationProcess;
+import com.lei.utility.queue.jobcategory.ProjectCatalogGenerationProcess;
+import com.lei.utility.queue.jobcategory.ProjectReportGenerationProcess;
+import com.lei.utility.queue.jobcategory.ProjectXrefCriticalRecordsReportGeneration;
+
+public class ReportingEngine {
+
+	public boolean execute(ReportDataTable reportDataTable) throws ProcessFailedException, ObjectNotSupportedException, ProjectDoesNotExistsException, ProjectConfigNotFoundException, IOException, EmailException, NumberFormatException, ProjectIdNotSupportedException, FileIdNotSupportedException, LoginIDFormatException, InterruptedException, ExecutionException{
+		
+		ReportsComponentFactory componentFactory = new ReportsComponentFactory();
+//		System.out.println("Starting Report Engine");
+//		IReportGenerator reportGenerator = null;
+//		String[] reportsFormat = reportDataTable.getReportFormats();
+//		List<Long> reportFiles = new ArrayList<>();
+//		for (int i = 0; i < reportsFormat.length; i++) {
+//			
+//			reportGenerator = componentFactory.getReportGenerator(reportsFormat[i]);
+//			Long reportFile = reportGenerator.generateReport(reportDataTable);
+//			reportFiles.add(reportFile);
+//		}
+//		
+		IProjectMaintenance projectMaintenance = new ProjectMaintenanceImpl();
+		if(reportDataTable.getFeedList()!=null && reportDataTable.getFeedList().size()>0){
+			for(ProjectFeedDto obj :reportDataTable.getFeedList()){
+				projectMaintenance.setPreExecutionFiles(reportDataTable.getTenentEmail(), Long.valueOf(obj.getProjectId()), reportDataTable.getExecutedId(), obj.getFileId(), reportDataTable.getInputCatelogID());	
+			}
+		}else{
+			projectMaintenance.setPreExecutionFiles(reportDataTable.getTenentEmail(), Long.valueOf(reportDataTable.getProjectId()), reportDataTable.getExecutedId(), reportDataTable.getInputFileID(), reportDataTable.getInputCatelogID());	
+		}
+		
+		
+		String[] reportsFormat = reportDataTable.getReportFormats();
+		QueueManager queueManager = new QueueManager(reportsFormat.length);
+		List<Long> reportFiles = new ArrayList<>();
+		
+		ArrayList<Future<Long>> resultList= new ArrayList<>();
+		
+			for (int i = 0; i < reportsFormat.length; i++) {
+				Future<Long> futureObject = queueManager.submitJob(new ProjectReportGenerationProcess<Long>(reportDataTable, componentFactory.getReportGenerator(reportsFormat[i])));
+				resultList.add(futureObject);
+//				resultList.add(executor.submit(new ProjectReportGenerationProcess<Long>(reportDataTable, componentFactory.getReportGenerator(reportsFormat[i]))));
+			}
+		
+		if(reportDataTable.getBadRecords()!=null && reportDataTable.getBadRecords().size()>0){
+			Future<Long> futureObject = queueManager.submitJob(new ProjectBadRecordsReportGenerationProcess(reportDataTable));
+			resultList.add(futureObject);
+		}
+		
+		//gen catalog 
+		Future<Long> catalogFutureObject = null;
+		if(reportDataTable.getCatalogData()!=null){
+			catalogFutureObject = queueManager.submitJob(new ProjectCatalogGenerationProcess(reportDataTable));
+		}
+		
+		if(null != reportDataTable.getFeedCriticalRecords() && !reportDataTable.getFeedCriticalRecords().isEmpty()){
+			for (String feedType : reportDataTable.getFeedCriticalRecords().keySet()){
+				resultList.add(queueManager.submitJob(new ProjectXrefCriticalRecordsReportGeneration(reportDataTable, feedType)));
+			}
+		}
+		
+		queueManager.noMoreJobs();
+		
+		for(Future<Long> result:resultList){
+			reportFiles.add(result.get());	
+		}
+		
+		queueManager.forceStop();
+		if(reportDataTable.getCatalogData()!=null){
+			Long catalogFileId = catalogFutureObject.get();
+			projectMaintenance.setPreExecutionFiles(reportDataTable.getTenentEmail(), Long.valueOf(reportDataTable.getProjectId()), reportDataTable.getExecutedId(), reportDataTable.getInputFileID(), catalogFileId);
+		}
+		
+		
+		if(reportFiles.size()>0 && reportDataTable.getEmailMe()!=null && reportDataTable.getEmailMe().equalsIgnoreCase("Y")/*Y check*/){
+			IFileMaintenance fileMaintenance = new FileMaintenanceImpl();
+			String[] fileLocation = new String[reportFiles.size()];
+			String[] fileNames = new String[reportFiles.size()];
+			for(int index =0; index<reportFiles.size();index++){
+				FileDto fileDetails = fileMaintenance.getFileDetails(reportDataTable.getTenentEmail(),reportFiles.get(index));
+				fileLocation[index] = fileDetails.getFileLocation()+fileDetails.getId()+"."+fileDetails.getExtension();
+				fileNames[index]	= fileDetails.getFileName();
+			}
+			IUserMaintenance userMaintenance = new UserMaintenanceImpl();
+			
+			UserDTO user = null;
+			try{
+				user = userMaintenance.getUser(reportDataTable.getTenentEmail(), false);//getUserByProjectId(Long.valueOf(reportDataTable.getProjectId()));
+			}catch(Exception e){
+				throw new ProcessFailedException("Unable to fetch user details.");
+			}
+			ProjectDTO projectDetails = projectMaintenance.getProject(reportDataTable.getTenentEmail(),Long.valueOf(reportDataTable.getProjectId()));
+			
+			
+			String emailBody = MessageUtils.getMessage(MessageKeyConstants.PROJECTREPORTSUCCESS.getKey(), user.getFirstName(),projectDetails.getProjectName());
+			try{
+			SendMail.sendMail(EmailEvent.PROJECTREPORT.getEvent(), user.getEmail(), null, emailBody, fileLocation,fileNames,user);
+//			SendMail.sendMail(EmailEvent.PROJECTREPORT.getEvent(), user.getEmail(), null, emailBody, fileLocation,fileNames);
+			}catch(EmailException e){
+				e.printStackTrace();
+				
+			}
+		}
+		
+		return true;
+		
+	}
+	
+	
+}

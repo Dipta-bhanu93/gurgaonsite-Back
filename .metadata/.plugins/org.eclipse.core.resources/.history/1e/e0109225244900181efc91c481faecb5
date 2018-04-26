@@ -1,0 +1,2377 @@
+package com.dipta.project.dao.crossReference.orm;
+
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.Date;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Set;
+
+import javax.persistence.ParameterMode;
+
+import lombok.extern.slf4j.Slf4j;
+
+import org.hibernate.Criteria;
+import org.hibernate.Hibernate;
+import org.hibernate.criterion.Order;
+import org.hibernate.criterion.Restrictions;
+import org.hibernate.procedure.ProcedureCall;
+import org.hibernate.transform.Transformers;
+import org.hibernate.type.StandardBasicTypes;
+import org.springframework.stereotype.Repository;
+
+import com.lei.dao.base.DaoManager;
+import com.lei.dao.base.orm.AbstractBaseDao;
+import com.lei.dao.crossReference.ICrossRefDao;
+import com.lei.dao.project.IProjectDao;
+import com.lei.dao.user.IUserDao;
+import com.lei.domain.crossReference.EtlFeedMatchingDetailDomain;
+import com.lei.domain.crossReference.EtlFileMetaDataDomain;
+import com.lei.domain.crossReference.EtlIDRuleDetailDomain;
+import com.lei.domain.crossReference.EtlIDRuleMasterDomain;
+import com.lei.domain.crossReference.EtlMatchMasterColumnsDomain;
+import com.lei.domain.crossReference.EtlMatchingColumnDetailDomain;
+import com.lei.domain.crossReference.EtlMatchingScoreDetailDomain;
+import com.lei.domain.crossReference.EtlPrestageMapDomain;
+import com.lei.domain.crossReference.EtlPrestageMasterDomain;
+import com.lei.domain.crossReference.EtlStageFieldMapDomain;
+import com.lei.domain.crossReference.EtlTransformMapDomain;
+import com.lei.domain.crossReference.FeedMasterDomain;
+import com.lei.domain.crossReference.ProjectFeedDomain;
+import com.lei.domain.crossReference.ReplaceCategoryDomain;
+import com.lei.domain.crossReference.ReplaceTransformPerformDomain;
+import com.lei.domain.crossReference.SourceTargetInfoDomain;
+import com.lei.domain.file.ClientFeedDomain;
+import com.lei.domain.project.ProjectConfigXrefDomain;
+import com.lei.domain.project.UserProjectDomain;
+import com.lei.domain.user.StatusDomain;
+import com.lei.dto.crossReference.BuiltInFunctionCategoryRulesData;
+import com.lei.dto.crossReference.CategoryRulesData;
+import com.lei.dto.crossReference.CountryCodeCategoryRulesData;
+import com.lei.dto.crossReference.EtlFeedMatchingDetailDto;
+import com.lei.dto.crossReference.EtlFileMetaDataDto;
+import com.lei.dto.crossReference.EtlIDRuleDetailDto;
+import com.lei.dto.crossReference.EtlIDRuleMasterDto;
+import com.lei.dto.crossReference.EtlMatchMasterColumnsCollectionDto;
+import com.lei.dto.crossReference.EtlMatchMasterColumnsDto;
+import com.lei.dto.crossReference.EtlMatchingColumnDetailDto;
+import com.lei.dto.crossReference.EtlMatchingScoreDetailDto;
+import com.lei.dto.crossReference.EtlPrestageMapDto;
+import com.lei.dto.crossReference.EtlPrestageMasterDto;
+import com.lei.dto.crossReference.EtlStageFieldMapDto;
+import com.lei.dto.crossReference.EtlTransformMasterDto;
+import com.lei.dto.crossReference.FeedMasterDto;
+import com.lei.dto.crossReference.FeedMasterDtoCollection;
+import com.lei.dto.crossReference.ProjectFeedDto;
+import com.lei.dto.crossReference.ReplaceCategoryCollection;
+import com.lei.dto.crossReference.ReplaceCategoryDto;
+import com.lei.dto.crossReference.ReplaceTransformDto;
+import com.lei.dto.crossReference.SourceTargetInfoDto;
+import com.lei.dto.crossReference.TransRuleDto;
+import com.lei.dto.project.config.ProjectConfigXrefDto;
+import com.lei.dto.user.UserDTO;
+import com.lei.dto.workflow.ProjectDTO;
+import com.lei.exception.common.ObjectNotSupportedException;
+import com.lei.exception.common.ProcessFailedException;
+import com.lei.exception.crossReference.DuplicateFeedTypeException;
+import com.lei.exception.crossReference.DuplicateMappingNameException;
+import com.lei.utility.CommonUtils;
+import com.lei.utility.constants.ApplicationConstants;
+import com.lei.utility.constants.CommonConstants;
+import com.lei.utility.constants.FileConstants;
+import com.lei.utility.constants.StatusConstants;
+
+/**
+ * @author Ashish.Patel
+ * 
+ */
+
+@Slf4j
+@Repository("crossRefDao")
+public class CrossRefDaoImpl extends AbstractBaseDao implements ICrossRefDao {
+
+	private static final String Yes = "ENABLE";
+
+	public CrossRefDaoImpl() {
+		this(ApplicationConstants.SUPERUSEREMAIL.getValue());
+	}
+
+	public CrossRefDaoImpl(String tenantEmail) {
+		super(tenantEmail);
+	}
+
+	public CrossRefDaoImpl(Long tenantId) {
+		super(tenantId);
+	}
+
+	private static final String CLASSNAME = "CrossRefDaoImpl";
+	private static final String EXCEPTION = "Exception in CrossRefDaoImpl";
+	
+	private static final StringBuilder COUNTRYCODERULESQUERY = new StringBuilder(" select crc.REPLACE_CATEGORY_ID as replaceCategoryId, ctr.RULE_DESC as ruleDesc,ctr.RULE_TABLE_NAME as ruleTableName,ctr.RULE_ID as ruleId,rc.MASTER_JOIN_COL_NAME as masterJoinColName,rc.MASTER_CODE_COL_NAME as masterCodeColName from  ")
+	.append(" CDI_REPLACE_CATEGORY crc, CDI_TRANS_RULES ctr, CDI_REPLACE_CODE rc ")
+	.append(" where crc.REPLACE_CATEGORY_ID = :categoryId and ctr.REPLACE_CATEGORY_ID = :categoryId and rc.REPLACE_CATEGORY_ID = :categoryId and ctr.RULE_ID = rc.RULE_ID order by ctr.RULE_ID ");
+	
+	private static final StringBuilder BUILTINFUNCTIONQUERY = new StringBuilder(" select crc.REPLACE_CATEGORY_ID as replaceCategoryId, ctr.RULE_DESC as ruleDesc,ctr.RULE_TABLE_NAME as ruleTableName,ctr.RULE_ID as ruleId,caff.FUNCTION_NAME as functionName from  ")
+	.append(" CDI_REPLACE_CATEGORY crc, CDI_TRANS_RULES ctr, CDI_APPLY_FORMAT_FUNCTIONS caff ")
+	.append(" where crc.REPLACE_CATEGORY_ID = :categoryId and ctr.REPLACE_CATEGORY_ID = :categoryId and caff.REPLACE_CATEGORY_ID = :categoryId and ctr.RULE_ID = caff.RULE_ID order by ctr.RULE_ID ");
+	
+	private static final StringBuilder CATEGORYRULESQUERY = new StringBuilder(" select crc.REPLACE_CATEGORY_ID as replaceCategoryId, ctr.RULE_DESC as ruleDesc,ctr.RULE_TABLE_NAME as ruleTableName,ctr.RULE_ID as ruleId,crr.REPLACE_TEXT as replaceText,crr.REPLACE_TEXT_WITH as replaceTextWith,crr.REPLACE_POSITION as replacePosition from ")
+	.append(" CDI_REPLACE_CATEGORY crc, CDI_TRANS_RULES ctr, CDI_REPLACE_RULE crr ")
+	.append(" where crc.REPLACE_CATEGORY_ID = :categoryId and ctr.REPLACE_CATEGORY_ID = :categoryId and crr.REPLACE_CATEGORY_ID = :categoryId and ctr.RULE_ID = crr.RULE_ID order by ctr.RULE_ID ");
+	
+
+	@Override
+	public boolean addFeed(String userEmail, FeedMasterDto feedMasterDto) throws ProcessFailedException, ObjectNotSupportedException {
+		final String methodName = "addFeed";
+		log.info("Inside " + methodName + " method of " + CLASSNAME);
+		boolean result = false;
+		ProjectFeedDomain projectFeedDomain = null;
+		StatusDomain statusDomain = null;
+		FeedMasterDomain feedMasterDomain = null;
+		EtlFileMetaDataDomain etlFileMetaDataDomain = null;
+		UserProjectDomain userProjectDomain = null;
+		try {
+			if (null != feedMasterDto) {
+				
+				beginTransaction();
+				
+				Criteria criteria = createCriteria(UserProjectDomain.class);
+				criteria.add(Restrictions.eq("id",CommonConstants.DEFAULT_PROJECT_ID));
+				userProjectDomain = (UserProjectDomain) criteria.uniqueResult();
+
+				IUserDao iUserDao = DaoManager.USER.getDao(userEmail,IUserDao.class);
+				UserDTO userDTO = iUserDao.getUser(userEmail, false);
+				statusDomain = hibernatePersistenceManager.getFromSession(StatusDomain.class, StatusConstants.IDLE.getID());
+				
+				feedMasterDomain = CommonUtils.convertObject(feedMasterDto,FeedMasterDomain.class);
+
+				feedMasterDomain.setDateCreated(new Timestamp(new Date().getTime()));
+				feedMasterDomain.setClientId(userDTO.getCompanyId());
+				feedMasterDomain.setUserIdCreated(String.valueOf(userDTO.getId()));
+				feedMasterDomain = (FeedMasterDomain) hibernatePersistenceManager.saveOrUpdate(feedMasterDomain);
+
+				etlFileMetaDataDomain = CommonUtils.convertObject(feedMasterDto.getEtlFileMetaDataDto(),EtlFileMetaDataDomain.class);
+				etlFileMetaDataDomain.setFeedMasterDomain(feedMasterDomain);
+				etlFileMetaDataDomain.setUserIdCreated(String.valueOf(userDTO.getId()));
+				etlFileMetaDataDomain.setDateCreated(new Timestamp(new Date().getTime()));
+				etlFileMetaDataDomain = (EtlFileMetaDataDomain) hibernatePersistenceManager.saveOrUpdate(etlFileMetaDataDomain);
+
+				projectFeedDomain = new ProjectFeedDomain();
+				if (null != userProjectDomain) {
+					projectFeedDomain.setUserProject(userProjectDomain);
+				}
+				projectFeedDomain.setUserProject(userProjectDomain);
+				projectFeedDomain.setFeedMasterDomain(feedMasterDomain);
+				projectFeedDomain.setDateCreated(new Timestamp(new Date().getTime()));
+				projectFeedDomain.setUserIdCreated(String.valueOf(userDTO.getId()));
+				if (null != statusDomain) {
+					projectFeedDomain.setStatusDomain(statusDomain);
+				}
+				hibernatePersistenceManager.saveOrUpdate(projectFeedDomain);
+
+				endTransaction();
+				result = true;
+
+			} else {
+				log.info("feedMasterDto Found Null");
+				result = false;
+			}
+		} catch (Exception e) {
+			result = false;
+			log.error(EXCEPTION, e);
+			rollBack();
+			throw new ProcessFailedException("addFeed Process Failed.");
+		}
+		return result;
+	}
+
+	@Override
+	public ProjectDTO getFeedListByProjectId(String userEmail,long projectId) {
+		final String methodName = "getFeedListByProjectId";
+		log.info("Inside " + methodName + " method of " + CLASSNAME);
+		Criteria criteria = null;
+		List<FeedMasterDto> feedMasterDtos = new ArrayList<>();
+		ProjectDTO projectDTO = new ProjectDTO();
+		try {
+			if (projectId != CommonConstants.DEFAULT_PROJECT_ID) {
+				beginTransaction();
+				criteria = createCriteria(UserProjectDomain.class);
+				criteria.add(Restrictions.eq("id", projectId));
+				UserProjectDomain projectDomain = (UserProjectDomain)criteria.uniqueResult();
+				if(null != projectDomain){
+					projectDTO = CommonUtils.convertObject(projectDomain, ProjectDTO.class);
+					List<ProjectFeedDomain> projectFeedDomains = projectDomain.getProjectFeedDetailsSet();
+					if (null != projectFeedDomains && !projectFeedDomains.isEmpty()) {
+						for (ProjectFeedDomain projectFeedDomain : projectFeedDomains) {
+							FeedMasterDomain feedMasterDomain = projectFeedDomain.getFeedMasterDomain();
+							FeedMasterDto feedMasterDto = CommonUtils.convertObject(feedMasterDomain,FeedMasterDto.class);
+							feedMasterDto.setEtlFileMetaDataDto(CommonUtils.convertObject(feedMasterDomain.getEtlFileMetaDataDomain(),EtlFileMetaDataDto.class));
+							feedMasterDto.setFeedFileStatus(getClientFeedFileStatus(projectId, feedMasterDomain.getFeedType(), projectFeedDomain.getFileId()));
+							
+							criteria = createCriteria(ProjectFeedDomain.class);
+							criteria.add(Restrictions.and(
+									Restrictions.ne("userProject.id", projectId),
+									Restrictions.ne("userProject.id", CommonConstants.DEFAULT_PROJECT_ID),
+									Restrictions.eq("feedMasterDomain.feedid",feedMasterDomain.getFeedid())
+								));
+							boolean feedUsableForProject = true;
+							List<ProjectFeedDomain> projectDmnList = criteria.list();
+							IProjectDao projectDao = DaoManager.PROJECTDAO.getDao(userEmail, IProjectDao.class);
+							for (ProjectFeedDomain projectDmn : projectDmnList) {
+								ProjectDTO projectObj = projectDao.getPojectStatusbyProjectIds(userEmail, String.valueOf(projectDmn.getUserProject().getId()));
+								if(null != projectObj && null != projectObj.getProjectStatusMap() && "INPROGRESS".equalsIgnoreCase(projectObj.getProjectStatusMap().get(String.valueOf(projectDmn.getUserProject().getId())))){
+									feedUsableForProject = false;
+									break;
+								}else if(projectDmn.getStatusDomain().getId()>=StatusConstants.XREF_MATCHING_SAVED.getID() && projectDmn.getStatusDomain().getId()<=StatusConstants.XREF_ATTRIB_CONFIG_SAVED.getID()){
+									feedUsableForProject = false;
+									break;
+								}
+							}
+							
+							feedMasterDto.setFeedUsableForProject(feedUsableForProject);
+							feedMasterDto.setFeedCurrentStatus(projectFeedDomain.getStatusDomain().getId());
+							feedMasterDtos.add(feedMasterDto);
+						}
+						
+						// sort dtos by feedid asc
+						if(feedMasterDtos!=null){
+							Collections.sort(feedMasterDtos, new Comparator<FeedMasterDto>(){
+								   public int compare(FeedMasterDto o1, FeedMasterDto o2){
+								      return new Long(o1.getFeedid() - o2.getFeedid()).intValue();
+								   }
+								});	
+						}
+						
+						
+						projectDTO.setFeedMasterDtos(feedMasterDtos);
+					} else {
+						log.info("projectFeedDomains Found null");
+					}
+				}
+			} else {
+				beginTransaction();
+				criteria = createCriteria(ProjectFeedDomain.class);
+				criteria.add(Restrictions.eq("userProject.id", projectId));
+				List<ProjectFeedDomain> projectFeedDomains = criteria.list();
+				if (null != projectFeedDomains && !projectFeedDomains.isEmpty()) {
+					for (ProjectFeedDomain projectFeedDomain : projectFeedDomains) {
+						FeedMasterDomain feedMasterDomain = projectFeedDomain.getFeedMasterDomain();
+						FeedMasterDto feedMasterDto = CommonUtils.convertObject(feedMasterDomain,FeedMasterDto.class);
+						feedMasterDto.setEtlFileMetaDataDto(CommonUtils.convertObject(feedMasterDomain.getEtlFileMetaDataDomain(),EtlFileMetaDataDto.class));
+						feedMasterDto.setFeedFileStatus(getClientFeedFileStatus(projectId, feedMasterDomain.getFeedType(), projectFeedDomain.getFileId()));
+						
+						//New
+						criteria = createCriteria(ProjectFeedDomain.class);
+						criteria.add(Restrictions.and(
+								Restrictions.ne("userProject.id", projectId),
+								Restrictions.eq("feedMasterDomain.feedid",feedMasterDomain.getFeedid())
+							));
+						boolean feedUsableForProject = true;
+						List<ProjectFeedDomain> projectDmnList = criteria.list();
+						IProjectDao projectDao = DaoManager.PROJECTDAO.getDao(userEmail, IProjectDao.class);
+						for (ProjectFeedDomain projectDmn : projectDmnList) {
+							ProjectDTO projectObj = projectDao.getPojectStatusbyProjectIds(userEmail, String.valueOf(projectDmn.getUserProject().getId()));
+							if(null != projectObj && null != projectObj.getProjectStatusMap() && "INPROGRESS".equalsIgnoreCase(projectObj.getProjectStatusMap().get(String.valueOf(projectDmn.getUserProject().getId())))){
+								feedUsableForProject = false;
+								break;
+							}else if(projectDmn.getStatusDomain().getId()>=StatusConstants.XREF_MATCHING_SAVED.getID() && projectDmn.getStatusDomain().getId()<=StatusConstants.XREF_ATTRIB_CONFIG_SAVED.getID()){
+								feedUsableForProject = false;
+								break;
+							}
+						}
+						
+						feedMasterDto.setFeedUsableForProject(feedUsableForProject);
+						feedMasterDto.setFeedCurrentStatus(projectFeedDomain.getStatusDomain().getId());
+						
+						feedMasterDtos.add(feedMasterDto);
+					}
+					
+					// sort dtos by feedid asc
+					if(feedMasterDtos!=null){
+						Collections.sort(feedMasterDtos, new Comparator<FeedMasterDto>(){
+							   public int compare(FeedMasterDto o1, FeedMasterDto o2){
+							      return new Long(o1.getFeedid() - o2.getFeedid()).intValue();
+							   }
+							});	
+					}
+					
+					projectDTO.setFeedMasterDtos(feedMasterDtos);
+				} else {
+					log.info("projectFeedDomains Found null");
+				}
+				projectDTO.setId(projectId);
+			}
+			endTransaction();
+		} catch (Exception e) {
+			log.error(EXCEPTION, e);
+		}
+		return projectDTO;
+	}
+	
+	@Override
+	public FeedMasterDto getFeedInfoByFeedId(String userEmail, long feedId) {
+		final String methodName = "getFeedInfoByFeedId";
+		log.info("Inside " + methodName + " method of " + CLASSNAME);
+		FeedMasterDto feedMasterDto = new FeedMasterDto();
+		try {
+			if (feedId > 0) {
+				beginTransaction();
+				FeedMasterDomain feedMasterDomain = (FeedMasterDomain) hibernatePersistenceManager.getPersistentObject(FeedMasterDomain.class, feedId);
+				if (null != feedMasterDomain) {
+					feedMasterDto = CommonUtils.convertObject(feedMasterDomain,FeedMasterDto.class);
+					feedMasterDto.setEtlFileMetaDataDto(CommonUtils.convertObject(feedMasterDomain.getEtlFileMetaDataDomain(),EtlFileMetaDataDto.class));
+				} else {
+					log.info("feedMasterDomain found Null");
+				}
+				endTransaction();
+			} else {
+				log.info("feedId Found 0");
+			}
+		} catch (Exception e) {
+			log.error(EXCEPTION, e);
+		}
+		return feedMasterDto;
+	}
+
+	@Override
+	public FeedMasterDtoCollection getAvailableFeedForDropDown(String userEmail) {
+		final String methodName = "getAvailableFeedForDropDown";
+		log.info("Inside " + methodName + " method of " + CLASSNAME);
+		FeedMasterDto feedMasterDto = null;
+		List<FeedMasterDto> feedMasterDtoList = new ArrayList<>();
+		Criteria criteria = null;
+		FeedMasterDtoCollection feedMasterDtoCollection = new FeedMasterDtoCollection();
+		try {
+			IUserDao iUserDao = DaoManager.USER.getDao(userEmail,IUserDao.class);
+			UserDTO userDTO = iUserDao.getUser(userEmail, false);
+			beginTransaction();
+			criteria = createCriteria(FeedMasterDomain.class);
+			criteria.add(Restrictions.ne("feedType",CommonConstants.CUSTOMER_ENRICHMENT_FEED)); 
+			criteria.add(Restrictions.ne("feedType",CommonConstants.SECURITY_MAP_FEED)); 
+			criteria.add(Restrictions.not(Restrictions.in("feedType",CommonConstants.HIE_PRO_FEED)));
+			criteria.addOrder(Order.asc("feedType")); 
+			
+			List<FeedMasterDomain> feedMasterDomains = criteria.list();
+			if (null != feedMasterDomains && !feedMasterDomains.isEmpty()) {
+				for (FeedMasterDomain feedMasterDomain : feedMasterDomains) {
+					criteria = createCriteria(ProjectFeedDomain.class);
+					criteria.add(Restrictions.eq("feedMasterDomain.feedid",feedMasterDomain.getFeedid()));
+					List<ProjectFeedDomain> projectFeedDomains = criteria.list();
+					if (null != projectFeedDomains && !projectFeedDomains.isEmpty()) {
+						if (checkFeedAvailableOrNot(userEmail, projectFeedDomains)) {
+							feedMasterDto = new FeedMasterDto();
+							feedMasterDto.setFeedid(feedMasterDomain.getFeedid());
+							feedMasterDto.setFeedType(feedMasterDomain.getFeedType());
+							feedMasterDtoList.add(feedMasterDto);
+						}
+					}else{
+						feedMasterDto = new FeedMasterDto();
+						feedMasterDto.setFeedid(feedMasterDomain.getFeedid());
+						feedMasterDto.setFeedType(feedMasterDomain.getFeedType());
+						feedMasterDtoList.add(feedMasterDto);
+					}
+				}
+				feedMasterDtoCollection.setFeedMasterDtos(feedMasterDtoList);
+			} else {
+				log.info("feedMasterDto Found Null");
+			}
+			endTransaction();
+		} catch (Exception e) {
+			log.error(EXCEPTION, e);
+		}
+		return feedMasterDtoCollection;
+	}
+
+	private boolean checkFeedAvailableOrNot(String userEmail, List<ProjectFeedDomain> projectFeedDomains) {
+		boolean feedAvailable = true;
+		try {
+			IProjectDao projectDao = DaoManager.PROJECTDAO.getDao(userEmail, IProjectDao.class);
+			for (ProjectFeedDomain projectFeedDomain : projectFeedDomains) {
+				if(projectFeedDomain.getUserProject().getId() == CommonConstants.DEFAULT_PROJECT_ID){
+					if(StatusConstants.XREF_MATCHING_SAVED.getID() == projectFeedDomain.getStatusDomain().getId()){
+						continue;
+					}else{
+						feedAvailable = false;
+						break;
+					}
+				}else{
+					ProjectDTO projectDTO = projectDao.getPojectStatusbyProjectIds(userEmail, String.valueOf(projectFeedDomain.getUserProject().getId()));
+					if(null != projectDTO && null != projectDTO.getProjectStatusMap() && "INPROGRESS".equalsIgnoreCase(projectDTO.getProjectStatusMap().get(String.valueOf(projectFeedDomain.getUserProject().getId())))){
+						feedAvailable = false;
+						break;
+					}else if(projectFeedDomain.getStatusDomain().getId()>=StatusConstants.XREF_MATCHING_SAVED.getID() && projectFeedDomain.getStatusDomain().getId()<=StatusConstants.XREF_ATTRIB_CONFIG_SAVED.getID()){
+						feedAvailable = false;
+						break;
+					}
+				}
+			}
+		} catch (Exception e) {
+			log.error(EXCEPTION, e);
+		}
+		return feedAvailable;
+	}
+
+	@Override
+	public boolean isFeedTypeExits(String feedType)throws DuplicateFeedTypeException {
+		final String methodName = "isFeedTypeExits";
+		log.info("Inside " + methodName + " method of " + CLASSNAME);
+		boolean result = false;
+		try{
+			beginTransaction();
+			Criteria feedCriteria = createCriteria(FeedMasterDomain.class);
+			feedCriteria.add(Restrictions.ilike("feedType", feedType));
+			FeedMasterDomain feedMasterDomain = (FeedMasterDomain) feedCriteria.uniqueResult();
+			if (null != feedMasterDomain) {
+				result = true;
+				throw new DuplicateFeedTypeException();
+			}
+			endTransaction();
+		}catch(Exception e){
+			log.error("Exception::"+e);
+			result = true;
+			throw new DuplicateFeedTypeException(e.getMessage());
+		}
+		
+		return result;
+	}
+
+	@Override
+	public boolean updateFeed(String userEmail, FeedMasterDto feedMasterDto) throws ProcessFailedException {
+		final String methodName = "updateFeed";
+		log.info("Inside " + methodName + " method of " + CLASSNAME);
+		boolean result = false;
+		Criteria criteria = null;
+		try {
+			if(null != feedMasterDto){
+				if(feedMasterDto.getFeedid()>0){
+					IUserDao iUserDao = DaoManager.USER.getDao(userEmail,IUserDao.class);
+					UserDTO userDTO = iUserDao.getUser(userEmail, false);
+					beginTransaction();
+					criteria = createCriteria(FeedMasterDomain.class);
+					criteria.add(Restrictions.eq("feedid", feedMasterDto.getFeedid()));
+					FeedMasterDomain feedMasterDomain = (FeedMasterDomain) criteria.uniqueResult();
+					if(null != feedMasterDomain){
+						
+						feedMasterDomain.setFeedName(feedMasterDto.getFeedName());
+						feedMasterDomain.setFeedType(feedMasterDto.getFeedType());
+						feedMasterDomain.setFeedName(feedMasterDto.getFeedName());
+						feedMasterDomain.setSourceType(feedMasterDto.getSourceType());
+						feedMasterDomain.setUserIdModified(String.valueOf(userDTO.getId()));
+						feedMasterDomain.setDateModified(new Timestamp(new Date().getTime()));
+						feedMasterDomain.setFeedDataType(feedMasterDto.getFeedDataType());
+						
+						hibernatePersistenceManager.saveOrUpdate(feedMasterDomain);
+
+						EtlFileMetaDataDomain etlFileMetaDataDomain = feedMasterDomain.getEtlFileMetaDataDomain();
+
+						if (null != etlFileMetaDataDomain) {
+
+							etlFileMetaDataDomain.setGoldDataFlag(feedMasterDto.getEtlFileMetaDataDto().getGoldDataFlag());
+							etlFileMetaDataDomain.setCustomerDataFlag(feedMasterDto.getEtlFileMetaDataDto().getCustomerDataFlag());
+							etlFileMetaDataDomain.setFileExtension(feedMasterDto.getEtlFileMetaDataDto().getFileExtension());
+							etlFileMetaDataDomain.setFileDelimiter(feedMasterDto.getEtlFileMetaDataDto().getFileDelimiter());
+							etlFileMetaDataDomain.setBSkipRows(feedMasterDto.getEtlFileMetaDataDto().getBSkipRows());
+							etlFileMetaDataDomain.setESkipRows(feedMasterDto.getEtlFileMetaDataDto().getESkipRows());
+							etlFileMetaDataDomain.setFileContainsHeaders(feedMasterDto.getEtlFileMetaDataDto().getFileContainsHeaders());
+							etlFileMetaDataDomain.setUserIdModified(String.valueOf(userDTO.getId()));
+							etlFileMetaDataDomain.setDateModified(new Timestamp(new Date().getTime()));
+
+							hibernatePersistenceManager.saveOrUpdate(etlFileMetaDataDomain);
+						}
+						deleteProjectConfigXref(feedMasterDto.getFeedid(), null);
+						result = true;
+					}else{
+						log.info("feedMasterDomain Found Null");
+					}
+					endTransaction();
+				}else{
+					log.info("FeedId found 0");
+				}
+			}else{
+				log.info("feedMasterDto Found Null");
+			}
+		} catch (Exception e) {
+			result = false;
+			log.error(EXCEPTION, e);
+			rollBack();
+			throw new ProcessFailedException("updateFeed Process Failed.");
+		}
+		return result;
+	}
+	
+	@Override
+	public boolean deleteFeed(long feedId,long projectId) throws ProcessFailedException{
+		final String methodName = "deleteFeed";
+		log.info("Inside " + methodName + " method of " + CLASSNAME);
+		boolean result = false;
+		Criteria criteria = null;
+		try{
+			if(feedId>0 && projectId>0){
+			//	beginTransaction();
+				criteria = createCriteria(ProjectFeedDomain.class);
+				criteria.add(Restrictions.and(Restrictions.eq("userProject.id", projectId),Restrictions.eq("feedMasterDomain.feedid",feedId)));
+				ProjectFeedDomain projectFeedDomain = (ProjectFeedDomain) criteria.uniqueResult();
+				if(null != projectFeedDomain){
+					hibernatePersistenceManager.delete(projectFeedDomain);
+					result = true;
+				}
+			//	endTransaction();
+			}else{
+				log.info("FeedId or projectId found 0");
+			}
+		}catch(Exception e){
+			result = false;
+			log.error(EXCEPTION, e);
+			rollBack();
+			throw new ProcessFailedException("deleteFeed Process Failed.");
+		}
+		return result;
+	}
+	
+	@Override
+	public void updateProjectFeed(String userEmail, long projectId, long feedId, long fileId) throws ProcessFailedException{
+		try{
+			beginTransaction();
+			IUserDao iUserDao = DaoManager.USER.getDao(userEmail,IUserDao.class);
+			UserDTO userDTO = iUserDao.getUser(userEmail, false);
+			
+			Criteria prjFeed = hibernatePersistenceManager.createCriteria(ProjectFeedDomain.class);
+			prjFeed.add(Restrictions.eq("userProject.id",projectId));
+			prjFeed.add(Restrictions.eq("feedMasterDomain.feedid",feedId));
+			
+			ProjectFeedDomain prjFeedObj = (ProjectFeedDomain) prjFeed.uniqueResult();
+			if(null != prjFeedObj){
+				prjFeedObj.setFileId(fileId);
+				prjFeedObj.setDateModified(new Timestamp(new Date().getTime()));
+				prjFeedObj.setUserIdModified(String.valueOf(userDTO.getId()));
+				hibernatePersistenceManager.saveOrUpdate(prjFeedObj);
+			}
+			endTransaction();
+		}catch(Exception e){
+			endTransaction();
+			throw new ProcessFailedException("Failed to update Project Feed. "+e.getMessage());
+		}
+	}
+	
+	@Override
+	public EtlFileMetaDataDto getFeedMetaDataByFeedId(long feedId)  throws ProcessFailedException{
+		EtlFileMetaDataDto etlDto = new EtlFileMetaDataDto();
+		try{
+			beginTransaction();
+			
+			Criteria etlCriteria = hibernatePersistenceManager.createCriteria(EtlFileMetaDataDomain.class);
+			etlCriteria.add(Restrictions.eq("feedMasterDomain.feedid",feedId));
+			
+			EtlFileMetaDataDomain etlDomain = (EtlFileMetaDataDomain) etlCriteria.uniqueResult();
+			etlDto = CommonUtils.convertObject(etlDomain,EtlFileMetaDataDto.class);
+			endTransaction();
+		}catch(Exception e){
+			endTransaction();
+			throw new ProcessFailedException("Error while getting Feed MetaData. "+e.getMessage());
+		}
+		return etlDto;
+	}
+	
+	@Override
+	public void updateFeedMetaData(String userEmail, String fileName, long feedId, long fileId, int loadedRecords, int totalBadRecords) throws ProcessFailedException{
+		try{
+			beginTransaction();
+			IUserDao iUserDao = DaoManager.USER.getDao(userEmail,IUserDao.class);
+			UserDTO userDTO = iUserDao.getUser(userEmail, false);
+			
+			Criteria etlCriteria = hibernatePersistenceManager.createCriteria(EtlFileMetaDataDomain.class);
+			etlCriteria.add(Restrictions.eq("feedMasterDomain.feedid",feedId));
+			
+			EtlFileMetaDataDomain etlFeedObj = (EtlFileMetaDataDomain) etlCriteria.uniqueResult();
+			if(null != etlFeedObj){
+				etlFeedObj.setFileId(fileId);
+				etlFeedObj.setFileName(fileName);
+				etlFeedObj.setDateModified(new Timestamp(new Date().getTime()));
+				etlFeedObj.setUserIdModified(String.valueOf(userDTO.getId()));
+				etlFeedObj.setTotalNoRecords(loadedRecords);
+				etlFeedObj.setTotalNoBadRecords(totalBadRecords);
+				hibernatePersistenceManager.saveOrUpdate(etlFeedObj);
+			}
+			endTransaction();
+		}catch(Exception e){
+			rollBack();
+			throw new ProcessFailedException("Failed to update Feed MetaData. "+e.getMessage());
+		}
+	}
+	
+	@Override
+	public boolean createMapping(String userEmail,EtlPrestageMasterDto etlPrestageMasterDto) throws ProcessFailedException{
+		final String methodName = "createMapping";
+		log.info("Inside " + methodName + " method of " + CLASSNAME);
+		boolean result = false;
+		try{
+			if(null != etlPrestageMasterDto){
+				IUserDao iUserDao = DaoManager.USER.getDao(userEmail,IUserDao.class);
+				UserDTO userDTO = iUserDao.getUser(userEmail, false);
+				FeedMasterDto masterDto = getFeedInfoByFeedId(userEmail, etlPrestageMasterDto.getFeedid());
+				beginTransaction();
+				EtlPrestageMasterDomain etlPrestageMasterDomain = CommonUtils.convertObject(etlPrestageMasterDto, EtlPrestageMasterDomain.class);
+				long prestageMapId = (long) hibernatePersistenceManager.createSQLQuery("select SEQ_etl_PrestageMapId.nextval as num from dual").addScalar("num", StandardBasicTypes.LONG).uniqueResult();
+				etlPrestageMasterDomain.setId(null);
+				etlPrestageMasterDomain.setFileId(masterDto.getEtlFileMetaDataDto().getFileId());
+				etlPrestageMasterDomain.setPrestageMapId(prestageMapId);
+				etlPrestageMasterDomain.setUserIdCreated(String.valueOf(userDTO.getId()));
+				etlPrestageMasterDomain.setDateCreated(new Timestamp(new Date().getTime()));					
+				etlPrestageMasterDomain = (EtlPrestageMasterDomain) hibernatePersistenceManager.saveOrUpdate(etlPrestageMasterDomain);
+				
+				List<EtlPrestageMapDto> prestageMapDtos = etlPrestageMasterDto.getEtlPrestageMapDtoList();
+				
+				if(null != prestageMapDtos && !prestageMapDtos.isEmpty()){
+					for (EtlPrestageMapDto etlPrestageMapDto : prestageMapDtos) {
+						EtlPrestageMapDomain etlPrestageMapDomain = CommonUtils.convertObject(etlPrestageMapDto, EtlPrestageMapDomain.class);
+						etlPrestageMapDomain.setId(null);
+						/*if((CommonConstants.STAGECOL_IDENTIFIER.equals(etlPrestageMapDomain.getStageColName()) || CommonConstants.STAGECOL_ATTRIBUTE_VALUE.equals(etlPrestageMapDomain.getStageColName())) && (null == etlPrestageMapDomain.getPrestageIdentifierName() || etlPrestageMapDomain.getPrestageIdentifierName().trim().length() == 0)){
+							etlPrestageMapDomain.setPrestageIdentifierName(etlPrestageMapDomain.getPrestageColName());
+						}*/
+						etlPrestageMapDomain.setUserIdCreated(String.valueOf(userDTO.getId()));
+						etlPrestageMapDomain.setDateCreated(new Timestamp(new Date().getTime()));
+						if(etlPrestageMasterDomain != null){
+							etlPrestageMapDomain.setPrestageMapId(etlPrestageMasterDomain.getPrestageMapId());
+						}
+						hibernatePersistenceManager.saveOrUpdate(etlPrestageMapDomain);
+					}
+				}else{
+					log.info("prestageMapDtos found null");
+					rollBack();
+					throw new ProcessFailedException("createMapping Process Failed.");
+				}
+				result = true;
+				endTransaction();
+				beginTransaction();
+				ProcedureCall procCall = hibernatePersistenceManager.getProcedureCall("POPULATE_MATCH_COLUMNS");
+				procCall.registerParameter(1, Long.class, ParameterMode.IN).bindValue(masterDto.getEtlFileMetaDataDto().getFileId());
+				procCall.getOutputs();
+				result = true;
+				endTransaction();
+			}else{
+				log.info("etlPrestageMasterDto found Null");
+			}
+		}catch(Exception e){
+			result = false;
+			log.error(EXCEPTION, e);
+			rollBack();
+			throw new ProcessFailedException("createMapping Process Failed.");
+		}
+		return result;
+		
+	}
+	
+	@Override
+	public EtlPrestageMasterDto getMappingInfo(String userEmail,long feedId) throws ProcessFailedException{
+		final String methodName = "getMappingInfo";
+		log.info("Inside " + methodName + " method of " + CLASSNAME);
+		EtlPrestageMasterDto etlPrestageMasterDto = null;
+		List<EtlPrestageMapDto> etlPrestageMapDtos = null;
+		
+		Criteria criteria = null;
+		try{
+			if(feedId>0){
+				beginTransaction();
+				criteria = createCriteria(FeedMasterDomain.class);
+				criteria.add(Restrictions.eq("feedid", feedId));
+				FeedMasterDomain feedMasterDomain = (FeedMasterDomain) criteria.uniqueResult();
+				if(null != feedMasterDomain){
+					final String prestageTableName = FileConstants.PREFFIX_FOR_PRESTAGE+feedMasterDomain.getFeedType().toUpperCase()+FileConstants.SUFFIX_FOR_PRESTAGE;
+					criteria = createCriteria(EtlPrestageMasterDomain.class);
+					criteria.add(Restrictions.eq("prestageTabName", prestageTableName));
+					List<EtlPrestageMasterDomain> prestageMasterDomainList = criteria.list();
+					if(null != prestageMasterDomainList && !prestageMasterDomainList.isEmpty()){
+						EtlPrestageMasterDomain prestageMasterDomain = prestageMasterDomainList.get(0);
+						etlPrestageMasterDto = CommonUtils.convertObject(prestageMasterDomain, EtlPrestageMasterDto.class);
+						criteria = hibernatePersistenceManager.createCriteria(EtlPrestageMapDomain.class);
+						criteria.add(Restrictions.eq("prestageMapId", prestageMasterDomain.getPrestageMapId()));
+						List<EtlPrestageMapDomain> etlPrestageMapList = criteria.list();
+						if(null != etlPrestageMapList && !etlPrestageMapList.isEmpty()){
+							etlPrestageMapDtos = new ArrayList<>();
+							for (EtlPrestageMapDomain etlPrestageMapDomain : etlPrestageMapList) {
+								 etlPrestageMapDtos.add(CommonUtils.convertObject(etlPrestageMapDomain, EtlPrestageMapDto.class));
+							}
+						}
+						etlPrestageMasterDto.setEtlPrestageMapDtoList(etlPrestageMapDtos);
+					}
+				}else{
+					log.info("feedMasterDomain found Null");
+				}
+				endTransaction();
+			}else{
+				log.info("feedId found 0");
+				throw new ProcessFailedException("feedId cannot be 0");
+			}
+		}catch(Exception e){
+			log.error(EXCEPTION, e);
+			throw new ProcessFailedException("Error occured while fetching Mapping details");
+		}
+		return etlPrestageMasterDto;
+	}
+	
+	@Override
+	public boolean isMappingNameExits(String mappingName)throws DuplicateMappingNameException {
+		final String methodName = "isMappingNameExits";
+		log.info("Inside " + methodName + " method of " + CLASSNAME);
+		boolean result = false;
+		beginTransaction();
+		Criteria feedCriteria = createCriteria(EtlPrestageMasterDomain.class);
+		feedCriteria.add(Restrictions.ilike("prestageMapName", mappingName));
+		EtlPrestageMasterDomain etlPrestageMasterDomain = (EtlPrestageMasterDomain) feedCriteria.uniqueResult();
+		if (null != etlPrestageMasterDomain) {
+			result = true;
+		}
+		endTransaction();
+		return result;
+	}
+	
+	@Override
+	public List<EtlStageFieldMapDto> getStageDataColumns(String feedDataType) throws ProcessFailedException{
+		List<EtlStageFieldMapDto> fieldDtoList = new ArrayList<>();
+		if(null == feedDataType){
+			throw new ProcessFailedException("Feed Data Type can not be null");
+		}
+		try{
+			requestPlatinumConnection();
+			beginTransaction();
+			Criteria stageCrit = hibernatePersistenceManager.createCriteria(EtlStageFieldMapDomain.class);
+			stageCrit.add(Restrictions.eq("feedDataType", feedDataType.toLowerCase()));
+			stageCrit.add(Restrictions.not(Restrictions.in("tableName", new String[]{"CLIENTCOUNTERPARTY_RATING", "CLIENTCTRPTYOWNER", "CLIENTCTRPTYHIERARCHY"})));
+			stageCrit.addOrder(Order.asc("displayName"));
+			List<EtlStageFieldMapDomain> fieldDomainList = stageCrit.list();
+			if (null != fieldDomainList && !fieldDomainList.isEmpty()) {
+				for (EtlStageFieldMapDomain etlStageFieldMap : fieldDomainList) {
+					EtlStageFieldMapDto fieldDto = new EtlStageFieldMapDto();
+					fieldDto = CommonUtils.convertObject(etlStageFieldMap, EtlStageFieldMapDto.class);
+					fieldDtoList.add(fieldDto);
+				}
+			}
+			endTransaction(); 
+			releasePlatinumConnection();
+		}catch(Exception e){
+			endTransaction();
+			throw new ProcessFailedException("Failed to fetch Stage Data Columns. "+e.getMessage());
+		}
+		return fieldDtoList;
+	}
+	
+	@Override
+	public List<String> getPreStageTableColumns(String feedType) throws ProcessFailedException{
+		StringBuilder sqlQuery = new StringBuilder();
+		List<String> prestageColumnList = new ArrayList<>();
+		if(null == feedType){
+			throw new ProcessFailedException("Feed Name can not be null.");
+		}
+		try{
+			beginTransaction();
+			String preStageTableName = FileConstants.PREFFIX_FOR_PRESTAGE+feedType.toUpperCase()+FileConstants.SUFFIX_FOR_PRESTAGE;
+			sqlQuery.append("select column_name from user_tab_columns where table_name = '").append(preStageTableName).append("' order by column_name asc");
+			log.info("SqlQuery --> " +sqlQuery.toString());
+			prestageColumnList = hibernatePersistenceManager.createSQLQuery(sqlQuery.toString()).list();
+			endTransaction();
+		}catch(Exception e){
+			endTransaction();
+			throw new ProcessFailedException("Failed to fetch Pre Stage Data Columns. "+e.getMessage());
+		}
+		return prestageColumnList;
+	}
+	
+	@Override
+	public List<EtlPrestageMapDto> getMappingDetailsByMappingId(long prestageMapId) throws ProcessFailedException{
+		List<EtlPrestageMapDto> mapDtoList = new ArrayList<>();
+		try{
+			beginTransaction();
+			Criteria mappingCrit = hibernatePersistenceManager.createCriteria(EtlPrestageMapDomain.class);
+			mappingCrit.add(Restrictions.eq("prestageMapId", prestageMapId));
+			List<EtlPrestageMapDomain> mappingList = mappingCrit.list();
+			if (null != mappingList && !mappingList.isEmpty()) {
+				for (EtlPrestageMapDomain etlMapping : mappingList) {
+					EtlPrestageMapDto mappingDto = new EtlPrestageMapDto();
+					mappingDto = CommonUtils.convertObject(etlMapping, EtlPrestageMapDto.class);
+					mapDtoList.add(mappingDto);
+				}
+			}
+			endTransaction(); 
+		}catch(Exception e){
+			endTransaction();
+			throw new ProcessFailedException("Failed to fetch Mapping Details. "+e.getMessage());
+		}
+		return mapDtoList;
+	}
+	
+	@Override
+	public List<String> getPrestageMappedColumnsByMappingId(long prestageMapId) throws ProcessFailedException{
+		List<String> mappedColumns = new ArrayList<>();
+		try{
+			beginTransaction();
+			Criteria mappingCrit = hibernatePersistenceManager.createCriteria(EtlPrestageMapDomain.class);
+			mappingCrit.add(Restrictions.eq("prestageMapId", prestageMapId));
+			List<EtlPrestageMapDomain> mappingList = mappingCrit.list();
+			if (null != mappingList && !mappingList.isEmpty()) {
+				for (EtlPrestageMapDomain etlMapping : mappingList) {
+					mappedColumns.add(etlMapping.getPrestageColName());
+				}
+			}
+			endTransaction(); 
+		}catch(Exception e){
+			endTransaction();
+			throw new ProcessFailedException("Failed to fetch Mapping Details. "+e.getMessage());
+		}
+		return mappedColumns;
+	}
+	
+
+	@Override
+	public boolean changeFeedStatus(String userEmail,ProjectFeedDto projectFeedDto) throws ProcessFailedException{
+		final String methodName = "changeFeedStatus";
+		log.info("Inside " + methodName + " method of " + CLASSNAME);
+		boolean result = false;
+		Criteria criteria = null;
+		StatusDomain statusDomain = null;
+		try{
+			if(projectFeedDto.getFeedId()>0 && projectFeedDto.getProjectId()>0 && null != projectFeedDto.getStatusName()){
+				criteria = createCriteria(ProjectFeedDomain.class);
+				criteria.add(Restrictions.and(Restrictions.eq("userProject.id", projectFeedDto.getProjectId()),Restrictions.eq("feedMasterDomain.feedid", projectFeedDto.getFeedId())));
+				ProjectFeedDomain projectFeedDomain = (ProjectFeedDomain) criteria.uniqueResult();
+				if(null != projectFeedDomain){
+					if(projectFeedDto.getStatusName().equalsIgnoreCase(StatusConstants.LOCKED.getStatus())){
+						statusDomain = hibernatePersistenceManager.getFromSession(StatusDomain.class,StatusConstants.LOCKED.getID());
+					}else if(projectFeedDto.getStatusName().equalsIgnoreCase(StatusConstants.IDLE.getStatus())){
+						statusDomain = hibernatePersistenceManager.getFromSession(StatusDomain.class,StatusConstants.IDLE.getID());
+					}
+					if(null != statusDomain){
+						projectFeedDomain.setStatusDomain(statusDomain);
+						result = true;
+					}else{
+						log.info("statusDomain found Null");
+					}
+				}else{
+					log.info("projectFeedDomain found Null");
+				}
+			}else{
+				log.info("feedid and projectid can not be zero or statusName can not be null");
+				throw new ProcessFailedException("feedid and projectid can not be zero or statusName can not be null");
+			}
+		}catch(Exception e){
+			endTransaction();
+			result = false;
+			log.error(EXCEPTION, e);
+			rollBack();
+			throw new ProcessFailedException("changeFeedStatus Process Failed.");
+		}
+		return result;
+	}
+	
+	@Override
+	public boolean editMappingDetails(String userEmail, EtlPrestageMasterDto etlPrestageMasterDto) throws ProcessFailedException{
+		final String methodName = "editMappingDetails";
+		log.info("Inside " + methodName + " method of " + CLASSNAME);
+		boolean result = false;
+		StringBuilder sqlQuery = new StringBuilder();
+		try{
+			IUserDao iUserDao = DaoManager.USER.getDao(userEmail,IUserDao.class);
+			UserDTO userDTO = iUserDao.getUser(userEmail, false);
+			FeedMasterDto masterDto = getFeedInfoByFeedId(userEmail, etlPrestageMasterDto.getFeedid());
+			beginTransaction();
+			
+			Criteria masterCrit = hibernatePersistenceManager.createCriteria(EtlPrestageMasterDomain.class);
+			masterCrit.add(Restrictions.eq("fileId", masterDto.getEtlFileMetaDataDto().getFileId()));
+			EtlPrestageMasterDomain etlPrestageMasterDomain = (EtlPrestageMasterDomain) masterCrit.uniqueResult();
+			if(null == etlPrestageMasterDomain){
+				etlPrestageMasterDomain = CommonUtils.convertObject(etlPrestageMasterDto, EtlPrestageMasterDomain.class);
+				etlPrestageMasterDomain.setId(null);
+				etlPrestageMasterDomain.setFileId(masterDto.getEtlFileMetaDataDto().getFileId());
+				etlPrestageMasterDomain.setUserIdCreated(String.valueOf(userDTO.getId()));
+				etlPrestageMasterDomain.setDateCreated(new Timestamp(new Date().getTime()));					
+				etlPrestageMasterDomain = (EtlPrestageMasterDomain) hibernatePersistenceManager.saveOrUpdate(etlPrestageMasterDomain);
+			}
+			
+			sqlQuery.append("delete from etl_prestage_stage_map where PRESTAGEMAP_ID=:prestageMapId");
+			hibernatePersistenceManager.createSQLQuery(sqlQuery.toString()).setLong("prestageMapId", etlPrestageMasterDto.getPrestageMapId()).executeUpdate();
+			
+			List<EtlPrestageMapDto> prestageMapDtos = etlPrestageMasterDto.getEtlPrestageMapDtoList();
+			
+			if(null != prestageMapDtos && !prestageMapDtos.isEmpty()){
+				for (EtlPrestageMapDto etlPrestageMapDto : prestageMapDtos) {
+					EtlPrestageMapDomain etlPrestageMapDomain = CommonUtils.convertObject(etlPrestageMapDto, EtlPrestageMapDomain.class);
+					etlPrestageMapDomain.setId(null);
+					/*if((CommonConstants.STAGECOL_IDENTIFIER.equals(etlPrestageMapDomain.getStageColName()) || CommonConstants.STAGECOL_ATTRIBUTE_VALUE.equals(etlPrestageMapDomain.getStageColName())) && (null == etlPrestageMapDomain.getPrestageIdentifierName() || etlPrestageMapDomain.getPrestageIdentifierName().trim().length() == 0)){
+						etlPrestageMapDomain.setPrestageIdentifierName(etlPrestageMapDomain.getPrestageColName());
+					}*/
+					etlPrestageMapDomain.setUserIdCreated(String.valueOf(userDTO.getId()));
+					etlPrestageMapDomain.setDateCreated(new Timestamp(new Date().getTime()));
+					etlPrestageMapDomain.setPrestageMapId(etlPrestageMasterDto.getPrestageMapId());
+					
+					hibernatePersistenceManager.saveOrUpdate(etlPrestageMapDomain);
+				}
+				
+				
+			}else{
+				log.error("prestageMapDtos found null");
+				rollBack();
+				throw new ProcessFailedException("Edit Mapping Process Failed.");
+			}
+			endTransaction();
+			beginTransaction();
+			ProcedureCall procCall = hibernatePersistenceManager.getProcedureCall("POPULATE_MATCH_COLUMNS");
+			procCall.registerParameter(1, Long.class, ParameterMode.IN).bindValue(masterDto.getEtlFileMetaDataDto().getFileId());
+			procCall.getOutputs();
+			result = true;
+			endTransaction();
+		}catch(Exception e){
+			rollBack();
+			throw new ProcessFailedException("Failed to edit Mapping Details. "+e.getMessage());
+		}
+		return result;
+	}
+	
+	@Override
+	public boolean saveMappingDetails(String userEmail, EtlPrestageMasterDto etlPrestageMasterDto) throws ProcessFailedException{
+		final String methodName = "saveMappingDetails";
+		log.info("Inside " + methodName + " method of " + CLASSNAME);
+		boolean result = true;
+		try{
+			IUserDao iUserDao = DaoManager.USER.getDao(userEmail,IUserDao.class);
+			UserDTO userDTO = iUserDao.getUser(userEmail, false);
+			FeedMasterDto masterDto = getFeedInfoByFeedId(userEmail, etlPrestageMasterDto.getFeedid());
+			beginTransaction();
+			
+			Criteria masterCrit = hibernatePersistenceManager.createCriteria(EtlPrestageMasterDomain.class);
+			masterCrit.add(Restrictions.eq("fileId", masterDto.getEtlFileMetaDataDto().getFileId()));
+			EtlPrestageMasterDomain etlPrestageMasterDomain = (EtlPrestageMasterDomain) masterCrit.uniqueResult();
+			if(null == etlPrestageMasterDomain){
+				etlPrestageMasterDomain = CommonUtils.convertObject(etlPrestageMasterDto, EtlPrestageMasterDomain.class);
+				etlPrestageMasterDomain.setId(null);
+				etlPrestageMasterDomain.setPrestageTabName(FileConstants.PREFFIX_FOR_PRESTAGE+masterDto.getFeedType()+FileConstants.SUFFIX_FOR_PRESTAGE);
+				etlPrestageMasterDomain.setFileId(masterDto.getEtlFileMetaDataDto().getFileId());
+				etlPrestageMasterDomain.setUserIdCreated(String.valueOf(userDTO.getId()));
+				etlPrestageMasterDomain.setDateCreated(new Timestamp(new Date().getTime()));					
+				etlPrestageMasterDomain = (EtlPrestageMasterDomain) hibernatePersistenceManager.saveOrUpdate(etlPrestageMasterDomain);
+			}
+			endTransaction();
+		}catch(Exception e){
+			rollBack();
+			result = false;
+			log.error("Exception::"+e);
+			throw new ProcessFailedException("Failed to save Mapping. "+e.getMessage());
+		}
+		return result;
+	}
+	
+	@Override
+	public long doesFileMappingExists(String userEmail, long feedId) throws ProcessFailedException{
+		long prestageMapId = 0L;
+		try{
+			FeedMasterDto masterDto = getFeedInfoByFeedId(userEmail, feedId);
+			beginTransaction();
+			Criteria masterCrit = hibernatePersistenceManager.createCriteria(EtlPrestageMasterDomain.class);
+			masterCrit.add(Restrictions.eq("fileId", masterDto.getEtlFileMetaDataDto().getFileId()));
+			EtlPrestageMasterDomain etlPrestageMasterDomain = (EtlPrestageMasterDomain) masterCrit.uniqueResult();
+			if(null != etlPrestageMasterDomain){
+				prestageMapId = etlPrestageMasterDomain.getPrestageMapId();
+			}
+			endTransaction();
+		}catch(Exception e){
+			endTransaction();
+			throw new ProcessFailedException("Error while checking file mapping.");
+		}
+		return prestageMapId;
+	}
+	
+	@Override
+	public List<EtlTransformMasterDto> getTransformationListByFeedId(long feedId) throws ProcessFailedException{
+		List<EtlTransformMasterDto> dtoList = new ArrayList<>();
+		try{
+			beginTransaction();
+			Criteria masterCrit = hibernatePersistenceManager.createCriteria(EtlTransformMapDomain.class);
+			masterCrit.add(Restrictions.eq("feedId", feedId));
+			List<EtlTransformMapDomain> domainList = masterCrit.list();
+			if(null != domainList && !domainList.isEmpty()){
+				for (EtlTransformMapDomain etlTransformMapDomain : domainList) {
+					EtlTransformMasterDto masterDto  = new EtlTransformMasterDto();
+					masterDto  = CommonUtils.convertObject(etlTransformMapDomain, EtlTransformMasterDto.class);
+					dtoList.add(masterDto);
+				}
+			}
+			endTransaction();
+		}catch(Exception e){
+			endTransaction();
+			throw new ProcessFailedException("Error while getting transformation List. "+e.getMessage());
+		}
+		return dtoList;
+	}
+	
+	@Override
+	public EtlTransformMasterDto getTransformationDetailsByTransId(long transMapId) throws ProcessFailedException{
+		List<SourceTargetInfoDto> sourceList = null;
+		List<ReplaceTransformDto> transformRuleList = null;
+		EtlTransformMasterDto masterDto  = new EtlTransformMasterDto();
+		try{
+			beginTransaction();
+			EtlTransformMapDomain transDomain = (EtlTransformMapDomain) hibernatePersistenceManager.getPersistentObject(EtlTransformMapDomain.class, transMapId);
+			if(null != transDomain){
+				masterDto  = CommonUtils.convertObject(transDomain, EtlTransformMasterDto.class);
+				if(null != transDomain.getSourceTargetInfoDomainSet()){
+					sourceList = new ArrayList<>();
+					for (SourceTargetInfoDomain sourceDomain : transDomain.getSourceTargetInfoDomainSet()) {
+						SourceTargetInfoDto sourceDto = new SourceTargetInfoDto();
+						if(null != sourceDomain.getReplaceTransformPerformDomainSet()){
+							transformRuleList = new ArrayList<>();
+							for (ReplaceTransformPerformDomain replaceTransform : sourceDomain.getReplaceTransformPerformDomainSet()) {
+								ReplaceTransformDto replaceDto = new ReplaceTransformDto();
+								replaceDto = CommonUtils.convertObject(replaceTransform, ReplaceTransformDto.class);
+								TransRuleDto transRuleDto = new TransRuleDto();
+								transRuleDto = CommonUtils.convertObject(replaceTransform.getRuleDomain(), TransRuleDto.class);
+								replaceDto.setRuleInfo(transRuleDto);
+								transformRuleList.add(replaceDto);
+							}
+						}
+						sourceDto = CommonUtils.convertObject(sourceDomain, SourceTargetInfoDto.class);
+						sourceDto.setReplaceTransformPerformList(transformRuleList);
+						sourceList.add(sourceDto);
+					}
+				}
+				masterDto.setSourceTargetList(sourceList);
+			}
+			endTransaction();
+		}catch(Exception e){
+			endTransaction();
+			throw new ProcessFailedException("Error while getting transformation Details. "+e.getMessage());
+		}
+		return masterDto;
+	}
+	
+	@Override
+	public boolean doesTransformationNameExists(String transName){
+		final String methodName = "doesTransformationNameExits";
+		log.info("Inside " + methodName + " method of " + CLASSNAME);
+		boolean result = false;
+		beginTransaction();
+		Criteria feedCriteria = createCriteria(EtlTransformMapDomain.class);
+		feedCriteria.add(Restrictions.ilike("transformSetName", transName));
+		EtlTransformMapDomain etlTransMasterDomain = (EtlTransformMapDomain) feedCriteria.uniqueResult();
+		if (null != etlTransMasterDomain) {
+			result = true;
+		}
+		endTransaction();
+		return result;
+	}
+	
+	@Override
+	public List<String> getPrestageTransformationColumnsByTransId(long transformMapId) throws ProcessFailedException{
+		List<String> transformColumns = new ArrayList<>();
+		try{
+			beginTransaction();
+			Criteria transformCrit = hibernatePersistenceManager.createCriteria(SourceTargetInfoDomain.class);
+			transformCrit.add(Restrictions.eq("etlTransformMapDomain.transformMapId", transformMapId));
+			List<SourceTargetInfoDomain> transformList = transformCrit.list();
+			if (null != transformList && !transformList.isEmpty()) {
+				for (SourceTargetInfoDomain sourceDomain : transformList) {
+					transformColumns.add(sourceDomain.getSourceColName());
+				}
+			}
+			endTransaction(); 
+		}catch(Exception e){
+			endTransaction();
+			throw new ProcessFailedException("Failed to fetch Transform Column List. "+e.getMessage());
+		}
+		return transformColumns;
+	}
+	
+	@Override
+	public boolean saveTransformation(long feedId, long transMapId) throws ProcessFailedException{
+		boolean result = false;
+		try{
+			beginTransaction();
+			Criteria transformCrit = hibernatePersistenceManager.createCriteria(EtlTransformMapDomain.class);
+			transformCrit.add(Restrictions.eq("feedId", feedId));
+			List<EtlTransformMapDomain> transformList = transformCrit.list();
+			if(null != transformList && !transformList.isEmpty()){
+				for (EtlTransformMapDomain etlTransformMapDomain : transformList) {
+					etlTransformMapDomain.setTransformStatus(CommonConstants.N);
+					if(transMapId  == etlTransformMapDomain.getTransformMapId()){
+						etlTransformMapDomain.setTransformStatus(CommonConstants.Y);
+					}
+					hibernatePersistenceManager.saveOrUpdate(etlTransformMapDomain);
+				}
+			}
+			result = true;
+			endTransaction();
+		}catch(Exception e){
+			rollBack();
+			throw new ProcessFailedException("Failed to save Transform Status "+e.getMessage());
+		}
+		return result;
+	}
+	
+	@Override
+	public boolean editTransformation(String userEmail, EtlTransformMasterDto etlTransformMasterDto) throws ProcessFailedException{
+		boolean result = false;
+		try{
+			IUserDao iUserDao = DaoManager.USER.getDao(userEmail,IUserDao.class);
+			UserDTO userDTO = iUserDao.getUser(userEmail, false);
+			FeedMasterDto masterDto = getFeedInfoByFeedId(userEmail, etlTransformMasterDto.getFeedId());
+			beginTransaction();
+			Criteria transformCrit = hibernatePersistenceManager.createCriteria(EtlTransformMapDomain.class);
+			transformCrit.add(Restrictions.eq("transformMapId", etlTransformMasterDto.getTransformMapId()));
+			EtlTransformMapDomain etlTransformMapDomain = (EtlTransformMapDomain) transformCrit.uniqueResult();
+			if(null != etlTransformMapDomain){
+				String sqlQuery = "delete from REPLACE_TRANSFORM_PERFORM where TRANS_DEF_SET_ID=:transformMapId";
+				hibernatePersistenceManager.createSQLQuery(sqlQuery).setLong("transformMapId", etlTransformMapDomain.getTransformMapId()).executeUpdate();
+				sqlQuery = "delete from CDI_SRC_TRGT_INFO where TRANS_DEF_SET_ID=:transformMapId";
+				hibernatePersistenceManager.createSQLQuery(sqlQuery).setLong("transformMapId", etlTransformMapDomain.getTransformMapId()).executeUpdate();
+				
+				List<SourceTargetInfoDto> sourceTargetInfoDtos = etlTransformMasterDto.getSourceTargetList();
+				
+				if(null != sourceTargetInfoDtos && !sourceTargetInfoDtos.isEmpty()){
+					final String prestageTableName = FileConstants.PREFFIX_FOR_PRESTAGE+masterDto.getFeedType().toUpperCase()+FileConstants.SUFFIX_FOR_PRESTAGE;
+					for (SourceTargetInfoDto sourceTargetInfoDto : sourceTargetInfoDtos) {
+						SourceTargetInfoDomain targetInfoDomain = CommonUtils.convertObject(sourceTargetInfoDto, SourceTargetInfoDomain.class);
+						targetInfoDomain.setSourceTableName(prestageTableName);
+						targetInfoDomain.setExecuteInstance(CommonConstants.E);
+						targetInfoDomain.setUserIdCreated(String.valueOf(userDTO.getId()));
+						targetInfoDomain.setDateCreated(new Timestamp(new Date().getTime()));
+						targetInfoDomain.setEtlTransformMapDomain(etlTransformMapDomain);
+						targetInfoDomain = (SourceTargetInfoDomain) hibernatePersistenceManager.saveOrUpdate(targetInfoDomain);
+						
+						List<ReplaceTransformDto> replaceTransformDtos = sourceTargetInfoDto.getReplaceTransformPerformList();
+						if(null != replaceTransformDtos){
+							for (ReplaceTransformDto replaceTransformDto : replaceTransformDtos) {
+								ReplaceTransformPerformDomain performDomain = CommonUtils.convertObject(replaceTransformDto, ReplaceTransformPerformDomain.class);
+								performDomain.setRuleStatus(CommonConstants.Y);
+								performDomain.setUserIdCreated(String.valueOf(userDTO.getId()));
+								performDomain.setDateCreated(new Timestamp(new Date().getTime()));
+								performDomain.setTransformSetName(etlTransformMapDomain.getTransformSetName());
+								performDomain.setTransformMapId(etlTransformMapDomain.getTransformMapId());
+								performDomain.setSourceTargetInfoDomain(targetInfoDomain);
+								performDomain = (ReplaceTransformPerformDomain) hibernatePersistenceManager.saveOrUpdate(performDomain);
+							}
+						}else{
+							log.info("replaceTransformDtos found null");
+							rollBack();
+							throw new ProcessFailedException("editTransformation Process Failed.");
+						}
+					}
+				}
+			}
+			endTransaction();
+			result = true;
+		}catch(Exception e){
+			rollBack();
+			throw new ProcessFailedException("Failed to edit transformation. "+e.getMessage());
+		}
+		return result;
+	}
+
+	@Override
+	public List<EtlIDRuleMasterDto> getMasterIDRules(String userEmail)
+			throws ProcessFailedException {
+		
+		final String methodName = "getMasterIDRules";
+		log.info("Inside " + methodName + " method of " + CLASSNAME);
+		Criteria criteria = null;
+		List<EtlIDRuleMasterDto> EtlIMasterIDRules = new ArrayList<EtlIDRuleMasterDto>();
+		List<EtlIDRuleMasterDomain> EtlIDRuleMasterDomains = new ArrayList<EtlIDRuleMasterDomain>();
+		
+		try {
+			
+			requestPlatinumConnection();
+			criteria = createCriteria(EtlIDRuleMasterDomain.class);
+			criteria.add(Restrictions.eq("ruleStatus", Yes));
+			EtlIDRuleMasterDomains =criteria.list();
+			
+			if (null != EtlIDRuleMasterDomains) {
+				for (EtlIDRuleMasterDomain EtlIDRuleMasterdomain : EtlIDRuleMasterDomains) {
+					EtlIDRuleMasterDto etlIDRuleMasterDto = CommonUtils.convertObject(EtlIDRuleMasterdomain,EtlIDRuleMasterDto.class);
+					EtlIMasterIDRules.add(etlIDRuleMasterDto);
+				}
+			} else {
+				log.info("EtlIDRuleMasterDomains Found null");
+			}
+			
+			releasePlatinumConnection();
+		}catch(Exception e){
+			log.error(EXCEPTION, e);
+			throw new ProcessFailedException("Failed to retrived ID rules. "+e.getMessage());
+		}
+		
+		log.info(" ID rules retrived successfully"+EtlIMasterIDRules.size());
+		return EtlIMasterIDRules;
+		
+	}
+
+	@Override
+	public List<EtlIDRuleDetailDto> getFeedIdRules(long feedId,String loggedInUserName) throws ProcessFailedException {
+		final String methodName = "getFeedIdRules";
+		log.info("Inside " + methodName + " method of " + CLASSNAME);
+		Criteria criteria = null;
+		List<EtlIDRuleDetailDto> feedIdRules = new ArrayList<EtlIDRuleDetailDto>();
+		
+		try{
+			if(feedId >0){
+			beginTransaction();
+			criteria= createCriteria(EtlIDRuleDetailDomain.class);
+			criteria.add(Restrictions.eq("feedId", feedId));
+			List<EtlIDRuleDetailDomain> idRuleDomains= criteria.list();
+					if (null != idRuleDomains) {
+						for (EtlIDRuleDetailDomain etlIDRuleDetailDomain : idRuleDomains) {
+							EtlIDRuleDetailDto etlIDRuleDetailDto = CommonUtils.convertObject(etlIDRuleDetailDomain,EtlIDRuleDetailDto.class);
+							EtlIDRuleMasterDto etlIdRuleMasterDto = CommonUtils.convertObject(etlIDRuleDetailDomain.getEtlRuleMasterDomain(),EtlIDRuleMasterDto.class);
+							etlIDRuleDetailDto.setEtlIDRuleMasterDto(etlIdRuleMasterDto);
+							feedIdRules.add(etlIDRuleDetailDto);
+						}
+					}else{
+						log.info("idRuleDomains Found null");
+					}
+						
+			}else{
+				log.info("feedId Found 0");
+			}
+			
+			
+		}catch(Exception e){
+			log.error(EXCEPTION, e);
+			throw new ProcessFailedException("Failed to retrived ID rules. "+e.getMessage());
+		}
+		
+		log.info(" Feed ID rules retrived successfully"+feedIdRules.size());
+		
+		return feedIdRules;
+	}
+	
+	@Override
+	public boolean saveFeedIDRules(String loggedInUserName,List<EtlIDRuleDetailDto> etlIDRules) throws ProcessFailedException {
+		final String methodName = "saveIDRules";
+		log.info("Inside " + methodName + " method of " + CLASSNAME);
+		boolean result = false;
+		
+		try{
+			
+			
+			if(null != etlIDRules){
+				beginTransaction();
+				
+				IUserDao iUserDao = DaoManager.USER.getDao(loggedInUserName,IUserDao.class);
+				UserDTO userDTO = iUserDao.getUser(loggedInUserName, false);
+				for(EtlIDRuleDetailDto etlIDRuleDetailDto:etlIDRules){
+					EtlIDRuleDetailDomain etlIDRuleDetailDomain = CommonUtils.convertObject(etlIDRuleDetailDto, EtlIDRuleDetailDomain.class);
+					etlIDRuleDetailDomain.setDateCreated(new Timestamp(new Date().getTime()));
+					etlIDRuleDetailDomain.setUserCreated(userDTO.getId());
+					hibernatePersistenceManager.save(etlIDRuleDetailDomain);
+				}
+				
+				result = true;
+				endTransaction();
+				
+			}else{
+				log.info("IDRules object found Null");
+			}
+			
+			
+		}catch(Exception e){
+			result = false;
+			log.error(EXCEPTION, e);
+			rollBack();
+			throw new ProcessFailedException("saveIDRules Process Failed.");
+		}
+		
+		return result;
+	}
+
+	@Override
+	public boolean editFeedIDRules(String loggedInUserName,List<EtlIDRuleDetailDto> etlIdRules, long feedId) throws ProcessFailedException {
+		boolean result = false;
+		StringBuilder sqlQuery = new StringBuilder();
+		try{
+			beginTransaction();
+			sqlQuery.append("delete from ID_RULE_DETAIL ed where ed.feedid=:feedId");
+			hibernatePersistenceManager.createSQLQuery(sqlQuery.toString()).setLong("feedId", feedId).executeUpdate();
+			
+			IUserDao iUserDao = DaoManager.USER.getDao(loggedInUserName,IUserDao.class);
+			UserDTO userDTO = iUserDao.getUser(loggedInUserName, false);
+			
+			if(null != etlIdRules){
+				
+				for(EtlIDRuleDetailDto etlIDRuleDetailDto:etlIdRules){
+					EtlIDRuleDetailDomain etlIDRuleDetailDomain = CommonUtils.convertObject(etlIDRuleDetailDto, EtlIDRuleDetailDomain.class);
+					etlIDRuleDetailDomain.setDateCreated(new Timestamp(new Date().getTime()));
+					etlIDRuleDetailDomain.setUserCreated(userDTO.getId());
+					hibernatePersistenceManager.save(etlIDRuleDetailDomain);
+				}
+				
+			}else{
+				log.info("IDRules object found Null");
+			}
+			
+			result = true;
+			endTransaction();
+		}catch(Exception e){
+			rollBack();
+			throw new ProcessFailedException("Failed to edit Feed Id Rules. "+e.getMessage());
+		}
+		return result;
+	}
+	
+	@Override
+	public ReplaceCategoryCollection getReplaceCategoryForDropDown(String userEmail) throws ProcessFailedException{
+		final String methodName = "getReplaceCategoryForDropDown";
+		log.info("Inside " + methodName + " method of " + CLASSNAME);
+		ReplaceCategoryDto replaceCategoryDto = null;
+		List<ReplaceCategoryDto> replaceCategoryList = new ArrayList<>();
+		ReplaceCategoryCollection categoryCollection = new ReplaceCategoryCollection();
+		Criteria criteria = null;
+		try{
+			requestPlatinumConnection();
+			beginTransaction();
+				criteria = createCriteria(ReplaceCategoryDomain.class);
+				List<ReplaceCategoryDomain> replaceCategoryDomainList = criteria.list();
+				if(null != replaceCategoryDomainList && !replaceCategoryDomainList.isEmpty()){
+					for (ReplaceCategoryDomain replaceCategoryDomain : replaceCategoryDomainList) {
+						if(replaceCategoryDomain.getReplaceCategoryId() != 9){
+							replaceCategoryDto = new ReplaceCategoryDto();
+							replaceCategoryDto.setReplaceCategoryId(replaceCategoryDomain.getReplaceCategoryId());
+							replaceCategoryDto.setReplaceCategoryDesc(replaceCategoryDomain.getReplaceCategoryDesc());
+							replaceCategoryList.add(replaceCategoryDto);
+						}
+					}
+					categoryCollection.setReplaceCategoryList(replaceCategoryList);
+				}else{
+					log.info("replaceCategoryDomainList Found null");
+				}
+			endTransaction();
+			releasePlatinumConnection();
+		}catch(Exception e){
+			endTransaction();
+			log.error(EXCEPTION, e);
+			throw new ProcessFailedException("Failed to fetch ReplaceCategory info. "+e.getMessage());
+		}
+		return categoryCollection;
+	}
+	
+	@Override
+	public ReplaceCategoryDto getRulesInfoByCategoryId(String userString,long categoryId) throws ProcessFailedException{
+		final String methodName = "getRulesInfoByCategoryId";
+		log.info("Inside " + methodName + " method of " + CLASSNAME);
+		ReplaceCategoryDto replaceCategoryDto = null;
+		try{
+			if(categoryId >0){
+				if(categoryId == CommonConstants.BUILT_IN_FUNCTIONS){
+					replaceCategoryDto = getBuiltInFunctionRules(userString, categoryId);
+				}else if(categoryId == CommonConstants.COUNTRY_CODE){
+					replaceCategoryDto = getCountryCodeRules(userString, categoryId);
+				}else{
+					replaceCategoryDto = getCategoryRulesInfo(userString, categoryId);
+				}
+			}else{
+				log.info("categoryId found 0");
+				throw new ProcessFailedException("categoryId cannot be 0");
+			}
+		}catch(Exception e){
+			endTransaction();
+			log.error(EXCEPTION, e);
+			throw new ProcessFailedException("Failed to fetch getRulesInfoByCategoryId info. "+e.getMessage());
+		}
+		return replaceCategoryDto;
+	}
+	
+	private ReplaceCategoryDto getCountryCodeRules(String userString,long categoryId) throws ProcessFailedException{
+		final String methodName = "getCountryCodeRules";
+		log.info("Inside " + methodName + " method of " + CLASSNAME);
+		ReplaceCategoryDto replaceCategoryDto = new ReplaceCategoryDto();
+		try{
+			requestPlatinumConnection();
+			beginTransaction();
+			
+			log.info("COUNTRYCODERULESQUERY --> " +COUNTRYCODERULESQUERY.toString());
+			List<CountryCodeCategoryRulesData> codeCategoryRulesDatas = hibernatePersistenceManager.createSQLQuery(COUNTRYCODERULESQUERY.toString())
+					.addScalar("ruleId", StandardBasicTypes.LONG)
+					.addScalar("ruleDesc", StandardBasicTypes.STRING)
+					.addScalar("ruleTableName", StandardBasicTypes.STRING)
+					.addScalar("replaceCategoryId", StandardBasicTypes.LONG)
+					.addScalar("masterJoinColName", StandardBasicTypes.STRING)
+					.addScalar("masterCodeColName", StandardBasicTypes.STRING)
+					.setLong("categoryId",categoryId)
+					.setResultTransformer(Transformers.aliasToBean(CountryCodeCategoryRulesData.class)).list();
+			if(null != codeCategoryRulesDatas && !codeCategoryRulesDatas.isEmpty()){
+				replaceCategoryDto.setCountryCodeCategorRulesDatas(codeCategoryRulesDatas);
+			}else{
+				log.info("codeCategoryRulesDatas found null");
+			}
+			endTransaction();
+			releasePlatinumConnection();
+		}catch(Exception e){
+			endTransaction();
+			log.error(EXCEPTION, e);
+			throw new ProcessFailedException("Failed to fetch getCountryCodeRules info. "+e.getMessage());
+		}
+		return replaceCategoryDto;
+	}
+	
+	private ReplaceCategoryDto getBuiltInFunctionRules(String userString,long categoryId) throws ProcessFailedException{
+		final String methodName = "getBuiltInFunctionRules";
+		log.info("Inside " + methodName + " method of " + CLASSNAME);
+		ReplaceCategoryDto replaceCategoryDto = new ReplaceCategoryDto();
+		try{
+			requestPlatinumConnection();
+			beginTransaction();
+			
+			log.info("BUILTINFUNCTIONQUERY --> " +BUILTINFUNCTIONQUERY.toString());
+			List<BuiltInFunctionCategoryRulesData> builtInFunctionCategoryRulesDatas = hibernatePersistenceManager.createSQLQuery(BUILTINFUNCTIONQUERY.toString())
+					.addScalar("ruleId", StandardBasicTypes.LONG)
+					.addScalar("ruleDesc", StandardBasicTypes.STRING)
+					.addScalar("ruleTableName", StandardBasicTypes.STRING)
+					.addScalar("replaceCategoryId", StandardBasicTypes.LONG)
+					.addScalar("functionName", StandardBasicTypes.STRING)
+					.setLong("categoryId",categoryId)
+					.setResultTransformer(Transformers.aliasToBean(BuiltInFunctionCategoryRulesData.class)).list();
+			if(null != builtInFunctionCategoryRulesDatas && !builtInFunctionCategoryRulesDatas.isEmpty()){
+				replaceCategoryDto.setBuiltInFunctionCategoryRulesDatas(builtInFunctionCategoryRulesDatas);
+			}else{
+				log.info("builtInFunctionCategoryRulesDatas found null");
+			}
+			endTransaction();
+			releasePlatinumConnection();
+		}catch(Exception e){
+			endTransaction();
+			log.error(EXCEPTION, e);
+			throw new ProcessFailedException("Failed to fetch getBuiltInFunctionRules info. "+e.getMessage());
+		}
+		return replaceCategoryDto;
+	}
+	
+	private ReplaceCategoryDto getCategoryRulesInfo(String userString,long categoryId) throws ProcessFailedException{
+		final String methodName = "getCategoryRulesInfo";
+		log.info("Inside " + methodName + " method of " + CLASSNAME);
+		ReplaceCategoryDto replaceCategoryDto = new ReplaceCategoryDto();
+		try{
+			requestPlatinumConnection();
+			beginTransaction();
+			
+			log.info("CATEGORYRULESQUERY --> " +CATEGORYRULESQUERY.toString());
+			List<CategoryRulesData> categoryRulesDatas = hibernatePersistenceManager.createSQLQuery(CATEGORYRULESQUERY.toString())
+					.addScalar("ruleId", StandardBasicTypes.LONG)
+					.addScalar("ruleDesc", StandardBasicTypes.STRING)
+					.addScalar("ruleTableName", StandardBasicTypes.STRING)
+					.addScalar("replaceCategoryId", StandardBasicTypes.LONG)
+					.addScalar("replaceText", StandardBasicTypes.STRING)
+					.addScalar("replaceTextWith", StandardBasicTypes.STRING)
+					.addScalar("replacePosition", StandardBasicTypes.STRING)
+					.setLong("categoryId",categoryId)
+					.setResultTransformer(Transformers.aliasToBean(CategoryRulesData.class)).list();
+			if(null != categoryRulesDatas && !categoryRulesDatas.isEmpty()){
+				replaceCategoryDto.setCategoryRulesDatas(categoryRulesDatas);
+			}else{
+				log.info("codeCategoryRulesDatas found null");
+			}
+			endTransaction();
+			releasePlatinumConnection();
+		}catch(Exception e){
+			endTransaction();
+			log.error(EXCEPTION, e);
+			throw new ProcessFailedException("Failed to fetch getCategoryRulesInfo info. "+e.getMessage());
+		}
+		return replaceCategoryDto;
+	}
+
+	@Override
+	public EtlMatchMasterColumnsCollectionDto getMatchingSourceColumns(String loggedInUserName, String feedType)throws ProcessFailedException {
+		
+		
+		final String methodName = "getMatchingSourceColumns";
+		log.info("Inside " + methodName + " method of " + CLASSNAME);
+		Criteria criteria = null;
+		
+		List<EtlMatchMasterColumnsDto> etlMatchMasterColumns = new ArrayList<EtlMatchMasterColumnsDto>();
+		
+		try {
+			beginTransaction();
+			criteria = createCriteria(EtlMatchMasterColumnsDomain.class);
+			criteria.add(Restrictions.eq("feedType", feedType));
+			List<EtlMatchMasterColumnsDomain> etlMatchMasterDomainColumns =criteria.list();
+			
+			if (null != etlMatchMasterDomainColumns) {
+				for (EtlMatchMasterColumnsDomain etlMatchMasterColumnsDomain : etlMatchMasterDomainColumns) {
+					EtlMatchMasterColumnsDto etlMatchMasterColumnsDto = CommonUtils.convertObject(etlMatchMasterColumnsDomain,EtlMatchMasterColumnsDto.class);
+					etlMatchMasterColumns.add(etlMatchMasterColumnsDto);
+				}
+			} else {
+				log.info("EtlMatchMasterColumnsDomain Found null");
+			}
+			endTransaction();			
+		}catch(Exception e){
+			log.error(EXCEPTION, e);
+			throw new ProcessFailedException("Failed to Matching SourceColumns. "+e.getMessage());
+		}
+		
+		log.info(" Matching SourceColumns retrived successfully"+etlMatchMasterColumns.size());
+		EtlMatchMasterColumnsCollectionDto etlMatchMasterColumnsCollectionDto= new EtlMatchMasterColumnsCollectionDto();
+		etlMatchMasterColumnsCollectionDto.setEtlMatchMasterColumns(etlMatchMasterColumns);
+		return etlMatchMasterColumnsCollectionDto;
+		
+	}
+
+	@Override
+	public EtlMatchMasterColumnsDto getMatchingTargetColumns(String loggedInUserName, String sourceColumnName,String sourceTableName, String feedType) throws ProcessFailedException {
+		final String methodName = "getMatchingTargetColumns";
+		log.info("Inside " + methodName + " method of " + CLASSNAME);
+		Criteria criteria = null;
+		
+		EtlMatchMasterColumnsDomain etlMatchMasterColumn = new EtlMatchMasterColumnsDomain();
+		EtlMatchMasterColumnsDto etlMatchMasterColumnsDto=null;
+		
+		try {
+			beginTransaction();
+			criteria = createCriteria(EtlMatchMasterColumnsDomain.class);
+			criteria.add(Restrictions.eq("sourceColumnName", sourceColumnName));
+			criteria.add(Restrictions.eq("sourceTableName", sourceTableName));
+			criteria.add(Restrictions.eq("feedType", feedType));
+			etlMatchMasterColumn =(EtlMatchMasterColumnsDomain)criteria.uniqueResult();
+			
+			if (null != etlMatchMasterColumn) {
+					 etlMatchMasterColumnsDto = CommonUtils.convertObject(etlMatchMasterColumn,EtlMatchMasterColumnsDto.class);
+			} else {
+				log.info("etlMatchMasterColumn Found null");
+			}
+			endTransaction();
+		}catch(Exception e){
+			log.error(EXCEPTION, e);
+			throw new ProcessFailedException("Failed to Matching TargetColumns. "+e.getMessage());
+		}
+		
+	
+		if(etlMatchMasterColumnsDto == null){
+			throw new NullPointerException("Matching target coulm can not be null");
+		}
+		
+		return etlMatchMasterColumnsDto;
+	}
+
+	@Override
+	public EtlFeedMatchingDetailDto getFeedMatchingRules(String loggedInUserName, String feedType)throws ProcessFailedException {
+		final String methodName = "getFeedMatchingRules";
+		log.info("Inside " + methodName + " method of " + CLASSNAME);
+		Criteria criteria = null;
+		EtlFeedMatchingDetailDto etlFeedMatchingDetailDto=null;
+		try{
+			
+			beginTransaction();
+			criteria= createCriteria(EtlFeedMatchingDetailDomain.class);
+			criteria.add(Restrictions.eq("feedType", feedType));
+			EtlFeedMatchingDetailDomain etlFeedMatchingDetail = (EtlFeedMatchingDetailDomain)criteria.uniqueResult();
+			if(null != etlFeedMatchingDetail){
+				Hibernate.initialize(etlFeedMatchingDetail.getEtlMatchingColumnDetails());
+				Hibernate.initialize(etlFeedMatchingDetail.getEtlMatchingScoreDetails());
+				etlFeedMatchingDetailDto = CommonUtils.convertObject(etlFeedMatchingDetail,EtlFeedMatchingDetailDto.class);
+			
+				//Setting rule id from parent to child objects
+				long ruleId = etlFeedMatchingDetailDto.getRuleId();
+				
+				for (EtlMatchingColumnDetailDto etlMatchingColumnDetailDto : etlFeedMatchingDetailDto.getEtlMatchingColumnDetails()) {
+					etlMatchingColumnDetailDto.setRuleId(ruleId);
+				}
+				for (EtlMatchingScoreDetailDto etlMatchingScoreDetailDto : etlFeedMatchingDetailDto.getEtlMatchingScoreDetails()) {
+					etlMatchingScoreDetailDto.setRuleId(ruleId);
+				}
+			}
+			
+			endTransaction();
+		}catch(Exception e){
+			log.error(EXCEPTION, e);
+			throw new ProcessFailedException("Failed to fetch configured matching rules for feedType:-"+feedType+""+e.getMessage());
+		}
+		
+		return etlFeedMatchingDetailDto;
+	}
+
+	@Override
+	public boolean saveFeedMatchingRules(String loggedInUserName,EtlFeedMatchingDetailDto etlFeedMatchingDetailDto)throws ProcessFailedException {
+		final String methodName = "saveFeedMatchingRules";
+		log.info("Inside " + methodName + " method of " + CLASSNAME);
+		boolean result=false;
+		
+		try{
+			
+			if(null != etlFeedMatchingDetailDto){
+				beginTransaction();
+				
+					IUserDao iUserDao = DaoManager.USER.getDao(loggedInUserName,IUserDao.class);
+					UserDTO userDTO = iUserDao.getUser(loggedInUserName, false);
+					EtlFeedMatchingDetailDomain etlFeedMatchingDetailDomain = CommonUtils.convertObject(etlFeedMatchingDetailDto, EtlFeedMatchingDetailDomain.class);
+					etlFeedMatchingDetailDomain.setDateCreated(new Timestamp(new Date().getTime()));
+					etlFeedMatchingDetailDomain.setUserCreated(userDTO.getId());
+					
+					//etlMatchingColumnDetailDomain = hibernatePersistenceManager.save(etlFeedMatchingDetailDomain);
+					
+					//setting date created and user created in child domain object <code>EtlMatchingScoreDetailDomain</code>. 
+					//Code will throw null pointer exception if object is null.
+					Set<EtlMatchingColumnDetailDomain> etlMatchingColumnDetailDomain = etlFeedMatchingDetailDomain.getEtlMatchingColumnDetails();
+					if(!etlMatchingColumnDetailDomain.isEmpty()){
+						Iterator<EtlMatchingColumnDetailDomain> matchingColumnsIterator = etlMatchingColumnDetailDomain.iterator();
+						while(matchingColumnsIterator.hasNext()){
+							EtlMatchingColumnDetailDomain nextObj = matchingColumnsIterator.next();
+							nextObj.setDateCreated(new Timestamp(new Date().getTime()));
+							nextObj.setUserCreated(userDTO.getId());
+							
+							//use for bi-directional relations
+							nextObj.setEtlFeedMatchingDetailDomain(etlFeedMatchingDetailDomain);
+							
+						}
+					}else{
+						throw new NullPointerException("Matching rules columns can not be null");
+					}
+					//setting date created and user created in child domain object <code>EtlMatchingScoreDetailDomain</code>.
+					//Code will throw null pointer exception if object is null.
+					Set<EtlMatchingScoreDetailDomain> etlMatchingScoreDetailDomain = etlFeedMatchingDetailDomain.getEtlMatchingScoreDetails();
+					if(!etlMatchingScoreDetailDomain.isEmpty()){
+						Iterator<EtlMatchingScoreDetailDomain> matchingScoresIterator = etlMatchingScoreDetailDomain.iterator();
+						while(matchingScoresIterator.hasNext()){
+							EtlMatchingScoreDetailDomain nextObj = matchingScoresIterator.next();
+							nextObj.setDateCreated(new Timestamp(new Date().getTime()));
+							nextObj.setUserCreated(userDTO.getId());
+							
+							//use for bi-directional relations
+							nextObj.setEtlFeedMatchingDetailDomain(etlFeedMatchingDetailDomain);
+							
+						}
+					}else{
+						throw new NullPointerException("Matching rules scores can not be null");
+					}
+					hibernatePersistenceManager.save(etlFeedMatchingDetailDomain);
+				
+				result = true;
+				endTransaction();
+				
+			}else{
+				log.info("FeedMatchingRules object found Null");
+			}
+			
+		}catch(Exception e){
+			log.error(EXCEPTION, e);
+			rollBack();
+			if(etlFeedMatchingDetailDto!=null) {
+			throw new ProcessFailedException("Error occurred while saving Feed Matching rules for feedType:-"+etlFeedMatchingDetailDto.getFeedType()+""+e.getMessage());
+			}
+		}
+		
+		return result;
+	}
+
+	@Override
+	public boolean editFeedMatchingRules(String loggedInUserName,EtlFeedMatchingDetailDto etlFeedMatchingDetailDto)throws ProcessFailedException {
+		final String methodName = "editFeedMatchingRules";
+		log.info("Inside " + methodName + " method of " + CLASSNAME);
+		boolean result=false;
+		Criteria criteria = null;
+		
+		try{
+			if(null != etlFeedMatchingDetailDto){
+				
+				beginTransaction();
+				IUserDao iUserDao = DaoManager.USER.getDao(loggedInUserName,IUserDao.class);
+				UserDTO userDTO = iUserDao.getUser(loggedInUserName, false);
+
+				criteria= createCriteria(EtlFeedMatchingDetailDomain.class);
+				criteria.add(Restrictions.eq("feedType", etlFeedMatchingDetailDto.getFeedType()));
+				EtlFeedMatchingDetailDomain persistedEtlFeedMatchingDetail = (EtlFeedMatchingDetailDomain)criteria.uniqueResult();
+				if(persistedEtlFeedMatchingDetail != null){
+					Hibernate.initialize(persistedEtlFeedMatchingDetail.getEtlMatchingColumnDetails());
+					Hibernate.initialize(persistedEtlFeedMatchingDetail.getEtlMatchingScoreDetails());
+					//Delete existing matching rules.
+					hibernatePersistenceManager.delete(persistedEtlFeedMatchingDetail);
+				}
+				
+				//Save new rules configured
+				EtlFeedMatchingDetailDomain updatedFeedMatchingDetailDomain = CommonUtils.convertObject(etlFeedMatchingDetailDto, EtlFeedMatchingDetailDomain.class);
+				updatedFeedMatchingDetailDomain.setDateCreated(new Timestamp(new Date().getTime()));
+				updatedFeedMatchingDetailDomain.setUserCreated(userDTO.getId());
+				
+				//setting date created and user created in child domain object <code>EtlMatchingScoreDetailDomain</code>. 
+				//Code will throw null pointer exception if object is null.
+				Set<EtlMatchingColumnDetailDomain> etlMatchingColumnDetailDomain = updatedFeedMatchingDetailDomain.getEtlMatchingColumnDetails();
+				if(!etlMatchingColumnDetailDomain.isEmpty()){
+					Iterator<EtlMatchingColumnDetailDomain> matchingColumnsIterator = etlMatchingColumnDetailDomain.iterator();
+					while(matchingColumnsIterator.hasNext()){
+						EtlMatchingColumnDetailDomain nextObj = matchingColumnsIterator.next();
+						nextObj.setDateCreated(new Timestamp(new Date().getTime()));
+						nextObj.setUserCreated(userDTO.getId());
+						
+						//use for bi-directional relations
+						nextObj.setEtlFeedMatchingDetailDomain(updatedFeedMatchingDetailDomain);
+						
+					}
+				}else{
+					throw new NullPointerException("Matching rules columns can not be null");
+				}
+				//setting date created and user created in child domain object <code>EtlMatchingScoreDetailDomain</code>.
+				//Code will throw null pointer exception if object is null.
+				Set<EtlMatchingScoreDetailDomain> etlMatchingScoreDetailDomain = updatedFeedMatchingDetailDomain.getEtlMatchingScoreDetails();
+				if(!etlMatchingScoreDetailDomain.isEmpty()){
+					Iterator<EtlMatchingScoreDetailDomain> matchingScoresIterator = etlMatchingScoreDetailDomain.iterator();
+					while(matchingScoresIterator.hasNext()){
+						EtlMatchingScoreDetailDomain nextObj = matchingScoresIterator.next();
+						nextObj.setDateCreated(new Timestamp(new Date().getTime()));
+						nextObj.setUserCreated(userDTO.getId());
+						
+						//use for bi-directional relations
+						nextObj.setEtlFeedMatchingDetailDomain(updatedFeedMatchingDetailDomain);
+						
+						
+					}
+				}else{
+					throw new NullPointerException("Matching rules scores can not be null");
+				}
+				
+				hibernatePersistenceManager.save(updatedFeedMatchingDetailDomain);
+				result = true;
+				endTransaction();
+				
+			}else{
+				log.info("FeedMatchingRules object found Null");
+			}
+				
+			
+		}catch(Exception e){
+			log.error(EXCEPTION, e);
+			rollBack();
+			if(etlFeedMatchingDetailDto!=null) {
+				throw new ProcessFailedException("Error occurred while updating Feed Matching rules for feedType:-"+etlFeedMatchingDetailDto.getFeedType()+""+e.getMessage());	
+			}
+		}
+		return result;
+	}
+	@Override
+	public EtlTransformMasterDto createTransformation(String userString,EtlTransformMasterDto etlTransformMasterDto) throws ProcessFailedException{
+		final String methodName = "createTransformation";
+		log.info("Inside " + methodName + " method of " + CLASSNAME);
+		boolean result = false;
+		EtlTransformMasterDto returnDto  = new EtlTransformMasterDto();
+		//StringBuilder sqlQuery = new StringBuilder();
+		try{
+			if(null != etlTransformMasterDto && etlTransformMasterDto.getFeedId()>0){
+				FeedMasterDto masterDto = getFeedInfoByFeedId(userString, etlTransformMasterDto.getFeedId());
+				if(null != masterDto){
+					IUserDao iUserDao = DaoManager.USER.getDao(userString,IUserDao.class);
+					UserDTO userDTO = iUserDao.getUser(userString, false);
+					
+					beginTransaction();
+					
+					//sqlQuery.append("update CDI_ETL_TRANSFORM_MAP cetm set DEF_STATUS = 'N' where cetm.FEEDID =:feedId");
+					//hibernatePersistenceManager.createSQLQuery(sqlQuery.toString()).setLong("feedId", etlTransformMasterDto.getFeedId()).executeUpdate();
+					
+					EtlTransformMapDomain etlTransformMapDomain = CommonUtils.convertObject(etlTransformMasterDto, EtlTransformMapDomain.class);
+					etlTransformMapDomain.setExecuteStatusFlag(CommonConstants.N);
+					etlTransformMapDomain.setTransformStatus(CommonConstants.N);
+					etlTransformMapDomain.setUserIdCreated(String.valueOf(userDTO.getId()));
+					etlTransformMapDomain.setDateCreated(new Timestamp(new Date().getTime()));
+					etlTransformMapDomain = (EtlTransformMapDomain) hibernatePersistenceManager.saveOrUpdate(etlTransformMapDomain);
+					
+					List<SourceTargetInfoDto> sourceTargetInfoDtos = etlTransformMasterDto.getSourceTargetList();
+					
+					if(null != sourceTargetInfoDtos && !sourceTargetInfoDtos.isEmpty()){
+						final String prestageTableName = FileConstants.PREFFIX_FOR_PRESTAGE+masterDto.getFeedType().toUpperCase()+FileConstants.SUFFIX_FOR_PRESTAGE;
+						for (SourceTargetInfoDto sourceTargetInfoDto : sourceTargetInfoDtos) {
+							SourceTargetInfoDomain targetInfoDomain = CommonUtils.convertObject(sourceTargetInfoDto, SourceTargetInfoDomain.class);
+							targetInfoDomain.setSourceTableName(prestageTableName);
+							targetInfoDomain.setExecuteInstance(CommonConstants.E);
+							targetInfoDomain.setUserIdCreated(String.valueOf(userDTO.getId()));
+							targetInfoDomain.setDateCreated(new Timestamp(new Date().getTime()));
+							targetInfoDomain.setEtlTransformMapDomain(etlTransformMapDomain);
+							targetInfoDomain = (SourceTargetInfoDomain) hibernatePersistenceManager.saveOrUpdate(targetInfoDomain);
+							
+							List<ReplaceTransformDto> replaceTransformDtos = sourceTargetInfoDto.getReplaceTransformPerformList();
+							if(null != replaceTransformDtos){
+								for (ReplaceTransformDto replaceTransformDto : replaceTransformDtos) {
+									ReplaceTransformPerformDomain performDomain = CommonUtils.convertObject(replaceTransformDto, ReplaceTransformPerformDomain.class);
+									performDomain.setRuleStatus(CommonConstants.Y);
+									performDomain.setUserIdCreated(String.valueOf(userDTO.getId()));
+									performDomain.setDateCreated(new Timestamp(new Date().getTime()));
+									performDomain.setTransformSetName(etlTransformMapDomain.getTransformSetName());
+									performDomain.setTransformMapId(etlTransformMapDomain.getTransformMapId());
+									performDomain.setSourceTargetInfoDomain(targetInfoDomain);
+									performDomain = (ReplaceTransformPerformDomain) hibernatePersistenceManager.saveOrUpdate(performDomain);
+								}
+							}else{
+								log.info("replaceTransformDtos found null");
+							//	rollBack();
+							//	throw new ProcessFailedException("createTransformation Process Failed.");
+							}
+						}
+						
+					}else{
+						log.info("sourceTargetInfoDtos found null");
+					//	rollBack();
+					//	throw new ProcessFailedException("createTransformation Process Failed.");
+					}
+					returnDto  = CommonUtils.convertObject(etlTransformMapDomain, EtlTransformMasterDto.class);
+					endTransaction();
+					result = true;
+				}else{
+					log.info("masterDto found null");
+				}
+			}else{
+				log.info("etlTransformMasterDto found null or FeedID found 0");
+			}
+		}catch(Exception e){
+			endTransaction();
+			result = false;
+			log.error(EXCEPTION, e);
+			rollBack();
+			throw new ProcessFailedException("createTransformation Process Failed.");
+		}
+		return returnDto;
+	}
+	
+	@Override
+	public ArrayList<ProjectConfigXrefDto> getMappedColumnListByProjectId(long projectId) throws ProcessFailedException{
+		final String methodName = "getMappedColumnListByProjectId";
+		log.info("Inside " + methodName + " method of " + CLASSNAME);
+		ProjectConfigXrefDto configXrefDto = null;
+		ArrayList<ProjectConfigXrefDto> configXrefDtoList = new ArrayList<>();
+		Criteria criteria = null;
+		try{
+			if(projectId>0){
+				criteria = createCriteria(ProjectFeedDomain.class);
+				//criteria.add(Restrictions.and(Restrictions.eq("userProject.id", projectId),Restrictions.ge("statusDomain.id",StatusConstants.XREF_MAPPINGS_COMPLETED.getID())));
+				criteria.add(Restrictions.eq("userProject.id", projectId));
+				List<ProjectFeedDomain> projectFeedDomains = criteria.list();
+				if(null != projectFeedDomains && !projectFeedDomains.isEmpty()){
+					for (ProjectFeedDomain projectFeedDomain : projectFeedDomains) {
+
+						if(projectFeedDomain.getStatusDomain().getId()>=StatusConstants.XREF_MAPPINGS_COMPLETED.getID()){
+							criteria = createCriteria(EtlPrestageMasterDomain.class);
+							criteria.add(Restrictions.eq("fileId",projectFeedDomain.getFileId()));
+							EtlPrestageMasterDomain etlPrestageMasterDomain = (EtlPrestageMasterDomain) criteria.uniqueResult();
+							if(null != etlPrestageMasterDomain){
+								criteria = createCriteria(EtlPrestageMapDomain.class);
+								criteria.add(Restrictions.eq("prestageMapId", etlPrestageMasterDomain.getPrestageMapId()));
+								List<EtlPrestageMapDomain> etlPrestageMapList = criteria.list();
+								if(null != etlPrestageMapList && !etlPrestageMapList.isEmpty()){
+									for (EtlPrestageMapDomain etlPrestageMapDomain : etlPrestageMapList) {
+										configXrefDto = new ProjectConfigXrefDto();
+										configXrefDto.setAttributeName(etlPrestageMapDomain.getPrestageColName());
+										configXrefDto.setFeedId(projectFeedDomain.getFeedMasterDomain().getFeedid());
+										configXrefDto.setDisplayName(projectFeedDomain.getFeedMasterDomain().getFeedType());
+										configXrefDto.setProjectId(projectId);
+										configXrefDto.setType(CommonConstants.MAPPED_COL);
+										configXrefDto.setFeedStatus(CommonConstants.MAPPINGS_COMPLETED);
+										if(!configXrefDtoList.contains(configXrefDto)){
+											configXrefDtoList.add(configXrefDto);
+										}
+									}
+								}
+							}
+							
+						}else{
+							configXrefDto = new ProjectConfigXrefDto();
+							configXrefDto.setFeedId(projectFeedDomain.getFeedMasterDomain().getFeedid());
+							configXrefDto.setDisplayName(projectFeedDomain.getFeedMasterDomain().getFeedType());
+							configXrefDto.setProjectId(projectId);
+							configXrefDto.setValue(false);
+							configXrefDto.setType(CommonConstants.MAPPED_COL);
+							configXrefDto.setFeedStatus(CommonConstants.MAPPINGS_IN_COMPLETED);
+							configXrefDtoList.add(configXrefDto);
+						}
+						
+					}
+					//Collection Sorting by Feedid then FeedType
+					if(!configXrefDtoList.isEmpty()){
+						Collections.sort(configXrefDtoList, new Comparator<ProjectConfigXrefDto>() {
+							@Override
+							public int compare(ProjectConfigXrefDto dto1, ProjectConfigXrefDto dto2) {
+								Long feedId1 = dto1.getFeedId();
+								Long feedId2 = dto2.getFeedId();
+					            int feedComp = feedId1.compareTo(feedId2);
+					            if (feedComp != 0) {
+					               return feedComp;
+					            } else {
+					               String feedType1 = dto1.getAttributeName();
+					               String feedType2 = dto2.getAttributeName();
+					               return feedType1.compareTo(feedType2);
+					            }
+							}
+						});
+						
+					}
+				}else{
+					log.info("projectFeedDomains found null");
+				}
+			}else{
+				log.info("projectId found 0");
+				throw new ProcessFailedException("projectId can not be 0.");
+			}
+		}catch(Exception e){
+			log.error(EXCEPTION, e);
+		}
+		return configXrefDtoList;
+		
+	}
+	
+	
+	
+	
+	
+	
+	@Override
+	public boolean checkFeedSetupForStep(String userEmail, long feedsetupStepId, long feedId, long projectId) throws ProcessFailedException {
+		final String methodName = "checkCompletedProcessFor";
+		log.info("Inside " + methodName + " method of " + CLASSNAME);
+		
+		ProjectFeedDto feedDto  = getUniqueFeedByProjectNFeedIds(userEmail, feedId, projectId);
+		
+		long domainStatus =-1;
+		if(feedDto != null && feedDto.getStatusId() >0){
+			domainStatus=  feedDto.getStatusId() ;
+		}
+			
+		if(domainStatus >= feedsetupStepId){
+			return true;
+		}
+		
+		return false;
+	}
+	
+	
+	
+	
+	
+	@Override
+	public ProjectFeedDto getUniqueFeedByProjectNFeedIds(String userEmail, long feedId, long projectId) throws ProcessFailedException {
+		final String methodName = "getUniqueFeedByProjectNFeedIds";
+		log.info("Inside " + methodName + " method of " + CLASSNAME);
+		ProjectFeedDto feedDto = new ProjectFeedDto();
+		try{
+			if(feedId>0){
+				beginTransaction();
+				feedDto = getProjectFeedByProjectIdNFeedId(feedId, projectId);
+				endTransaction();
+			}else{
+				log.info("FeedId or projectId found 0");
+			}
+		}catch(Exception e){
+			log.error(EXCEPTION, e);
+			rollBack();
+			throw new ProcessFailedException("Could not retireve status for feed");
+		}
+		return feedDto;
+	}
+	
+	//This method is without Transaction and called also from other Dao.
+	@Override
+	public ProjectFeedDto getProjectFeedByProjectIdNFeedId(long feedId, long projectId){
+		ProjectFeedDto feedDto = new ProjectFeedDto();
+		Criteria criteria = createCriteria(ProjectFeedDomain.class);
+		criteria.add(Restrictions.and(Restrictions.eq("userProject.id", projectId),Restrictions.eq("feedMasterDomain.feedid",feedId)));
+		ProjectFeedDomain projectFeedDomain = (ProjectFeedDomain) criteria.uniqueResult();
+		if(projectFeedDomain != null){
+			feedDto.setStatusId(projectFeedDomain.getStatusDomain().getId());
+			feedDto.setStatusName(projectFeedDomain.getStatusDomain().getStatus());
+			feedDto.setProjectId(projectFeedDomain.getUserProject().getId());
+		}
+		return feedDto;
+	}
+	
+	
+	
+	@Override
+	public boolean updateFeedSetupStepCompletion(String userEmail, long feedId, long projectId, long completedStepId) throws ProcessFailedException {
+		// TODO Auto-generated method stub
+		final String methodName = "updateFeedSetupStepCompletion";
+		log.info("Inside " + methodName + " method of " + CLASSNAME);
+		boolean result = false;
+		try{
+			beginTransaction();
+			if(feedId>0){
+				result = updateFeedByProjectIdNFeedId(userEmail,feedId, projectId, completedStepId);
+			}else{
+				log.info("feedid and projectid can not be zero or statusName can not be null");
+				throw new ProcessFailedException("feedid and projectid can not be zero or statusName can not be null");
+			}
+			endTransaction();
+		}catch(Exception e){
+			result = false;
+			log.error(EXCEPTION, e);
+			rollBack();
+			throw new ProcessFailedException("changeFeedStatus Process Failed.");
+		}
+		return result;
+	}
+	
+	//This method is without Transaction and also called from other Dao.
+	@Override
+	public boolean updateFeedByProjectIdNFeedId(String userEmail,long feedId, long projectId, long completedStepId) throws ObjectNotSupportedException{
+		boolean result = false;
+		IUserDao iUserDao = DaoManager.USER.getDao(userEmail,IUserDao.class);
+		UserDTO userDTO = iUserDao.getUser(userEmail, false);
+		Criteria criteria = createCriteria(ProjectFeedDomain.class);
+		criteria.add(Restrictions.and(Restrictions.eq("userProject.id", projectId),Restrictions.eq("feedMasterDomain.feedid", feedId)));
+		ProjectFeedDomain projectFeedDomain = (ProjectFeedDomain) criteria.uniqueResult();
+		if(null != projectFeedDomain){
+			StatusDomain statusDomain = hibernatePersistenceManager.getFromSession(StatusDomain.class, new Long(completedStepId).intValue());
+			if(null != statusDomain){
+				projectFeedDomain.setStatusDomain(statusDomain);
+				projectFeedDomain.setDateModified(new Timestamp(new Date().getTime()));
+				projectFeedDomain.setUserIdModified(String.valueOf(userDTO.getId()));
+				hibernatePersistenceManager.saveOrUpdate(projectFeedDomain);
+				result = true;
+			}else{
+				log.info("statusDomain found Null");
+			}
+		}else{
+			log.info("projectFeedDomain found Null");
+		}
+		return result;
+	}
+	
+	@Override
+	public ProjectDTO getProjectByFeedId(long feedId) throws ProcessFailedException {
+		final String methodName = "getProjectIdByFeedId";
+		log.info("Inside " + methodName + " method of " + CLASSNAME);
+		ProjectDTO projectObj = null;
+		try{
+			if(feedId>0){
+				beginTransaction();
+				Criteria criteria = createCriteria(ProjectFeedDomain.class);
+				criteria.add(Restrictions.and(Restrictions.eq("feedMasterDomain.feedid", feedId),Restrictions.gt("statusDomain.id", StatusConstants.IDLE.getID())));
+				ProjectFeedDomain projectFeedDomain = (ProjectFeedDomain) criteria.uniqueResult();
+				if(null != projectFeedDomain){
+					projectObj = CommonUtils.convertObject(projectFeedDomain.getUserProject(), ProjectDTO.class);
+				}
+				endTransaction();
+			}else{
+				log.info("feedid can not be zero");
+				throw new ProcessFailedException("feedid can not be zero");
+			}
+		}catch(Exception e){
+			log.error(EXCEPTION, e);
+			throw new ProcessFailedException("Error occured while fetching project for feed.");
+		}
+		
+		return projectObj;
+	}
+	
+	@Override
+	public boolean addUpdateAndDeleteFeed(String userEmail,ProjectDTO projectDTO){
+		final String methodName = "addUpdateAndDeleteFeed";
+		log.info("Inside " + methodName + " method of " + CLASSNAME);
+		boolean result = false;
+		try{
+			if(null != projectDTO){
+				beginTransaction();
+				List<FeedMasterDto> feedMasterDtos = projectDTO.getFeedMasterDtos();
+				if(null != feedMasterDtos && !feedMasterDtos.isEmpty()){
+					addOrUpdateFeed(userEmail, feedMasterDtos, projectDTO.getId());
+				}
+				List<FeedMasterDto> feedDeleteList = projectDTO.getFeedDeleteList();
+				if(null != feedDeleteList && !feedDeleteList.isEmpty()){
+					for (FeedMasterDto feedMasterDto : feedDeleteList) {
+						deleteFeed(feedMasterDto.getFeedid(), projectDTO.getId());
+					}
+				}
+				endTransaction();
+				result = true;
+			}else{
+				log.info("projectDTO found Null");
+			}
+		}catch(Exception e){
+			rollBack();
+			result = false;
+			log.error(EXCEPTION, e);
+		}
+		return result;
+	}
+	
+	private long getClientFeedFileStatus(long projectId, String feedType, long fileId) throws ProcessFailedException{
+		long fileStatus = 0L;
+		try{
+			//beginTransaction();
+			Criteria clientfeedDomain = hibernatePersistenceManager.createCriteria(ClientFeedDomain.class);
+			clientfeedDomain.add(Restrictions.eq("projectId", projectId));
+			clientfeedDomain.add(Restrictions.eq("feedType", feedType));
+			clientfeedDomain.add(Restrictions.eq("fileId", fileId));
+			ClientFeedDomain domain = (ClientFeedDomain) clientfeedDomain.uniqueResult();
+			if(null != domain){
+				Criteria statusCriteria = hibernatePersistenceManager.createCriteria(StatusDomain.class);
+				statusCriteria.add(Restrictions.eq("status", domain.getStatus()));
+				StatusDomain statusDomain = (StatusDomain) statusCriteria.uniqueResult();
+				if(null != statusDomain){
+					fileStatus = statusDomain.getId();
+				}
+			}
+			//endTransaction();
+		}catch(Exception e){
+			//endTransaction();
+			throw new ProcessFailedException("ClientFeed retrieved successfully. "+e.getMessage());
+		}
+		return fileStatus;
+	}
+	
+	@Override
+	public boolean addOrUpdateFeed(String userEmail,List<FeedMasterDto> feedMasterDtoList, long projectId)throws ProcessFailedException, ObjectNotSupportedException {
+		final String methodName = "addOrUpdateFeed";
+		log.info("Inside " + methodName + " method of " + CLASSNAME);
+		boolean result = false;
+		ProjectFeedDomain projectFeedDomain = null;
+		Criteria criteria = null;
+		StatusDomain statusDomain = null;
+		FeedMasterDomain feedMasterDomain = null;
+		EtlFileMetaDataDomain etlFileMetaDataDomain = null;
+		UserProjectDomain userProjectDomain = null;
+		try {
+
+			if (feedMasterDtoList != null) {
+
+				// beginTransaction();
+
+				IUserDao iUserDao = DaoManager.USER.getDao(userEmail,IUserDao.class);
+				UserDTO userDTO = iUserDao.getUser(userEmail, false);
+				
+				if(projectId >0){
+					criteria = createCriteria(UserProjectDomain.class);
+					criteria.add(Restrictions.eq("id", projectId));
+					userProjectDomain = (UserProjectDomain) criteria.uniqueResult();
+				}
+				statusDomain = hibernatePersistenceManager.getFromSession(StatusDomain.class,StatusConstants.LOCKED.getID());
+
+				for (FeedMasterDto feedMasterDto : feedMasterDtoList) {
+
+				//	if (!feedMasterDto.getFeedOperation().equalsIgnoreCase("DELETE")) {
+
+						if (feedMasterDto.getFeedid() > 0) {
+
+							criteria = createCriteria(FeedMasterDomain.class);
+							criteria.add(Restrictions.eq("feedid",feedMasterDto.getFeedid()));
+							feedMasterDomain = (FeedMasterDomain) criteria.uniqueResult();
+
+							if (null != feedMasterDomain) {
+
+								/*if (!feedMasterDomain.getFeedName().equalsIgnoreCase(feedMasterDto.getFeedName())) {
+									if (isFeedNameExits(feedMasterDto.getFeedName())) {
+										throw new DuplicateFeedNameException(feedMasterDomain.getFeedName()+ " Feed Name already exist. Please try another name");
+									}
+								}*/
+
+								feedMasterDomain.setFeedName(feedMasterDto.getFeedName());
+								feedMasterDomain.setFeedType(feedMasterDto.getFeedType());
+								feedMasterDomain.setSourceType(feedMasterDto.getSourceType());
+								feedMasterDomain.setUserIdModified(String.valueOf(userDTO.getId()));
+								feedMasterDomain.setDateModified(new Timestamp(new Date().getTime()));
+								feedMasterDomain.setFeedDataType(CommonConstants.FEEDTYPE_CUSTOMER);
+								
+								hibernatePersistenceManager.saveOrUpdate(feedMasterDomain);
+
+								etlFileMetaDataDomain = feedMasterDomain.getEtlFileMetaDataDomain();
+
+								if (null != etlFileMetaDataDomain) {
+
+									etlFileMetaDataDomain.setGoldDataFlag(feedMasterDto.getEtlFileMetaDataDto().getGoldDataFlag());
+									etlFileMetaDataDomain.setCustomerDataFlag(feedMasterDto.getEtlFileMetaDataDto().getCustomerDataFlag());
+									etlFileMetaDataDomain.setFileExtension(feedMasterDto.getEtlFileMetaDataDto().getFileExtension());
+									etlFileMetaDataDomain.setFileDelimiter(feedMasterDto.getEtlFileMetaDataDto().getFileDelimiter());
+									etlFileMetaDataDomain.setBSkipRows(feedMasterDto.getEtlFileMetaDataDto().getBSkipRows());
+									etlFileMetaDataDomain.setESkipRows(feedMasterDto.getEtlFileMetaDataDto().getESkipRows());
+									etlFileMetaDataDomain.setFileContainsHeaders(feedMasterDto.getEtlFileMetaDataDto().getFileContainsHeaders());
+									etlFileMetaDataDomain.setUserIdModified(String.valueOf(userDTO.getId()));
+									etlFileMetaDataDomain.setDateModified(new Timestamp(new Date().getTime()));
+
+									hibernatePersistenceManager.saveOrUpdate(etlFileMetaDataDomain);
+								}
+								
+								criteria = createCriteria(ProjectFeedDomain.class);
+								criteria.add(Restrictions.and(Restrictions.eq("userProject.id", projectId),Restrictions.eq("feedMasterDomain.feedid", feedMasterDto.getFeedid())));
+								projectFeedDomain = (ProjectFeedDomain) criteria.uniqueResult();
+								if(null == projectFeedDomain){
+									projectFeedDomain = new ProjectFeedDomain();
+									if (null != userProjectDomain) {
+										projectFeedDomain.setUserProject(userProjectDomain);
+									}
+									projectFeedDomain.setFeedMasterDomain(feedMasterDomain);
+									projectFeedDomain.setDateCreated(new Timestamp(new Date().getTime()));
+									projectFeedDomain.setUserIdCreated(String.valueOf(userDTO.getId()));
+									if (null != statusDomain) {
+										projectFeedDomain.setStatusDomain(statusDomain);
+									}
+									hibernatePersistenceManager.saveOrUpdate(projectFeedDomain);
+								}
+								/*if(null != projectFeedDomain){
+									if (null != userProjectDomain) {
+										projectFeedDomain.setUserProject(userProjectDomain);
+									}
+									projectFeedDomain.setFeedMasterDomain(feedMasterDomain);
+									projectFeedDomain.setDateModified(new Timestamp(new Date().getTime()));
+									projectFeedDomain.setUserIdModified(String.valueOf(userDTO.getId()));
+									
+									if (null != statusDomain) {
+										projectFeedDomain.setStatusDomain(statusDomain);
+									}
+									hibernatePersistenceManager.saveOrUpdate(projectFeedDomain);
+								}else{
+									projectFeedDomain = new ProjectFeedDomain();
+
+									if (null != userProjectDomain) {
+										projectFeedDomain.setUserProject(userProjectDomain);
+									}
+									projectFeedDomain.setFeedMasterDomain(feedMasterDomain);
+									projectFeedDomain.setDateCreated(new Timestamp(new Date().getTime()));
+									projectFeedDomain.setUserIdCreated(String.valueOf(userDTO.getId()));
+									
+									if (null != statusDomain) {
+										projectFeedDomain.setStatusDomain(statusDomain);
+									}
+									hibernatePersistenceManager.saveOrUpdate(projectFeedDomain);
+								}*/
+
+							}
+
+						} else {
+
+							feedMasterDomain = CommonUtils.convertObject(feedMasterDto, FeedMasterDomain.class);
+
+							/*if (isFeedNameExits(feedMasterDomain.getFeedName())) {
+								throw new DuplicateFeedNameException(feedMasterDomain.getFeedName()+ " Feed Name already exist. Please try another name");
+							}*/
+
+							feedMasterDomain.setDateCreated(new Timestamp(new Date().getTime()));
+							feedMasterDomain.setClientId(userDTO.getCompanyId());
+							feedMasterDomain.setUserIdCreated(String.valueOf(userDTO.getId()));
+							feedMasterDomain = (FeedMasterDomain) hibernatePersistenceManager.saveOrUpdate(feedMasterDomain);
+
+							etlFileMetaDataDomain = CommonUtils.convertObject(feedMasterDto.getEtlFileMetaDataDto(),EtlFileMetaDataDomain.class);
+							etlFileMetaDataDomain.setFeedMasterDomain(feedMasterDomain);
+							etlFileMetaDataDomain.setUserIdCreated(String.valueOf(userDTO.getId()));
+							etlFileMetaDataDomain.setDateCreated(new Timestamp(new Date().getTime()));
+							etlFileMetaDataDomain = (EtlFileMetaDataDomain) hibernatePersistenceManager.saveOrUpdate(etlFileMetaDataDomain);
+
+							projectFeedDomain = new ProjectFeedDomain();
+
+							if (null != userProjectDomain) {
+								projectFeedDomain.setUserProject(userProjectDomain);
+							}
+							projectFeedDomain.setFeedMasterDomain(feedMasterDomain);
+							projectFeedDomain.setDateCreated(new Timestamp(new Date().getTime()));
+							projectFeedDomain.setUserIdCreated(String.valueOf(userDTO.getId()));
+							
+							if (null != statusDomain) {
+								projectFeedDomain.setStatusDomain(statusDomain);
+							}
+							hibernatePersistenceManager.saveOrUpdate(projectFeedDomain);
+						}
+
+				/*	} else {
+
+						criteria = createCriteria(ProjectFeedDomain.class);
+						criteria.add(Restrictions.eq("userProject.id",projectId));
+						List<ProjectFeedDomain> projectFeedDomains = criteria.list();
+						if (projectFeedDomains != null) {
+							for (ProjectFeedDomain projectFeedDomain2 : projectFeedDomains) {
+								hibernatePersistenceManager.delete(projectFeedDomain2);
+							}
+						}
+
+					}
+*/
+				}
+
+				// endTransaction();
+
+				result = true;
+
+			} else {
+				log.info("feedMasterDto Found Null");
+				result = false;
+			}
+		} catch (Exception e) {
+			result = false;
+			log.error(EXCEPTION, e);
+			//rollBack();
+			throw new ProcessFailedException("addOrUpdateFeed Process Failed.");
+		}
+		return result;
+	}
+	
+	@Override
+	public boolean saveFeedForProject(String userEmail,ProjectDTO projectDTO){
+		final String methodName = "saveFeedForProject";
+		log.info("Inside " + methodName + " method of " + CLASSNAME);
+		boolean result = false;
+		Criteria criteria = null;
+		ProjectFeedDomain projectFeedDomain = null;
+		try{
+			if(null != projectDTO){
+				beginTransaction();
+				
+				List<FeedMasterDto> feedDeleteList = projectDTO.getFeedDeleteList();
+				if(null != feedDeleteList && !feedDeleteList.isEmpty()){
+					for (FeedMasterDto feedMasterDto : feedDeleteList) {
+						deleteFeed(feedMasterDto.getFeedid(), projectDTO.getId());
+						deleteProjectConfigXref(feedMasterDto.getFeedid(), projectDTO.getId());
+					}
+				}
+				
+				
+				List<FeedMasterDto> feedMasterDtos = projectDTO.getFeedMasterDtos();
+				if(null != feedMasterDtos && !feedMasterDtos.isEmpty()){
+
+					IUserDao iUserDao = DaoManager.USER.getDao(userEmail,IUserDao.class);
+					UserDTO userDTO = iUserDao.getUser(userEmail, false);
+					criteria = createCriteria(UserProjectDomain.class);
+					criteria.add(Restrictions.eq("id",projectDTO.getId()));
+					UserProjectDomain userProjectDomain = (UserProjectDomain) criteria.uniqueResult();
+					StatusDomain statusDomain = hibernatePersistenceManager.getFromSession(StatusDomain.class, StatusConstants.LOCKED.getID());
+					
+					for (FeedMasterDto feedMasterDto : feedMasterDtos) {
+						
+						criteria = createCriteria(ProjectFeedDomain.class);
+						criteria.add(Restrictions.and(Restrictions.eq("userProject.id", projectDTO.getId()),Restrictions.eq("feedMasterDomain.feedid", feedMasterDto.getFeedid())));
+						projectFeedDomain = (ProjectFeedDomain) criteria.uniqueResult();
+						if(null == projectFeedDomain){
+							projectFeedDomain = new ProjectFeedDomain();
+							if (null != userProjectDomain) {
+								projectFeedDomain.setUserProject(userProjectDomain);
+							}
+							projectFeedDomain.setFeedMasterDomain((FeedMasterDomain) hibernatePersistenceManager.getPersistentObject(FeedMasterDomain.class, feedMasterDto.getFeedid()));
+							projectFeedDomain.setDateCreated(new Timestamp(new Date().getTime()));
+							projectFeedDomain.setUserIdCreated(String.valueOf(userDTO.getId()));
+							if (null != statusDomain) {
+								projectFeedDomain.setStatusDomain(statusDomain);
+							}
+							hibernatePersistenceManager.saveOrUpdate(projectFeedDomain);
+						}
+					}
+				}
+				
+				
+				
+				endTransaction();
+				result = true;
+				
+			}else{
+				log.info("projectDTO found Null");
+			}
+		}catch(Exception e){
+			rollBack();
+			result = false;
+			log.error(EXCEPTION, e);
+		}
+		return result;
+	}
+	
+	private void deleteProjectConfigXref(Long feedId,Long projectId){
+		final String methodName = "deleteProjectConfigXref";
+		log.info("Inside " + methodName + " method of " + CLASSNAME);
+		Criteria criteria = hibernatePersistenceManager.createCriteria(ProjectConfigXrefDomain.class);
+		criteria.add(Restrictions.and(Restrictions.eq("feedId", feedId),Restrictions.eq("type",CommonConstants.MAPPED_COL)));
+		if(null != projectId){
+			criteria.add(Restrictions.eq("projectId", projectId));
+		}
+		List<ProjectConfigXrefDomain> listxref = criteria.list();
+		if(null != listxref && !listxref.isEmpty()){
+			for (ProjectConfigXrefDomain projectConfigXrefDomain : listxref) {
+				hibernatePersistenceManager.delete(projectConfigXrefDomain);
+			}
+		}
+	}
+	
+}

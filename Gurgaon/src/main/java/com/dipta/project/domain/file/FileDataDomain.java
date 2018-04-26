@@ -1,0 +1,99 @@
+package com.dipta.project.domain.file;
+
+import java.sql.Timestamp;
+
+import javax.persistence.Column;
+import javax.persistence.Entity;
+import javax.persistence.GeneratedValue;
+import javax.persistence.GenerationType;
+import javax.persistence.Id;
+import javax.persistence.SequenceGenerator;
+import javax.persistence.Table;
+
+import lombok.Getter;
+import lombok.Setter;
+
+/**
+ * 
+ * @author saurabh.agarwal
+ *
+ */
+@Entity
+@Table(name = "CLIENT_DATA")
+public class FileDataDomain {
+	
+	@Getter
+	@Setter
+	@Id
+	@Column(name="ID")
+	@GeneratedValue(strategy=GenerationType.AUTO, generator="SEQ_ENTITYID")
+	@SequenceGenerator(name="SEQ_ENTITYID", sequenceName="SEQ_ENTITYID")
+	private Long seqNo;
+	
+	@Getter
+	@Setter
+	@Column(name="SERIAL_NO")
+	private String f0;
+	
+	@Getter
+	@Setter
+	@Column(name="NAME")
+	private String f1;
+	
+	@Getter
+	@Setter
+	@Column(name="COUNTRY")
+	private String f2;
+	
+	@Getter
+	@Setter
+	@Column(name="CUSIP")
+	private String f3;
+	
+	@Getter
+	@Setter
+	@Column(name="ISIN")
+	private String f4;
+	
+	@Getter
+	@Setter
+	@Column(name="SEDOL")
+	private String f5;
+	
+	
+	@Getter
+	@Setter
+	@Column(name="USERID")
+	Long userID;
+	
+	@Getter
+	@Setter
+	@Column(name="PROJECTID")
+	Long projectID;
+	
+	
+	@Getter
+	@Setter
+	@Column(name="DATECREATED")
+	private Timestamp dateCreated;
+	
+	@Getter
+	@Setter
+	@Column(name="STATUS")
+	private String status;
+	
+	@Getter
+	@Setter
+	@Column(name="PROJECTID",insertable=false, updatable=false)
+	private Long projectId;
+	
+	@Getter
+	@Setter
+	@Column(name="comments",insertable=false, updatable=false)
+	private String comments;
+	
+	@Override
+	public String toString() {
+		return "[F0:"+this.getF0() + "F1:"+this.getF1() +",F2:"+ this.getF2()+",F3 (CUSIP):" +this.getF3()+" Length "+this.getF3().length()+"]";
+	}
+}

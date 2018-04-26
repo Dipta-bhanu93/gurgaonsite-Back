@@ -1,0 +1,109 @@
+package com.lei.dao.crossReference;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import com.lei.dao.base.DaoBaseInterface;
+import com.lei.dto.crossReference.EtlFeedMatchingDetailDto;
+import com.lei.dto.crossReference.EtlFileMetaDataDto;
+import com.lei.dto.crossReference.EtlIDRuleDetailDto;
+import com.lei.dto.crossReference.EtlIDRuleMasterDto;
+import com.lei.dto.crossReference.EtlMatchMasterColumnsCollectionDto;
+import com.lei.dto.crossReference.EtlMatchMasterColumnsDto;
+import com.lei.dto.crossReference.EtlPrestageMapDto;
+import com.lei.dto.crossReference.EtlPrestageMasterDto;
+import com.lei.dto.crossReference.EtlStageFieldMapDto;
+import com.lei.dto.crossReference.EtlTransformMasterDto;
+import com.lei.dto.crossReference.FeedMasterDto;
+import com.lei.dto.crossReference.FeedMasterDtoCollection;
+import com.lei.dto.crossReference.ProjectFeedDto;
+import com.lei.dto.crossReference.ReplaceCategoryCollection;
+import com.lei.dto.crossReference.ReplaceCategoryDto;
+import com.lei.dto.project.config.ProjectConfigXrefDto;
+import com.lei.dto.workflow.ProjectDTO;
+import com.lei.exception.common.ObjectNotSupportedException;
+import com.lei.exception.common.ProcessFailedException;
+import com.lei.exception.crossReference.DuplicateFeedTypeException;
+import com.lei.exception.crossReference.DuplicateMappingNameException;
+
+/**
+ * @author Ashish.Patel
+ *
+ */
+public interface ICrossRefDao extends DaoBaseInterface {
+	
+	
+	public boolean checkFeedSetupForStep(String userEmail, long processIdtoCheck, long feedId,long projectId) throws ProcessFailedException;
+	public boolean updateFeedSetupStepCompletion(String userEmail, long feedId,long projectId, long completedStepId) throws ProcessFailedException;
+	public ProjectFeedDto getUniqueFeedByProjectNFeedIds(String userEmail, long feedId, long projectId) throws ProcessFailedException;
+	
+	
+	
+	/***********Feed Creation/Updation*************/
+	public boolean addOrUpdateFeed(String userEmail,List<FeedMasterDto> feedMasterDto,long projectId) throws ProcessFailedException, ObjectNotSupportedException;
+	public boolean updateFeed(String userEmail,FeedMasterDto feedMasterDto) throws ProcessFailedException;
+	public ProjectDTO getFeedListByProjectId(String userEmail,long projectId);
+	public FeedMasterDto getFeedInfoByFeedId(String userEmail, long feedId);
+	public FeedMasterDtoCollection getAvailableFeedForDropDown(String userEmail);
+	public boolean deleteFeed(long feedId, long projectId) throws ProcessFailedException;
+	public boolean isFeedTypeExits(String feedName) throws  DuplicateFeedTypeException;
+	public void updateProjectFeed(String userEmail, long projectId, long feedId, long fileId) throws ProcessFailedException;
+	public void updateFeedMetaData(String userEmail, String fileName, long feedId, long fileId, int loadedRecords, int totalBadRecords) throws ProcessFailedException;
+	public EtlFileMetaDataDto getFeedMetaDataByFeedId(long feedId) throws ProcessFailedException;
+	
+	
+	/***********Mapping Creation/Updation*************/
+	public boolean createMapping(String userEmail, EtlPrestageMasterDto etlPrestageMasterDto) throws ProcessFailedException;
+	public EtlPrestageMasterDto getMappingInfo(String userEmail,long feedId) throws ProcessFailedException;
+	public boolean isMappingNameExits(String mappingName) throws DuplicateMappingNameException;
+	public List<String> getPreStageTableColumns(String feedType)	throws ProcessFailedException;
+	public List<EtlStageFieldMapDto> getStageDataColumns(String feedDataType) throws ProcessFailedException;
+	public List<EtlPrestageMapDto> getMappingDetailsByMappingId(long prestageMapId) throws ProcessFailedException;
+	public List<String> getPrestageMappedColumnsByMappingId(long prestageMapId)	throws ProcessFailedException;
+	public boolean changeFeedStatus(String userEmail, ProjectFeedDto projectFeedDto) throws ProcessFailedException;
+	public boolean editMappingDetails(String userEmail,	EtlPrestageMasterDto etlPrestageMasterDto) throws ProcessFailedException;
+	public boolean saveMappingDetails(String userEmail,	EtlPrestageMasterDto etlPrestageMasterDto) throws ProcessFailedException;
+	public long doesFileMappingExists(String userEmail, long feedId) throws ProcessFailedException;
+	
+	
+	/***********Transformation Creation/Updation*************/
+	public boolean doesTransformationNameExists(String transName);
+	public List<String> getPrestageTransformationColumnsByTransId(long transformMapId) throws ProcessFailedException;
+	public ReplaceCategoryCollection getReplaceCategoryForDropDown(String userEmail) throws ProcessFailedException;
+	public ReplaceCategoryDto getRulesInfoByCategoryId(String userString, long categoryId) throws ProcessFailedException;
+	public List<EtlTransformMasterDto> getTransformationListByFeedId(long feedId) throws ProcessFailedException;
+	public EtlTransformMasterDto getTransformationDetailsByTransId(long transMapId)	throws ProcessFailedException;
+	public EtlTransformMasterDto createTransformation(String userString,EtlTransformMasterDto etlTransformMasterDto) throws ProcessFailedException;
+	public boolean saveTransformation(long feedId, long transMapId) throws ProcessFailedException;
+	public boolean editTransformation(String userEmail, EtlTransformMasterDto masterDto) throws ProcessFailedException;
+	
+	
+	/***********Initial Diagnosis Creation/Updation*************/
+	public List<EtlIDRuleMasterDto> getMasterIDRules(String userEmail)throws ProcessFailedException;
+	public boolean saveFeedIDRules(String loggedInUserName,List<EtlIDRuleDetailDto> etlIDRules)throws ProcessFailedException;
+	public List<EtlIDRuleDetailDto> getFeedIdRules(long feedId,String loggedInUserName)throws ProcessFailedException;
+	public boolean editFeedIDRules(String loggedInUserName,List<EtlIDRuleDetailDto> etlIdRules, long feedId)throws ProcessFailedException;
+	
+	
+	/***********Matching Creation/Updation*************/
+	public EtlMatchMasterColumnsCollectionDto getMatchingSourceColumns(String loggedInUserName, String feedType)throws ProcessFailedException;
+	public EtlMatchMasterColumnsDto getMatchingTargetColumns(String loggedInUserName, String sourceColumnName,String sourceTableName, String feedType)throws ProcessFailedException;
+	public EtlFeedMatchingDetailDto getFeedMatchingRules(String loggedInUserName, String feedType)throws ProcessFailedException;
+	public boolean saveFeedMatchingRules(String loggedInUserName,EtlFeedMatchingDetailDto etlFeedMatchingDetailDto)throws ProcessFailedException;
+	public boolean editFeedMatchingRules(String loggedInUserName,EtlFeedMatchingDetailDto etlFeedMatchingDetailDto)throws ProcessFailedException;
+
+
+	
+	
+	
+	public ArrayList<ProjectConfigXrefDto> getMappedColumnListByProjectId(long projectId) throws ProcessFailedException;
+	public ProjectFeedDto getProjectFeedByProjectIdNFeedId(long feedId, long projectId);
+	public boolean updateFeedByProjectIdNFeedId(String userEmail, long feedId,long projectId, long completedStepId) throws ObjectNotSupportedException;
+	public ProjectDTO getProjectByFeedId(long feedId) throws ProcessFailedException;
+	public boolean addUpdateAndDeleteFeed(String userEmail, ProjectDTO projectDTO);
+	public boolean addFeed(String userEmail, FeedMasterDto feedMasterDto)
+			throws ProcessFailedException, ObjectNotSupportedException;
+	public boolean saveFeedForProject(String userEmail, ProjectDTO projectDTO);
+	
+
+}

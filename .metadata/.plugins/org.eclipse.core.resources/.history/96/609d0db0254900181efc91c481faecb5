@@ -1,0 +1,3050 @@
+package com.dipta.project.dao.project.orm;
+
+import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.text.DecimalFormat;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+
+import javax.persistence.ParameterMode;
+
+import lombok.extern.slf4j.Slf4j;
+
+import org.hibernate.CacheMode;
+import org.hibernate.Criteria;
+import org.hibernate.FlushMode;
+import org.hibernate.Hibernate;
+import org.hibernate.Query;
+import org.hibernate.criterion.Order;
+import org.hibernate.criterion.ProjectionList;
+import org.hibernate.criterion.Projections;
+import org.hibernate.criterion.Restrictions;
+import org.hibernate.procedure.ProcedureCall;
+import org.hibernate.transform.Transformers;
+import org.hibernate.type.StandardBasicTypes;
+
+import com.dipta.project.dao.ticketManagement.ITicketMaintenanceDao;
+import com.dipta.project.dao.base.DaoManager;
+import com.dipta.project.dao.base.orm.AbstractBaseDao;
+import com.dipta.project.dao.crossReference.ICrossRefDao;
+import com.dipta.project.dao.file.IFileDao;
+import com.dipta.project.dao.project.IProjectDao;
+import com.dipta.project.dao.report.IReportDao;
+import com.dipta.project.dao.report.orm.ReportsDaoImpl;
+import com.dipta.project.dao.user.IUserDao;
+import com.dipta.project.dao.user.orm.UserDaoImpl;
+import com.dipta.project.dao.workflow.IWorkFlowDao;
+import com.dipta.project.domain.company.DataSearchDomain;
+import com.dipta.project.domain.controlPanel.BusinessGlossaryConfigDomain;
+import com.dipta.project.domain.crossReference.EtlFileMetaDataDomain;
+import com.dipta.project.domain.crossReference.FeedMasterDomain;
+import com.dipta.project.domain.crossReference.ProjectFeedDomain;
+import com.dipta.project.domain.file.FileDataCollectionDomain;
+import com.dipta.project.domain.file.FileDataDomain;
+import com.dipta.project.domain.file.FileDomain;
+import com.dipta.project.domain.project.AllExecutionsStatusDomain;
+import com.dipta.project.domain.project.CodAttributesDomain;
+import com.dipta.project.domain.project.ProjectClassificationDomain;
+import com.dipta.project.domain.project.ProjectConfigDomain;
+import com.dipta.project.domain.project.ProjectConfigXrefDomain;
+import com.dipta.project.domain.project.ProjectExecutionDomain;
+import com.dipta.project.domain.project.ProjectExecutionHistoryDomain;
+import com.dipta.project.domain.project.ProjectPreExecutionFilesDomain;
+import com.dipta.project.domain.project.ProjectSourceDomain;
+import com.dipta.project.domain.project.ProjectTemplateMasterDomain;
+import com.dipta.project.domain.project.StatsGoldTemplateDomain;
+import com.dipta.project.domain.project.TemplateServiceMasterDomain;
+import com.dipta.project.domain.project.UserProjectDomain;
+import com.dipta.project.domain.user.StatusDomain;
+import com.dipta.project.domain.user.UserDomain;
+import com.dipta.project.domain.workflow.WorkFlowDomain;
+import com.dipta.project.dto.crossReference.FeedMasterDto;
+import com.dipta.project.dto.crossReference.ProjectFeedDto;
+import com.dipta.project.dto.file.FileDataCollectionDTO;
+import com.dipta.project.dto.file.FileDataDTO;
+import com.dipta.project.dto.file.FileDto;
+import com.dipta.project.dto.hierarchy.HierarchyEntityDTO;
+import com.dipta.project.dto.project.config.ConfigAttributesDto;
+import com.dipta.project.dto.project.config.IncludeInResultPropsDto;
+import com.dipta.project.dto.project.config.PremuimServicesPropsDto;
+import com.dipta.project.dto.project.config.ProjectConfigXrefDto;
+import com.dipta.project.dto.project.config.ResultConfigPropsDto;
+import com.dipta.project.dto.project.config.SupportServicesPropsDto;
+import com.dipta.project.dto.project.execute.ProjectExecutionDto;
+import com.dipta.project.dto.project.execute.ProjectSkippedFeed;
+import com.dipta.project.dto.project.template.ProjectClassificationDto;
+import com.dipta.project.dto.project.template.ProjectTemplateCountsDto;
+import com.dipta.project.dto.project.template.ProjectTemplateGridData;
+import com.dipta.project.dto.project.template.ProjectTemplateMasterDto;
+import com.dipta.project.dto.project.template.ProjectTemplateSearchGridDto;
+import com.dipta.project.dto.report.PreExecutionFileReports;
+import com.dipta.project.dto.report.RecordCountsDto;
+import com.dipta.project.dto.report.ReportDTO;
+import com.dipta.project.dto.report.generate.GeneratedReportsDto;
+import com.dipta.project.dto.ticketManagement.TicketDto;
+import com.dipta.project.dto.user.UserDTO;
+import com.dipta.project.dto.user.UserProjectCollection;
+import com.dipta.project.dto.workflow.ProjectDTO;
+import com.dipta.project.dto.workflow.WorkFlowMasterDto;
+import com.dipta.project.dto.workflow.WorkFlowSearchGridDto;
+import com.dipta.project.dto.workflow.WorkflowRecordsMappingDto;
+import com.dipta.project.exception.common.ObjectNotSupportedException;
+import com.dipta.project.exception.common.ProcessFailedException;
+import com.dipta.project.exception.project.ProjectConfigNotFoundException;
+import com.dipta.project.exception.project.ProjectCreationFailedException;
+import com.dipta.project.exception.project.ProjectDoesNotExistsException;
+import com.dipta.project.exception.project.SaveProjectConfigException;
+import com.dipta.project.maintenance.file.FileMaintenanceImpl;
+import com.dipta.project.maintenance.file.IFileMaintenance;
+import com.dipta.project.utility.CommonUtils;
+import com.dipta.project.utility.constants.ApplicationConstants;
+import com.dipta.project.utility.constants.CommonConstants;
+import com.dipta.project.utility.constants.FileSourceConstants;
+import com.dipta.project.utility.constants.ProjectConfigEnum;
+import com.dipta.project.utility.constants.ProjectConfigEnum.ConfigProperties;
+import com.dipta.project.utility.constants.ProjectConfigEnum.ConfigPropertiesForXref;
+import com.dipta.project.utility.constants.StatusConstants;
+import com.dipta.project.utility.queue.QueueManager;
+import com.dipta.project.utility.queue.RunnableQueueJob;
+import com.dipta.project.utility.queue.jobcategory.UpdateFilePercentage;
+
+/**
+ * 
+ * @author saurabh.agarwal
+ * 
+ */
+@Slf4j
+public class ProjectDaoImpl extends AbstractBaseDao implements IProjectDao {
+
+
+	public ProjectDaoImpl(String userEmail) {
+		super(userEmail);
+	}
+	public ProjectDaoImpl(Long clientId) {
+		super(clientId);
+	}
+
+	private static final String CLASSNAME = "ProjectDaoImpl";
+	private static final String EXCEPTION = "Exception in ProjectDaoImpl";
+
+	@Override
+	public List<ProjectDTO> getProjects(String userId) throws ObjectNotSupportedException {
+		beginTransaction();
+		Criteria userProjects = hibernatePersistenceManager.createCriteria(UserProjectDomain.class);
+		UserDaoImpl userDaoImpl = new UserDaoImpl(userId);
+		List<ProjectDTO> projectDTOs = new ArrayList<>();
+
+		try {
+			Long id = userDaoImpl.getUserID(userId);
+
+			userProjects.add(Restrictions.eq("userCreated", id));
+			userProjects.add(Restrictions.eq("statusId", 1L));
+			userProjects.addOrder(Order.desc("dateCreated"));
+			List<UserProjectDomain> result = userProjects.list();
+			for (UserProjectDomain userDomain : result) {
+				// ProjectDTO projectDTO =
+				// conversonUtility.convertObject(userDomain, ProjectDTO.class);
+
+				ProjectDTO projectDTO;
+				projectDTO = CommonUtils.convertObject(userDomain, ProjectDTO.class);
+				projectDTOs.add(projectDTO);
+			}
+		} catch (ObjectNotSupportedException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		endTransaction();
+		return projectDTOs;
+	}
+	
+	/**
+	 * Return projects for the user under the template id.
+	 * @author saurabh.agarwal
+	 * @param userId
+	 * @param templateID
+	 * @return
+	 * @throws ObjectNotSupportedException
+	 */
+	@Override
+	public List<ProjectDTO> getProjects(String userId,long templateID) throws ProcessFailedException {
+		beginTransaction();
+		//Criteria userProjects = hibernatePersistenceManager.createCriteria(UserProjectDomain.class);
+		UserDaoImpl userDaoImpl = new UserDaoImpl(userId);
+		List<ProjectDTO> projectDTOs = new ArrayList<>();
+		StringBuilder sqlQuery = null;
+		try{
+		Long id = userDaoImpl.getUserID(userId);
+		sqlQuery = new StringBuilder("select PROJECT_ID as id,PROJECT_NAME as projectName,TEMPLATE_ID as templateID  from user_projects where TEMPLATE_ID = :templateID and USER_ID_CREATED = :userCreated and STATUS_ID = :statusId ORDER by DATE_CREATED desc ");
+		log.info("SqlQuery --> " +sqlQuery.toString());
+		projectDTOs = hibernatePersistenceManager.createSQLQuery(sqlQuery.toString())
+											.addScalar("id", StandardBasicTypes.LONG)
+											.addScalar("projectName", StandardBasicTypes.STRING)
+											.addScalar("templateID", StandardBasicTypes.LONG)
+											.setLong("templateID",templateID)
+											.setLong("userCreated",id)
+											.setLong("statusId",1L)
+											.setResultTransformer(Transformers.aliasToBean(ProjectDTO.class)).list();
+		}catch(Exception e){
+			e.printStackTrace();
+			throw new ProcessFailedException(e.getMessage());
+		}
+		endTransaction();
+		return projectDTOs;
+	}
+	
+	/**
+	 * Return all the projects from all the users of the client.
+	 * @author saurabh.agarwal
+	 * @param clientId
+	 * @param templateID
+	 * @return
+	 * @throws ObjectNotSupportedException
+	 */
+	@Override
+	public List<ProjectDTO> getProjects(long clientId,long templateID) throws ProcessFailedException {
+		beginTransaction();
+		//Criteria userProjects = hibernatePersistenceManager.createCriteria(UserProjectDomain.class);
+		UserDaoImpl userDaoImpl = new UserDaoImpl(getTenantEmail());
+		List<ProjectDTO> projectDTOs = new ArrayList<>();
+		StringBuilder sqlQuery = null;
+		try {
+			ArrayList<UserDTO> userList=userDaoImpl.getUsersForClient(clientId, null);
+			List<String> userIdList=new ArrayList<>();
+			for(UserDTO user:userList){
+				userIdList.add(String.valueOf(user.getId()));
+			}
+			String commaSepUser = org.springframework.util.StringUtils.arrayToCommaDelimitedString(userIdList.toArray());
+			
+			sqlQuery = new StringBuilder("select PROJECT_ID as id,PROJECT_NAME as projectName,TEMPLATE_ID as templateID from user_projects where TEMPLATE_ID = :templateID and USER_ID_CREATED in ( "+commaSepUser+" ) and STATUS_ID = :statusId ORDER by DATE_CREATED desc ");
+			log.info("SqlQuery --> " +sqlQuery.toString());
+			projectDTOs = hibernatePersistenceManager.createSQLQuery(sqlQuery.toString())
+												.addScalar("id", StandardBasicTypes.LONG)
+												.addScalar("projectName", StandardBasicTypes.STRING)
+												.addScalar("templateID", StandardBasicTypes.LONG)
+												.setLong("templateID",templateID)
+												.setLong("statusId",1L)
+												.setResultTransformer(Transformers.aliasToBean(ProjectDTO.class)).list();
+		} catch (ProcessFailedException e) {
+			e.printStackTrace();
+			throw new ProcessFailedException(e.getMessage());
+		}
+		endTransaction();
+		return projectDTOs;
+	}
+
+
+	@Override
+	public ProjectDTO createProject(String userEmail, ProjectDTO projectDetails) throws ObjectNotSupportedException, ProjectCreationFailedException {
+		UserDaoImpl userDao = new UserDaoImpl(userEmail);
+		UserDTO userDTO = userDao.getUser(userEmail, false);
+		UserProjectDomain projectDomain = CommonUtils.convertObject(projectDetails, UserProjectDomain.class);
+		projectDomain.setUserCreated(userDTO.getId());
+		projectDomain.setDateCreated(new Timestamp(new Date().getTime()));
+		try {
+			beginTransaction();
+			if(projectDetails.getTemplateID() == CommonConstants.DATA_CROSS_REFERENCING){
+				projectDomain.setSourceId(Long.parseLong(projectDetails.getSourceId()));
+			}
+			projectDomain = (UserProjectDomain) hibernatePersistenceManager.save(projectDomain);
+
+			//			PreparedStatement query = hibernatePersistenceManager.getPreparedStatement("{call proc_user_create(?, ?)}");
+
+			
+			ProcedureCall procCall = hibernatePersistenceManager.getProcedureCall("proc_user_create");
+			procCall.registerParameter(1, Long.class, ParameterMode.IN).bindValue(userDTO.getId());
+			procCall.registerParameter(2, Long.class, ParameterMode.IN).bindValue(projectDomain.getId());
+
+			procCall.getOutputs();
+
+			ProcedureCall procCall1 = hibernatePersistenceManager.getProcedureCall("PROC_STATS_GOLD_DATA");
+			procCall1.registerParameter(1, Long.class, ParameterMode.IN).bindValue(projectDomain.getId());
+			procCall1.getOutputs();
+
+			endTransaction();
+			
+			return CommonUtils.convertObject(projectDomain, ProjectDTO.class);
+		}catch (Exception e) {
+			rollBack();
+			throw new ProjectCreationFailedException("Project creation failed: " + e.getMessage());
+		}
+	}
+
+	@Override
+	public boolean exists(String userEmail, String projectName) {
+//		UserDaoImpl userDao = new UserDaoImpl(userEmail);
+//		Long userId = userDao.getUserID(userEmail);
+//		UserProjectDomain projectDomain = getIfExistProjectDomain(userId, projectName);
+
+		UserProjectDomain projectDomain =getIfExistProjectDomain(projectName);
+		if (projectDomain != null) {
+			return true;
+		}
+		return false;
+	}
+
+	@Override
+	public boolean saveFile(String userEmail, ProjectDTO projectDetails) throws ProcessFailedException, ProjectDoesNotExistsException {
+		UserDaoImpl userDao = new UserDaoImpl(userEmail);
+		Long userId = userDao.getUserID(userEmail);
+		UserProjectDomain projectDomain = getProjectDomain(userId, projectDetails.getId());
+		if (projectDomain == null) {
+			throw new ProjectDoesNotExistsException("Project does not exists for project ID:" + projectDetails.getId());
+		} else {
+			projectDomain.setFileId(projectDetails.getFileId());
+			projectDomain.setSourceId(getSourceId(projectDetails.getSourceId()));
+			return updateDomain(projectDomain);
+		}
+	}
+
+	public Long getSourceId(String sourceName) {
+		ProjectSourceDomain sourceDomain = null;
+		Long response = 0L;
+		beginTransaction();
+		Criteria criteria = hibernatePersistenceManager.createCriteria(ProjectSourceDomain.class);
+		criteria.add(Restrictions.eq("name", sourceName));
+		List<ProjectSourceDomain> result = criteria.list();
+		if (result != null && result.size() > 0) {
+			sourceDomain = result.get(0);
+			response= sourceDomain.getId();
+		}
+		endTransaction();
+		return response;
+	}
+
+	@Override
+	public void saveFileData(String userEmail, Long projectID, Long fileId, List<FileDataDTO> inputData) throws ObjectNotSupportedException, ProcessFailedException {
+		//		FileDataDomain fileDataDomain = null;
+		int count = 0;
+		RunnableQueueJob job = new UpdateFilePercentage(userEmail,null, null,null);;
+		QueueManager queueManager = null;
+
+//		UserDaoImpl userDao = new UserDaoImpl(userEmail);
+//		Long userId = userDao.getUserID(userEmail);
+
+		beginTransaction();
+		Criteria projectCriteria = hibernatePersistenceManager.createCriteria(UserProjectDomain.class);
+		projectCriteria.add(Restrictions.eq("id", projectID));
+		UserProjectDomain project = (UserProjectDomain) projectCriteria.uniqueResult();
+		
+		
+		try {
+			//			PreparedStatement query = hibernatePersistenceManager.getPreparedStatement("ALTER TABLE CLIENT_DATA TRUNCATE SUBPARTITION \""+projectID+"\"");
+			//			query.executeUpdate();
+			hibernatePersistenceManager.executeSQL("ALTER TABLE CLIENT_DATA TRUNCATE SUBPARTITION \""+projectID+"\"");
+		} catch (SQLException e) {
+			throw new ProcessFailedException("Unable to wipe old data:" + e);
+		}
+		float totalRecords = inputData.size();
+		float completed = 0;
+		int currentPercentage = 0;
+		queueManager = new QueueManager();
+		int updatedPercentage = 0;
+
+
+		FileDataCollectionDTO dtoCollection = new FileDataCollectionDTO();
+		dtoCollection.setFileData(inputData);
+		FileDataCollectionDomain domainCollection = CommonUtils.convertObject(dtoCollection, FileDataCollectionDomain.class);
+		//		FileDataDomain fileDataDomain1 = domainCollection.getFileData().get(0);
+		//		insert into CLIENT_DATA (ID,SERIAL_NO,NAME,COUNTRY,CUSIP,ISIN,SEDOL,USERID,PROJECTID,DATECREATED) values ();
+
+		Query query = hibernatePersistenceManager.createSQLQuery("insert into CLIENT_DATA (ID,SERIAL_NO,NAME,COUNTRY,CUSIP,ISIN,SEDOL,USERID,PROJECTID,DATECREATED) values (SEQ_ENTITYID.nextval,?,?,?,?,?,?,?,?,?)");
+		query.setCacheMode(CacheMode.IGNORE);
+		query.setFlushMode(FlushMode.AUTO);
+
+
+		Timestamp ts = new Timestamp(new Date().getTime());
+
+
+		for(FileDataDomain fileDataDomain : domainCollection.getFileData()){
+
+			query.setString(0, fileDataDomain.getF0());
+			query.setString(1, fileDataDomain.getF1());
+			query.setString(2, fileDataDomain.getF2());
+			query.setString(3, fileDataDomain.getF3());
+			query.setString(4, fileDataDomain.getF4());
+			query.setString(5, fileDataDomain.getF5());
+//			query.setLong(6, userId);
+			query.setLong(6, project.getUserCreated());
+			query.setLong(7, projectID);
+			query.setTimestamp(8,ts );
+			int result = query.executeUpdate();
+
+
+
+
+
+			currentPercentage = (int) Math.ceil(((++completed / totalRecords) * 100F));
+			job.setData(userEmail,fileId, currentPercentage,StatusConstants.PROCESSING.getID());
+			queueManager.executeAJob(job);
+		}
+
+
+
+
+		/*for(FileDataDomain fileDataDomain : domainCollection.getFileData()){
+			fileDataDomain.setUserID(userId);
+			fileDataDomain.setProjectID(projectID);
+			fileDataDomain.setDateCreated(new Timestamp(new Date().getTime()));
+			try{
+				hibernatePersistenceManager.batchSave(fileDataDomain, ++count, inputData.size());
+			}catch(Exception e){
+				job.setData(userEmail,fileId, currentPercentage,StatusConstants.FAILED.getID());
+				queueManager.submitAJob(job);
+				rollBack();
+				throw e;
+			}
+//			if(fileId>0){
+				currentPercentage = (int) Math.ceil(((++completed / totalRecords) * 100F));
+				if(currentPercentage>updatedPercentage){
+					job.setData(userEmail,fileId, currentPercentage,StatusConstants.PROCESSING.getID());
+					queueManager.submitAJob(job);
+				}
+				updatedPercentage = currentPercentage;
+//			}
+
+		}*/
+
+
+		/*for (FileDataDTO fileData : inputData) {
+			fileDataDomain = CommonUtils.convertObject(fileData, FileDataDomain.class);
+			fileDataDomain.setUserID(userId);
+			fileDataDomain.setProjectID(projectID);
+			fileDataDomain.setDateCreated(new Timestamp(new Date().getTime()));
+			try{
+				hibernatePersistenceManager.batchSave(fileDataDomain, ++count, inputData.size());
+			}catch(Exception e){
+				job.setData(userEmail,fileId, currentPercentage,StatusConstants.FAILED.getID());
+				queueManager.submitAJob(job);
+				rollBack();
+				throw e;
+			}
+//			if(fileId>0){
+				currentPercentage = (int) Math.ceil(((++completed / totalRecords) * 100F));
+				if(currentPercentage>updatedPercentage){
+					job.setData(userEmail,fileId, currentPercentage,StatusConstants.PROCESSING.getID());
+					queueManager.submitAJob(job);
+				}
+				updatedPercentage = currentPercentage;
+//			}
+		}*/
+		job.setData(userEmail,fileId, 100,StatusConstants.ACTIVE.getID(),queueManager);
+		//		job = new UpdateFilePercentage(userEmail,fileId, 100,StatusConstants.ACTIVE.getID());
+		queueManager.executeAJob(job);
+		queueManager.noMoreJobs();
+		endTransaction();
+	}
+
+	@Override
+	public ProjectDTO getProjectDetailsById(Long projectId) throws ObjectNotSupportedException, ProjectDoesNotExistsException {
+
+		UserProjectDomain projectDomain = null;
+		beginTransaction();
+		Criteria projectCriteria = hibernatePersistenceManager.createCriteria(UserProjectDomain.class);
+		projectCriteria.add(Restrictions.eq("id", projectId));
+		List<UserProjectDomain> result = projectCriteria.list();
+		if (result != null && result.size() > 0) {
+			projectDomain = result.get(0);
+		}
+		endTransaction();
+		return CommonUtils.convertObject(projectDomain, ProjectDTO.class);
+	}
+
+	@Override
+	public ProjectDTO getProjectDetails(String userEmail, String projectName) throws ObjectNotSupportedException {
+		UserDaoImpl userDao = new UserDaoImpl(userEmail);
+		Long userId = userDao.getUserID(userEmail);
+
+		UserProjectDomain domain = getProjectDomain(userId, projectName);
+
+		if(domain != null)
+			return CommonUtils.convertObject(domain, ProjectDTO.class);
+		else
+			return null;
+	}
+
+	@Override
+	public ProjectDTO getProjectDetails(String userEmail, Long projectId) throws ObjectNotSupportedException, ProjectDoesNotExistsException {
+		UserDaoImpl userDao = new UserDaoImpl(userEmail);
+		Long userId = userDao.getUserID(userEmail);
+		UserProjectDomain projectDomain = getProjectDomain(userId, projectId);
+		if (projectDomain == null) {
+			throw new ProjectDoesNotExistsException("Project does not exists for project ID:" + projectId);
+		}
+		return CommonUtils.convertObject(projectDomain, ProjectDTO.class);
+	}
+	
+	@Override
+	public ProjectDTO getProjectFeedForFileID(String userEmail, Long projectId) throws ObjectNotSupportedException, ProjectDoesNotExistsException {
+		UserDaoImpl userDao = new UserDaoImpl(userEmail);
+		Long userId = userDao.getUserID(userEmail);
+		UserProjectDomain projectDomain = getProjectDomain(userId, projectId);
+		if (projectDomain == null) {
+			throw new ProjectDoesNotExistsException("Project does not exists for project ID:" + projectId);
+		}
+//		ProjectDTO project=new ProjectDTO();
+//		if(projectDomain.getTemplateID()==3){
+////			List<ProjectFeedDomain> dom=projectDomain.getProjectFeedDetailsSet();
+////			List<ProjectFeedDto> list=new ArrayList<>();
+//			for(ProjectFeedDomain obj:projectDomain.getProjectFeedDetailsSet())
+//			{
+//				list.add(CommonUtils.convertObject(obj, ProjectFeedDto.class));
+//			}
+//			projectDomain.setProjectFeedDetailsSet(null);
+//			project=CommonUtils.convertObject(projectDomain, ProjectDTO.class);
+////			project.setProjectFeedDetailsSet(list);
+//			
+//			
+//		}
+		
+		return CommonUtils.convertObject(projectDomain, ProjectDTO.class);
+	}
+	
+	
+
+	@Override
+	public ProjectDTO getProjectDetails(String userEmail, Long projectId, boolean clientLevelFlag) throws ObjectNotSupportedException, ProjectDoesNotExistsException {
+		UserDaoImpl userDao = new UserDaoImpl(userEmail);
+		Long userId = userDao.getUserID(userEmail);
+		UserProjectDomain projectDomain = null;
+
+		if(clientLevelFlag){
+			projectDomain = getProjectDomain(projectId);
+		}else{
+			projectDomain = getProjectDomain(userId, projectId);
+		}
+		if (projectDomain == null) {
+			throw new ProjectDoesNotExistsException("Project does not exists for project ID:" + projectId);
+		}
+		return CommonUtils.convertObject(projectDomain, ProjectDTO.class);
+	}
+
+
+	@Override
+	public ProjectDTO getProjectDetails(String userEmail, Long projectId, Long statusId) throws ObjectNotSupportedException, ProjectDoesNotExistsException, ProcessFailedException {
+		UserDaoImpl userDao = new UserDaoImpl(userEmail);
+		Long userId = userDao.getUserID(userEmail);
+		UserProjectDomain projectDomain = getProjectDomain(userId, projectId);
+		if (projectDomain == null) {
+			throw new ProjectDoesNotExistsException("Project does not exists for project ID:" + projectId);
+		}
+		projectDomain.setStatusId(statusId);
+		updateDomain(projectDomain);
+
+		return CommonUtils.convertObject(projectDomain, ProjectDTO.class);
+	}
+
+	@Override
+	public Boolean exists(Long projectId) {
+		UserDaoImpl userDao = new UserDaoImpl(getTenantEmail());
+		Long userId = userDao.getUserID(getTenantEmail());
+		beginTransaction();
+		Criteria projectCriteria = hibernatePersistenceManager.createCriteria(UserProjectDomain.class);
+		projectCriteria.add(Restrictions.eq("id", projectId));
+		//		Removed the User check
+		//		projectCriteria.add(Restrictions.eq("userCreated", userId));
+
+		List<UserProjectDomain> result = projectCriteria.list();
+		endTransaction();
+		if (result != null && result.size() > 0) {
+			return true;
+		} else {
+			return false;
+		}
+	}
+
+
+	private UserProjectDomain getProjectDomain(Long userId, String projectName) {
+		UserProjectDomain projectDomain = null;
+		beginTransaction();
+		Criteria projectCriteria = createCriteria(UserProjectDomain.class);
+		projectCriteria.add(Restrictions.eq("projectName", projectName));
+		projectCriteria.add(Restrictions.eq("userCreated", userId));
+		List<UserProjectDomain> result = projectCriteria.list();
+		if (result != null && result.size() > 0) {
+			projectDomain = result.get(0);
+		}
+		if (projectDomain != null) {
+			refresh(projectDomain);
+		}
+		endTransaction();
+		return projectDomain;
+	}
+	
+	@Override
+	public List<ProjectFeedDto>  getProjectFeedList(Long projectId) throws ObjectNotSupportedException {
+		beginTransaction();
+		Criteria projectCriteria = createCriteria(ProjectFeedDomain.class);
+		projectCriteria.add(Restrictions.eq("userProject.id",projectId ));
+		List<ProjectFeedDomain> result = projectCriteria.list();
+		List<ProjectFeedDto> list=new ArrayList<>();
+		for(ProjectFeedDomain obj:result){
+			ProjectFeedDto feedObj=new ProjectFeedDto();
+//			feedObj.setCompletedStepId();
+			feedObj.setFeedId(obj.getFeedMasterDomain().getFeedid());
+			feedObj.setFileId(obj.getFileId());
+			feedObj.setProjectFeedId(obj.getProjectFeedId());
+			feedObj.setProjectId(obj.getUserProject().getId());
+			feedObj.setStatusId(obj.getStatusDomain().getId());
+			feedObj.setStatusName(obj.getStatusDomain().getStatus());
+			list.add(feedObj);
+		}
+		endTransaction();
+		return list;
+	}
+	
+	@Override
+	public String  getProjectFeedName(Long projectId,Long fileId) throws ObjectNotSupportedException {
+		beginTransaction();
+		Criteria projectCriteria = createCriteria(ProjectFeedDomain.class);
+		projectCriteria.add(Restrictions.eq("userProject.id",projectId ));
+		projectCriteria.add(Restrictions.eq("fileId",fileId ));
+		ProjectFeedDomain result = (ProjectFeedDomain) projectCriteria.uniqueResult();
+		Hibernate.initialize(result.getFeedMasterDomain());
+		endTransaction();
+		return result.getFeedMasterDomain().getFeedType();
+	}
+	
+	private UserProjectDomain getIfExistProjectDomain(String projectName) {
+		UserProjectDomain projectDomain = null;
+		beginTransaction();
+		Criteria projectCriteria = createCriteria(UserProjectDomain.class);
+		projectCriteria.add(Restrictions.eq("projectName", projectName));
+		List<UserProjectDomain> result = projectCriteria.list();
+		if (result != null && result.size() > 0) {
+			projectDomain = result.get(0);
+		}
+		if (projectDomain != null) {
+			refresh(projectDomain);
+		}
+		endTransaction();
+		return projectDomain;
+	}
+	public UserProjectDomain getProjectDomain(Long userId, Long projectId) {
+		UserProjectDomain projectDomain = null;
+		beginTransaction();
+		Criteria projectCriteria = createCriteria(UserProjectDomain.class);
+		projectCriteria.add(Restrictions.eq("id", projectId));
+		//		Remover User Check
+		//		projectCriteria.add(Restrictions.eq("userCreated", userId));
+		List<UserProjectDomain> result = projectCriteria.list();
+		if (result != null && result.size() > 0) {
+			projectDomain = result.get(0);
+		}
+		if (projectDomain != null) {
+			refresh(projectDomain);
+		}
+		endTransaction();
+		return projectDomain;
+	}
+
+
+	public UserProjectDomain getProjectDomain(Long projectId) {
+		UserProjectDomain projectDomain = null;
+		beginTransaction();
+		Criteria projectCriteria = createCriteria(UserProjectDomain.class);
+		projectCriteria.add(Restrictions.eq("id", projectId));
+		List<UserProjectDomain> result = projectCriteria.list();
+		if (result != null && result.size() > 0) {
+			projectDomain = result.get(0);
+		}
+		if (projectDomain != null) {
+			refresh(projectDomain);
+		}
+		endTransaction();
+		return projectDomain;
+	}
+
+
+
+
+	private boolean updateDomain(Object projectDomain) throws ProcessFailedException {
+		boolean result = false;
+		try {
+			beginTransaction();
+			hibernatePersistenceManager.saveOrUpdate(projectDomain);
+			result = true;
+			endTransaction();
+		} catch (Exception e) {
+			e.printStackTrace();
+			hibernatePersistenceManager.rollback();
+			throw new ProcessFailedException("Update project Failed.");
+		}
+		return result;
+	}
+
+
+
+
+	@Override
+	public ProjectExecutionDto getProjectExecution(Long projectId) throws ProcessFailedException {
+
+		ProjectExecutionDomain projectDomain = getProjectExecutionDomain(projectId);
+		try {
+
+			if (projectDomain == null) {
+				return null;
+			} else {
+				if(projectDomain.getResultPublished()!=null && projectDomain.getResultPublished().equals(ApplicationConstants.RESULTNOTPUBLISHED.getValue())){
+					saveHistory(projectDomain);
+					projectDomain.setResultPublished(ApplicationConstants.RESULTPUBLISHED.getValue());
+					updateDomain(projectDomain);
+
+					projectDomain.setStatusId(projectDomain.getLastStatus());
+				}
+				ProjectExecutionDto latestDate=getLatestExecutionDetails(projectId);
+				if(latestDate != null && latestDate.getLastExecution() != null){
+					Timestamp lastExecutionDate=new Timestamp(latestDate.getLastExecution().getTime());
+					projectDomain.setLastExecution(lastExecutionDate);
+				}
+				ProjectExecutionDto projectExecutionDto= CommonUtils.convertObject(projectDomain, ProjectExecutionDto.class);
+				projectExecutionDto.setAddToGoldLastExecution(latestDate.getAddToGoldLastExecution());
+				projectExecutionDto.setAddToGoldLastExecutionText(latestDate.getAddToGoldLastExecutionText());
+				projectExecutionDto.setAddToGoldStatusId(latestDate.getAddToGoldStatusId());
+				return projectExecutionDto;
+			}
+		} catch (ObjectNotSupportedException e) {
+			throw new ProcessFailedException("Process failed due to following error (Object not supported ):" + e);
+		}
+	}
+
+	@Override
+	public ProjectExecutionDomain getProjectExecutionDomain(Long projectId) throws ProcessFailedException {
+		beginTransaction();
+		ProjectExecutionDomain executionDetails = hibernatePersistenceManager.getPersistentObject(ProjectExecutionDomain.class, projectId);
+		if (executionDetails != null) {
+			hibernatePersistenceManager.refresh(executionDetails);
+		}
+		endTransaction();
+		return executionDetails;
+	}
+
+
+
+	private ProjectConfigDomain convertToPrjConfig(UserProjectDomain userProjectDomain, ConfigAttributesDto attributesDto) throws ObjectNotSupportedException {
+
+		attributesDto.setId("");
+		ProjectConfigDomain updatedPojectConfigDomain = CommonUtils.convertObject(attributesDto, ProjectConfigDomain.class);
+		return updatedPojectConfigDomain;
+	}
+
+
+
+
+	private List<ProjectConfigDomain> getUpdatedProjectConfig(UserProjectDomain userProjectDomain, List<ConfigAttributesDto> attributesDtos) throws ObjectNotSupportedException {
+
+		List<ProjectConfigDomain> updatedProjectConfigs = new ArrayList<ProjectConfigDomain>();
+		
+		//Fix for duplicate configs and constration voilation | error root cause ->> angular broadcast!!
+		List<ConfigAttributesDto> uniqueConfigList = new ArrayList<ConfigAttributesDto>(new LinkedHashSet<ConfigAttributesDto>(attributesDtos));
+
+		for (ConfigAttributesDto attributesDto : uniqueConfigList) {
+
+			long projectConfigId = -1;
+			if (attributesDto.getId() != null && !attributesDto.getId().equals("")) {
+				projectConfigId = Long.parseLong(attributesDto.getId());
+			}
+
+			ProjectConfigDomain projectConfigDomain = (ProjectConfigDomain) hibernatePersistenceManager.getPersistentObject(ProjectConfigDomain.class, projectConfigId);
+			if (projectConfigDomain != null) {
+
+				projectConfigDomain.setAttributeValue(attributesDto.getAttributeValue());
+				hibernatePersistenceManager.saveOrUpdate(projectConfigDomain);
+			} else {
+
+				ProjectConfigDomain updatedPrjConfigDomain = convertToPrjConfig(userProjectDomain, attributesDto);
+				hibernatePersistenceManager.save(updatedPrjConfigDomain);
+			}
+
+		}
+
+		return updatedProjectConfigs;
+	}
+
+	@Override
+	public Boolean saveProjectConfig(ProjectDTO projectDetails) throws ObjectNotSupportedException, SaveProjectConfigException {
+		// TODO Auto-generated method stub
+
+		Boolean result = false;
+		try {
+			hibernatePersistenceManager.beginTransaction();
+
+			UserProjectDomain userProjectDomain = (UserProjectDomain) hibernatePersistenceManager.getPersistentObject(UserProjectDomain.class, projectDetails.getId());
+			List<ProjectConfigDomain> updatedProjectConfigs = new ArrayList<ProjectConfigDomain>();
+
+			updatedProjectConfigs.addAll(getUpdatedProjectConfig(userProjectDomain, projectDetails.getIncludeInResultPropsDto().getAttributes()));
+			updatedProjectConfigs.addAll(getUpdatedProjectConfig(userProjectDomain, projectDetails.getSupportServicesPropsDto().getAttributes()));
+			updatedProjectConfigs.addAll(getUpdatedProjectConfig(userProjectDomain, projectDetails.getPremuimServicesPropsDto().getAttributes()));
+			updatedProjectConfigs.addAll(getUpdatedProjectConfig(userProjectDomain, projectDetails.getResultConfigPropsDto().getAttributes()));
+
+			result = true;
+			hibernatePersistenceManager.commit();
+		} catch (Exception e) {
+			hibernatePersistenceManager.rollback();
+			e.printStackTrace();
+			throw new SaveProjectConfigException("Exception occurred while saving project configuration");
+		}
+
+		return result;
+	}
+
+	@Override
+	public List<ProjectConfigDomain> getSavedProjectConfigurations(long projectId) {
+
+		beginTransaction();
+		Criteria configsCriteria = hibernatePersistenceManager.createCriteria(ProjectConfigDomain.class);
+		configsCriteria.add(Restrictions.eq("projectId", projectId));
+		configsCriteria.addOrder(Order.asc("id"));
+		List<ProjectConfigDomain> configsList = configsCriteria.list();
+		if (configsList != null && configsList.size() > 0) {
+			endTransaction();
+			return configsList;
+		}
+		endTransaction();
+		return null;
+	}
+
+	@Override
+	public ProjectDTO getProjectConfig(String loggedUser, String projectId) throws ObjectNotSupportedException, ProjectConfigNotFoundException {
+
+		// Long userId = userDao.getUserID(loggedUser);
+
+		if (projectId == null || projectId.equals("")) {
+			projectId = "-1";
+		}
+		List<ProjectConfigDomain> configDomains = getSavedProjectConfigurations(Long.parseLong(projectId));
+		
+		beginTransaction(); 
+		ProjectDTO projectDTO = new ProjectDTO();
+		UserProjectDomain userProjectDomain = (UserProjectDomain) hibernatePersistenceManager.getPersistentObject(UserProjectDomain.class, Long.parseLong(projectId));
+		projectDTO = CommonUtils.convertObject(userProjectDomain, ProjectDTO.class);
+
+
+		projectDTO.setId(Long.parseLong(projectId));
+		endTransaction();
+		List<CodAttributesDomain> codPropsMasterList = getCodAllAttributes(projectDTO.getTemplateID());
+
+		
+		// -1 for excluding project level props
+		int MAX_PROP = ProjectConfigEnum.ConfigProperties.values().length + codPropsMasterList.size() - 1; 
+
+		beginTransaction(); 
+		if (configDomains == null || configDomains.size() == 0) {
+			preLoadConfigTemplate(projectDTO, userProjectDomain, codPropsMasterList);
+		} else {
+
+
+
+			List<ConfigAttributesDto> attributes = new ArrayList<>();
+			for (ProjectConfigDomain configDomain : configDomains) {
+				ConfigAttributesDto convertObject = CommonUtils.convertObject(configDomain, ConfigAttributesDto.class);
+
+				if (configDomain.getMasterAttribId() != 200) {
+					CodAttributesDomain masterAttributesDomain = getCodAttributeById(configDomain.getMasterAttribId());
+					convertObject.setAttribute(masterAttributesDomain.getAttribute());
+					convertObject.setAttributeText(masterAttributesDomain.getAttributeText());
+					convertObject.setType(masterAttributesDomain.getType());
+					convertObject.setTypeDisplayName(masterAttributesDomain.getTypeDisplayName());
+					convertObject.setDescription(masterAttributesDomain.getDescription());
+				}
+				attributes.add(convertObject);
+			}
+
+			loadSavedProjectConfign(projectDTO, attributes);
+
+			endTransaction();
+			// set result config ....if not saved yet!
+			if (userProjectDomain != null && configDomains.size() < MAX_PROP) {
+				//setUpResultConfigProperties(getCodAllAttributes(), projectDTO);
+				setUpResultConfigProperties(codPropsMasterList, projectDTO);
+			}
+		}
+		return projectDTO;
+
+	}
+
+	@Override
+	public boolean saveUpdateProjectExecution(Long projectID, ProjectExecutionDto executionDetails) throws ProcessFailedException {
+
+		ProjectExecutionDomain executionDomain = getProjectExecutionDomain(projectID);
+		if (executionDomain != null) {
+			ProjectExecutionHistoryDomain currentState = null;
+			try {
+				currentState = CommonUtils.convertObject(executionDomain, ProjectExecutionHistoryDomain.class);
+				updateDomain(currentState);
+
+				executionDomain = CommonUtils.convertObject(executionDetails, ProjectExecutionDomain.class);
+				executionDomain.setProjectId(projectID);
+				updateDomain(executionDomain);
+			} catch (ObjectNotSupportedException e) {
+				throw new ProcessFailedException("Process failed due to some objects conversions on DAO layer.");
+			}
+		} else {
+			try {
+				executionDomain = CommonUtils.convertObject(executionDetails, ProjectExecutionDomain.class);
+			} catch (ObjectNotSupportedException e) {
+				throw new ProcessFailedException("Process failed due to some objects conversions on DAO layer.");
+			}
+			executionDomain.setProjectId(projectID);
+			updateDomain(executionDomain);
+		}
+		return true;
+	}
+
+	@Override
+	public boolean updateProjectExecutionStatus(Long projectID, Integer statusID, String comments,String resultPublished) throws ProcessFailedException {
+
+		ProjectExecutionDomain executionDomain = getProjectExecutionDomain(projectID);
+		if (executionDomain != null) {
+			saveHistory(executionDomain);
+
+			executionDomain.setStatusId(statusID);
+			executionDomain.setComments(comments);
+
+			if(resultPublished==null){
+				if(executionDomain.getResultPublished()!=null && executionDomain.getResultPublished().equals(ApplicationConstants.RESULTPUBLISHED.getValue())){
+					executionDomain.setResultPublished(resultPublished);
+				}
+			}else{
+				executionDomain.setResultPublished(resultPublished);
+			}
+
+			updateDomain(executionDomain);
+			return true;
+		} else {
+			return false;
+		}
+	}
+
+	private void saveHistory(ProjectExecutionDomain executionDomain) throws ProcessFailedException{
+		if (executionDomain != null) {
+			ProjectExecutionHistoryDomain currentState = null;
+			try {
+				currentState = CommonUtils.convertObject(executionDomain, ProjectExecutionHistoryDomain.class);
+				updateDomain(currentState);
+			}catch (ObjectNotSupportedException e) {
+				throw new ProcessFailedException("Process failed due to some objects conversions on DAO layer.");
+			}
+		}
+
+	}
+
+	private void initializeConfigTypes(ProjectDTO projectDTO) {
+		IncludeInResultPropsDto includeInResultPropsDto = new IncludeInResultPropsDto();
+		includeInResultPropsDto.setCategory(ProjectConfigEnum.INCLUDEINRESULT.getProjectType());
+		includeInResultPropsDto.setCategoryText(ProjectConfigEnum.INCLUDEINRESULT.getProjectTypeText());
+		includeInResultPropsDto.setSaveFlag(false);
+
+		SupportServicesPropsDto supportServicesPropsDto = new SupportServicesPropsDto();
+		supportServicesPropsDto.setCategory(ProjectConfigEnum.SUPPORTSERVICES.getProjectType());
+		supportServicesPropsDto.setCategoryText(ProjectConfigEnum.SUPPORTSERVICES.getProjectTypeText());
+		supportServicesPropsDto.setSaveFlag(false);
+
+		PremuimServicesPropsDto premuimServicesPropsDto = new PremuimServicesPropsDto();
+		premuimServicesPropsDto.setCategory(ProjectConfigEnum.PREMIUMSERVICES.getProjectType());
+		premuimServicesPropsDto.setCategoryText(ProjectConfigEnum.PREMIUMSERVICES.getProjectTypeText());
+		premuimServicesPropsDto.setSaveFlag(false);
+
+		includeInResultPropsDto.setAttributes(new ArrayList<ConfigAttributesDto>());
+		supportServicesPropsDto.setAttributes(new ArrayList<ConfigAttributesDto>());
+		premuimServicesPropsDto.setAttributes(new ArrayList<ConfigAttributesDto>());
+
+		projectDTO.setIncludeInResultPropsDto(includeInResultPropsDto);
+		projectDTO.setSupportServicesPropsDto(supportServicesPropsDto);
+		projectDTO.setPremuimServicesPropsDto(premuimServicesPropsDto);
+
+		// set result configs
+		ResultConfigPropsDto resultConfigPropsDto = new ResultConfigPropsDto();
+		resultConfigPropsDto.setAttributes(new ArrayList<ConfigAttributesDto>());
+		resultConfigPropsDto.setSaveFlag(false);
+		projectDTO.setResultConfigPropsDto(resultConfigPropsDto);
+	}
+
+	private void loadSavedProjectConfign(ProjectDTO projectDTO, List<ConfigAttributesDto> attributes) {
+
+		initializeConfigTypes(projectDTO);
+
+		for (ConfigAttributesDto configAttributesDto : attributes) {
+			if (configAttributesDto.getAttribute().contains("IN_") && configAttributesDto.getMasterAttribId() == 200) {
+				configAttributesDto.setAttributeText(ProjectConfigEnum.ConfigProperties.valueOf(configAttributesDto.getAttribute()).getAttributeText());
+				projectDTO.getIncludeInResultPropsDto().getAttributes().add(configAttributesDto);
+			} else if (configAttributesDto.getAttribute().contains("SS_") && configAttributesDto.getMasterAttribId() == 200) {
+				configAttributesDto.setAttributeText(ProjectConfigEnum.ConfigProperties.valueOf(configAttributesDto.getAttribute()).getAttributeText());
+				projectDTO.getSupportServicesPropsDto().getAttributes().add(configAttributesDto);
+
+			} else if (configAttributesDto.getAttribute().contains("PS_") && configAttributesDto.getMasterAttribId() == 200) {
+				configAttributesDto.setAttributeText(ProjectConfigEnum.ConfigProperties.valueOf(configAttributesDto.getAttribute()).getAttributeText());
+				projectDTO.getPremuimServicesPropsDto().getAttributes().add(configAttributesDto);
+			} else {
+				projectDTO.getResultConfigPropsDto().getAttributes().add(configAttributesDto);
+			}
+		}
+
+	}
+
+	private void preLoadConfigTemplate(ProjectDTO projectDTO, UserProjectDomain userProjectDomain, List<CodAttributesDomain> codPropsMasterList) throws ObjectNotSupportedException {
+
+		initializeConfigTypes(projectDTO);
+
+		for (ConfigProperties property : ProjectConfigEnum.ConfigProperties.values()) {
+
+			ConfigAttributesDto attributesDto = new ConfigAttributesDto();
+
+			attributesDto.setId("");
+			attributesDto.setAttribute(property.getAttribute());
+			attributesDto.setAttributeText(property.getAttributeText());
+			
+			// Reporting Error | set default to false in case of MATP for Instrument template
+			if(property.getAttribute().equals(ProjectConfigEnum.ConfigProperties.IN_POTEN_MATCH.getAttribute()) && projectDTO.getTemplateID()==2){
+				attributesDto.setAttributeValue(false);	
+			}else{
+				attributesDto.setAttributeValue(property.isDefaultFlag());
+			}
+			
+			
+			
+			attributesDto.setProjectId(String.valueOf(userProjectDomain.getId()));
+
+			// set to default 200...later from properties
+			attributesDto.setMasterAttribId(200);
+
+			if (property.getAttribute().contains("IN_")) {
+				attributesDto.setType(ProjectConfigEnum.INCLUDEINRESULT.getProjectType());
+				projectDTO.getIncludeInResultPropsDto().getAttributes().add(attributesDto);
+
+			} else if (property.getAttribute().contains("SS_")) {
+				attributesDto.setType(ProjectConfigEnum.SUPPORTSERVICES.getProjectType());
+
+				projectDTO.getSupportServicesPropsDto().getAttributes().add(attributesDto);
+
+			} else if (property.getAttribute().contains("PS_")) {
+
+				attributesDto.setType(ProjectConfigEnum.PREMIUMSERVICES.getProjectType());
+
+				projectDTO.getPremuimServicesPropsDto().getAttributes().add(attributesDto);
+
+			}
+
+		}
+
+		setUpResultConfigProperties(codPropsMasterList, projectDTO);
+
+	}
+
+	private void setUpResultConfigProperties(List<CodAttributesDomain> attributesDomains, ProjectDTO projectDTO) throws ObjectNotSupportedException {
+
+		if (projectDTO.getResultConfigPropsDto() == null) {
+			ResultConfigPropsDto resultConfigPropsDto = new ResultConfigPropsDto();
+			resultConfigPropsDto.setAttributes(new ArrayList<ConfigAttributesDto>());
+			projectDTO.setResultConfigPropsDto(resultConfigPropsDto);
+
+		}
+		for (CodAttributesDomain propType : attributesDomains) {
+			// 200 = Proj level propssa
+			if (propType.getId() != 200) {
+
+				ConfigAttributesDto convertObject = CommonUtils.convertObject(propType, ConfigAttributesDto.class);
+
+				//if()
+
+				convertObject.setId("");
+				convertObject.setMasterAttribId(propType.getId());
+				convertObject.setProjectId(String.valueOf(projectDTO.getId()));
+
+				if (propType.getDefaultFlag() != null && propType.getDefaultFlag().equals("Y")) {
+
+					convertObject.setAttributeValue(true);
+				} else {
+					convertObject.setAttributeValue(false);
+				}
+
+				if(projectDTO.getResultConfigPropsDto().getAttributes()!=null 
+						&& ! projectDTO.getResultConfigPropsDto().getAttributes().contains(convertObject))
+				{
+					projectDTO.getResultConfigPropsDto().getAttributes().add(convertObject);
+				}
+			}
+		}
+
+	}
+
+	public List<CodAttributesDomain> getCodAllAttributes(long templateId) {
+
+		List<CodAttributesDomain> codAttributesDomains = null;
+		// try {
+		requestPlatinumConnection();
+		beginTransaction();
+
+		Criteria configsCriteria = hibernatePersistenceManager	.createCriteria(CodAttributesDomain.class);
+
+		switch ((int) templateId) {
+		case 1:
+		case 2:
+			configsCriteria.add(Restrictions.in("type", new String[] {
+					"AINFO", "BINFO", "CINFO", "DINFO", "EINFO", "FINFO",
+					"EMAIL", "DWNFRMT", "PROJECT" }));
+			break;
+		case 6:
+			configsCriteria.add(Restrictions.in("type", new String[] {
+					"HINFO", "EMAIL", "DWNFRMT", "PROJECT" }));
+			break;
+		case 7:
+			configsCriteria.add(Restrictions.in("type", new String[] {
+					"HINFO", "EMAIL", "DWNFRMT", "PROJECT" }));
+			break;	
+		}
+		configsCriteria.addOrder(Order.asc("id"));
+
+		codAttributesDomains = configsCriteria.list();
+		endTransaction();
+		releasePlatinumConnection();
+		// } catch (Exception e) {
+		// hibernatePersistenceManager.rollback();
+		// }
+		return codAttributesDomains;
+	}
+
+
+
+	private CodAttributesDomain getCodAttributeById(long id) {
+		return hibernatePersistenceManager.getPersistentObject(CodAttributesDomain.class, id);
+	}
+
+	@Override
+	public void execute(Long projectId) throws ProcessFailedException {
+		try {
+			beginTransaction();
+
+			/*PreparedStatement query = hibernatePersistenceManager.getPreparedStatement("{call PRC_CALL_PROCS(?)}");
+			query.setLong(1, projectDto.getId());
+			query.executeUpdate();*/
+
+
+			ProcedureCall procCall = hibernatePersistenceManager.getProcedureCall("PRC_CALL_PROCS");
+			procCall.registerParameter(1, Long.class, ParameterMode.IN).bindValue(projectId);
+
+			procCall.getOutputs();
+			
+
+			endTransaction();
+
+		} catch (Exception e) {
+			rollBack();
+			
+			ProjectExecutionDomain executionDomain = getProjectExecutionDomain(projectId);
+			throw new ProcessFailedException("Project Execution failed: " + executionDomain.getComments() +" | Feed ID:"+executionDomain.getFeedId()+", Feed Counter:"+executionDomain.getFeedCounter());
+		}
+	}
+
+
+	/*@Override
+	public boolean saveProjectExecutionStatus(ProjectExecutionDto projectExecutionDto) {
+		beginTransaction();
+		ProjectExecutionsStatusDomain projectExecutionsStatusDomain;
+		boolean successFlag = false;
+		try {
+			projectExecutionsStatusDomain = CommonUtils.convertObject(projectExecutionDto, ProjectExecutionsStatusDomain.class);
+			successFlag=true;
+		} catch (ObjectNotSupportedException e) {
+			rollBack();
+			//throw new ProcessFailedException("Project Executions Status save failed!");
+		} catch (Exception e) {
+			rollBack();
+			//throw new ProcessFailedException("Project Executions Status save failed!");
+		}finally{
+		}
+
+		endTransaction();
+
+		return successFlag;
+	}*/
+
+
+
+
+
+	@Override
+	public List<ProjectExecutionDto> getAllProjectExecutions(long projectId, String ExecutionNumbers) throws ObjectNotSupportedException, ProcessFailedException {
+		beginTransaction();
+		Criteria allExecCriteria = hibernatePersistenceManager.createCriteria(AllExecutionsStatusDomain.class);
+		List<ProjectExecutionDto> projectExecutionDtoList = new ArrayList<ProjectExecutionDto>();
+
+		try {
+			allExecCriteria.addOrder(Order.desc("dateCreated"));
+
+			if(ExecutionNumbers != null && ExecutionNumbers.equals("-1")){
+
+			}else{
+				allExecCriteria.setMaxResults(5);
+			}
+			List<AllExecutionsStatusDomain> result = allExecCriteria.list();
+
+			for (AllExecutionsStatusDomain eachExectuion : result) {
+
+				Hibernate.initialize(eachExectuion.getGeneratedReports());
+
+				ProjectExecutionDto projectExecutionDto = CommonUtils.convertObject(eachExectuion, ProjectExecutionDto.class);
+
+				projectExecutionDtoList.add(projectExecutionDto);
+			}
+		} catch (ObjectNotSupportedException e) {
+			rollBack();
+			throw new ObjectNotSupportedException();
+		}catch (Exception e) {
+			rollBack();
+			throw new ProcessFailedException(e.getMessage());
+		}finally{
+
+		}
+
+		endTransaction();
+		return projectExecutionDtoList;
+	}
+
+
+
+	@Override
+	public ProjectExecutionDto getLatestExecutionDetails(long projectId) throws ObjectNotSupportedException, ProcessFailedException {
+
+		ProjectExecutionDto projectExecutionDto = new ProjectExecutionDto();
+		try {
+
+			beginTransaction();
+			Criteria allExecCriteriaAddToGold = hibernatePersistenceManager.createCriteria(AllExecutionsStatusDomain.class);
+			allExecCriteriaAddToGold.add(Restrictions.eq("projectId", projectId));
+			allExecCriteriaAddToGold.add(Restrictions.eq("executionType","2"));
+			allExecCriteriaAddToGold.addOrder(Order.desc("id"));
+			allExecCriteriaAddToGold.setMaxResults(1);
+			AllExecutionsStatusDomain domainAddToGold = (AllExecutionsStatusDomain) allExecCriteriaAddToGold.uniqueResult();
+			
+			Criteria allExecCriteria = hibernatePersistenceManager.createCriteria(AllExecutionsStatusDomain.class);
+			allExecCriteria.add(Restrictions.eq("projectId", projectId));
+			// executionType = 2 ==> means Addtogold was called last
+			allExecCriteria.add(Restrictions.isNull("executionType"));
+			allExecCriteria.addOrder(Order.desc("id"));
+			allExecCriteria.setMaxResults(1);
+			AllExecutionsStatusDomain domain = (AllExecutionsStatusDomain) allExecCriteria.uniqueResult();
+			if(domain!=null){
+				projectExecutionDto = CommonUtils.convertObject(domain, ProjectExecutionDto.class);
+				Hibernate.initialize(domain.getGeneratedReports());
+			}
+			
+			if(domainAddToGold!=null){
+				
+				projectExecutionDto.setAddToGoldLastExecution(domainAddToGold.getLastExecution());
+			    projectExecutionDto.setAddToGoldLastExecutionText(domainAddToGold.getLastExecution().toString());
+			    projectExecutionDto.setAddToGoldStatusId(domainAddToGold.getStatusId());
+			}
+			
+			
+			endTransaction();
+
+		} catch (ObjectNotSupportedException e) {
+			
+			rollBack();
+			throw new ObjectNotSupportedException("Error in getLatestExecutionDetails| ObjectNotSupportedException : "+e.getMessage());
+		}catch (Exception e) {
+			
+			rollBack();
+			throw new ProcessFailedException("Error in getLatestExecutionDetails: "+e.getMessage());
+		}finally{
+
+		}
+
+		
+		return projectExecutionDto;
+	}
+
+	@Override
+	public ProjectTemplateMasterDto getProjectTemplateMasterMapForDropDown(String userEmail){
+		final String methodName = "getProjectTemplateMasterMapForDropDown";
+		log.info("Inside "+methodName+" method of "+CLASSNAME);
+		ProjectTemplateMasterDto projectTemplatedto = new ProjectTemplateMasterDto();
+		Map<String, ProjectTemplateMasterDto> projectMasterMap = new LinkedHashMap<String, ProjectTemplateMasterDto>();
+//		try{
+			//			beginTransaction();
+			//			Criteria projectTemplate = hibernatePersistenceManager.createCriteria(ProjectTemplateMasterDomain.class);
+			//			projectTemplate.addOrder(Order.asc("templateId"));
+			List<ProjectTemplateMasterDomain> projectTemplateList = getProjectTemplatesDomain();
+			if(projectTemplateList != null && !projectTemplateList.isEmpty()){
+				for (ProjectTemplateMasterDomain projectTemplateMasterDomain : projectTemplateList) {
+					try {
+						ProjectTemplateMasterDto PrjtmpMasterDto = CommonUtils.convertObject(projectTemplateMasterDomain, ProjectTemplateMasterDto.class);
+						projectMasterMap.put(projectTemplateMasterDomain.getDescription(),PrjtmpMasterDto);
+					} catch (ObjectNotSupportedException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
+				}
+			}else{
+				log.info("projectTemplateList Found Null");
+			}
+			projectTemplatedto.setProjectTemplateMasterMapDropDown((LinkedHashMap<String, ProjectTemplateMasterDto>) projectMasterMap);
+			//			endTransaction();
+//		}catch(Exception e){
+//			log.error(EXCEPTION,e);
+//			rollBack();
+//		}
+		return projectTemplatedto;
+
+	}
+	private List<ProjectTemplateMasterDomain> getProjectTemplatesDomain(){
+		List<ProjectTemplateMasterDomain>  templates = null;
+		beginTransaction();
+		Criteria projectTemplate = hibernatePersistenceManager.createCriteria(ProjectTemplateMasterDomain.class);
+		projectTemplate.addOrder(Order.asc("templateId"));
+		templates = projectTemplate.list();
+		endTransaction();
+		return templates;
+	}
+	
+	
+	@Override
+	public List<ProjectTemplateMasterDto> getProjectTemplates()throws ProcessFailedException{
+		List<ProjectTemplateMasterDto>  response = new ArrayList<>(); 
+		StringBuilder sqlQuery = null;
+		try{
+		sqlQuery = new StringBuilder("select TEMPLATE_ID as templateId from PRJ_TEMPLATE_MASTER");
+		log.info("SqlQuery --> " +sqlQuery.toString());
+		response = hibernatePersistenceManager.createSQLQuery(sqlQuery.toString())
+											.addScalar("templateId", StandardBasicTypes.LONG)
+											.setResultTransformer(Transformers.aliasToBean(ProjectTemplateMasterDto.class)).list();
+		}catch(Exception e){
+			e.printStackTrace();
+			throw new ProcessFailedException(e.getMessage());
+		}
+		return response;
+	}
+
+	@Override
+	public ProjectTemplateCountsDto getProjectTemplateInfo(String userEmail){
+		final String methodName = "getProjectTemplateMasterMapForDropDown";
+		log.info("Inside "+methodName+" method of "+CLASSNAME);
+		ProjectTemplateCountsDto countsDto = new ProjectTemplateCountsDto();
+		StringBuilder sqlQuery = new StringBuilder();
+		List<ProjectTemplateMasterDto> masterDtos = null;
+		try{
+			sqlQuery.append(" select pt.TEMPLATE_ID as templateId,pt.DESCRIPTION as description,COUNT(up.template_id) as projectTemplateCount from PRJ_TEMPLATE_MASTER pt, USER_PROJECTS up ")
+			.append(" where pt.TEMPLATE_ID = up.template_id(+) ")
+			.append(" GROUP BY up.template_id,pt.DESCRIPTION,pt.TEMPLATE_ID ORDER by pt.TEMPLATE_ID asc ");
+			masterDtos = (List<ProjectTemplateMasterDto>)hibernatePersistenceManager.createSQLQuery(sqlQuery.toString())
+					.addScalar("templateId",StandardBasicTypes.LONG)
+					.addScalar("description",StandardBasicTypes.STRING)
+					.addScalar("projectTemplateCount",StandardBasicTypes.LONG).setResultTransformer(Transformers.aliasToBean(ProjectTemplateMasterDto.class)).list();
+			if(masterDtos != null && !masterDtos.isEmpty()){
+				countsDto.setProjectTemplatemasterDtoList(masterDtos);
+			}else{
+				log.info("masterDtosList Found Null");
+			}
+		}catch(Exception e){
+			log.error(EXCEPTION,e);
+			rollBack();
+		}
+		return countsDto;
+
+	}
+	
+	private List<ProjectPreExecutionFilesDomain> getPreExecutionFiles(Long projectId){
+		String sqlQuery = new String("select * from PROJECT_PREEXECUTION_FILES where id in(select max(id) from PROJECT_PREEXECUTION_FILES where projectid="+projectId+" group by fileid)");
+		
+		beginTransaction();
+		List<ProjectPreExecutionFilesDomain> projectFiles = hibernatePersistenceManager.createSQLQuery(sqlQuery)
+		.addScalar("id",StandardBasicTypes.LONG)
+		.addScalar("projectId",StandardBasicTypes.LONG)
+		.addScalar("executionId",StandardBasicTypes.LONG)
+		.addScalar("fileId",StandardBasicTypes.LONG)
+		.addScalar("catelogId",StandardBasicTypes.LONG)
+		.addScalar("dateCreated",StandardBasicTypes.TIMESTAMP)
+		.setResultTransformer(Transformers.aliasToBean(ProjectPreExecutionFilesDomain.class)).list();
+		
+		endTransaction();
+		return projectFiles;
+		
+	}
+	private List<ProjectPreExecutionFilesDomain> getPreExecutionFilesXref(Long projectId){
+//		String sqlQuery = new String("select * from PROJECT_PREEXECUTION_FILES where id in(select max(id) from PROJECT_PREEXECUTION_FILES where projectid="+projectId+" group by fileid)");
+		String sqlQuery = new String("SELECT * FROM PROJECT_PREEXECUTION_FILES WHERE EXECUTIONID IN (SELECT MAX(EXECUTIONID)  FROM PROJECT_PREEXECUTION_FILES  WHERE projectid="+projectId+" )");
+		beginTransaction();
+		List<ProjectPreExecutionFilesDomain> projectFiles = hibernatePersistenceManager.createSQLQuery(sqlQuery)
+		.addScalar("id",StandardBasicTypes.LONG)
+		.addScalar("projectId",StandardBasicTypes.LONG)
+		.addScalar("executionId",StandardBasicTypes.LONG)
+		.addScalar("fileId",StandardBasicTypes.LONG)
+		.addScalar("catelogId",StandardBasicTypes.LONG)
+		.addScalar("dateCreated",StandardBasicTypes.TIMESTAMP)
+		.setResultTransformer(Transformers.aliasToBean(ProjectPreExecutionFilesDomain.class)).list();
+		
+		endTransaction();
+		return projectFiles;
+		
+	}
+	
+
+	@Override
+	public UserProjectCollection getProjectDetailsByTemplateID(String userEmail,long templateID,Boolean allProject) throws ObjectNotSupportedException, ProjectConfigNotFoundException {
+		final String methodName = "getProjectDetailsByTemplateID";
+		log.info("Inside "+methodName+" method of "+CLASSNAME);
+		UserProjectCollection projectCollection = new UserProjectCollection();
+		projectCollection.setUserProjects(new ArrayList<ProjectDTO>());
+		/*IFileDao fileDao = DaoManager.FILEDAO.getDao(userEmail, IFileDao.class);
+		IReportDao reportsdao = DaoManager.REPORTSDAO.getDao(userEmail, IReportDao.class);*/
+		IUserDao iUserDao = DaoManager.USER.getDao(userEmail,IUserDao.class);
+		long userid = iUserDao.getUserID(userEmail);
+		long clientId=iUserDao.getUser(userEmail, false).getCompanyId();
+		try{
+			if(templateID != 0){
+				beginTransaction();
+
+				Criteria projectCriteria = hibernatePersistenceManager.createCriteria(UserProjectDomain.class);
+				if(allProject){
+					ArrayList<UserDTO> userList=iUserDao.getUsersForClient(clientId, null);
+					List<Long> userIdList=new ArrayList<>();
+					for(UserDTO user:userList){
+						userIdList.add(user.getId());
+					}
+					if(templateID==CommonConstants.CLIENT_HRCY_TEMPLATE){
+						projectCriteria.add(Restrictions.and(Restrictions.in("templateID", CommonConstants.CLIENT_HRCY_SUBTEMPLATES),Restrictions.in("userCreated", userIdList)));
+						projectCriteria.addOrder(Order.desc("dateCreated"));
+					}else{
+						projectCriteria.add(Restrictions.and(Restrictions.eq("templateID", templateID),Restrictions.in("userCreated", userIdList)));
+						projectCriteria.addOrder(Order.desc("dateCreated"));
+					}
+					
+				}else{
+					if(templateID==CommonConstants.CLIENT_HRCY_TEMPLATE){
+						projectCriteria.add(Restrictions.and(Restrictions.in("templateID", CommonConstants.CLIENT_HRCY_SUBTEMPLATES),Restrictions.eq("userCreated", userid)));
+						projectCriteria.addOrder(Order.desc("dateCreated"));
+					}else{
+						projectCriteria.add(Restrictions.and(Restrictions.eq("templateID", templateID),Restrictions.eq("userCreated", userid)));
+						projectCriteria.addOrder(Order.desc("dateCreated"));
+					}
+				}
+				List<UserProjectDomain> projectList = projectCriteria.list();
+				endTransaction();
+				if(projectList != null && !projectList.isEmpty()){
+					/*List<ProjectExecutionDto> executionDtos = getAllProjectExecutions(0L,"-1");*/
+					for (UserProjectDomain userProjectDomain : projectList) {
+						ProjectDTO projectDTO = CommonUtils.convertObject(userProjectDomain, ProjectDTO.class);
+						ProjectExecutionDto projectExecutionDto=getLatestExecutionDetails(projectDTO.getId());
+							projectDTO.setStatusId(projectExecutionDto.getStatusId());
+							projectDTO.setDateExecuted(projectExecutionDto.getLastExecution());
+						if(allProject){
+							UserDomain createdByUserDomain = iUserDao.userDomainById(userProjectDomain.getUserCreated());
+
+							if(createdByUserDomain.getFirstName()!=null && createdByUserDomain.getLastName()!=null){
+								projectDTO.setCreatedBy(createdByUserDomain.getFirstName()+" "+createdByUserDomain.getLastName());
+							}
+						}
+						projectDTO.setOneTimeExecutionFlag(Boolean.parseBoolean(getScheduledFlag(projectDTO.getId())));
+
+						
+						// get information for projectClassification
+						/*Map<String,ProjectClassificationDto> projectClassificationMap = getProjectClassification(projectDTO.getId());
+						if(projectClassificationMap != null && !projectClassificationMap.isEmpty()){
+							projectDTO.setProjectClassificationMap((HashMap<String, ProjectClassificationDto>) projectClassificationMap);
+						}
+						if(executionDtos != null && !executionDtos.isEmpty()){
+							for (ProjectExecutionDto executionDto : executionDtos) {
+								if(projectDTO.getId().equals(executionDto.getProjectId())){
+									projectDTO.setRecordCounts(getProjectClassfnStats(projectDTO.getId()));
+									projectDTO.setReports(new ArrayList<ReportDTO>());
+									projectDTO.setDateExecuted(executionDto.getLastExecution());
+									for (GeneratedReportsDto generatedReportFile : executionDto.getGeneratedReports()) {
+										FileDomain fileDomain = fileDao.getFileDomain(generatedReportFile.getFileId());
+										if(fileDomain != null){
+											if(fileDomain.getSource().equals(FileSourceConstants.REPORT.getSource())){
+												ReportDTO reportDTO = CommonUtils.convertObject(fileDomain, ReportDTO.class);
+												reportDTO.setStatusDesc("");						
+												projectDTO.getReports().add(reportDTO);
+											}
+										}
+									}
+									break;
+								}
+							}
+						}else{
+							log.info("executionDtos Found Null");
+						}*/
+						/*added blank objects*/
+						addBlankObjects(projectDTO);
+						projectCollection.getUserProjects().add(projectDTO);
+					}
+				}else{
+					log.info("projectList Found Null");
+				}
+			}else{
+				log.info("templateID Found 0");
+			}
+
+		} catch (ProcessFailedException e) {
+			log.error(EXCEPTION,e);
+//			rollBack();
+			e.printStackTrace();
+		}catch(Exception e){
+			log.error(EXCEPTION,e);
+//			rollBack();
+			e.printStackTrace();
+		}
+		return projectCollection;
+	}
+
+
+	private RecordCountsDto getProjectClassfnStats (Long projectId,Boolean addToGold) {
+		final String methodName = "getProjectClassfnStats";
+		log.info("Inside "+methodName+" method of "+CLASSNAME);
+		RecordCountsDto responseDto = new RecordCountsDto();
+		beginTransaction();
+		/*Criteria crit = createCriteria(CounterpartyGoldDomain.class).add(Restrictions.eq("projectid", Long.toString(projectId)));
+		ProjectionList projList = Projections.projectionList();
+		projList.add(Projections.groupProperty("matchStatus").as("matchStatus"));
+		projList.add(Projections.count("entityId").setDistinct());*/
+		//uPDATED TABLE due TO CHANGE IN STRUCTURE FOR XREF
+		
+		/*Criteria crit = createCriteria(DataSearchDomain.class).add(Restrictions.eq("projectid", Long.toString(projectId)));
+		ProjectionList projList = Projections.projectionList();
+		projList.add(Projections.groupProperty("matchStatus").as("matchStatus"));
+		projList.add(Projections.count("entityId").setDistinct());
+		crit.setProjection(projList);
+		
+		
+		List<Object[]>  results = crit.list();
+
+		for(Object[] row : results){
+			if(row[0].toString().equalsIgnoreCase("MATG")){
+				responseDto.setPerfectMatch(Long.parseLong(row[1].toString()));
+			}else if(row[0].toString().equalsIgnoreCase("MATP")){
+				responseDto.setPartialMatch(Long.parseLong(row[1].toString()));
+			}else if(row[0].toString().equalsIgnoreCase("MATE")){
+				responseDto.setNoMatch(Long.parseLong(row[1].toString()));
+			}else{
+				responseDto.setException(Long.parseLong(row[1].toString()));
+			}
+		}
+*/
+		StringBuilder query =null;
+		if(addToGold) {
+			 query = new StringBuilder("SELECT A.MATCHSTATUS        AS MATCHSTATUS,  COUNT(DISTINCT A.ENTITYID) AS RECORDCOUNT  FROM DATA_SEARCH A  WHERE A.PROJECTID = :projectID  GROUP BY A.MATCHSTATUS  ");
+					
+		}else {
+			 query = new StringBuilder("SELECT A.MATCH_STATUS        AS MATCHSTATUS,    COUNT(DISTINCT A.ENTITYID) AS RECORDCOUNT  FROM HIERARCHY_MATCH_ENR A  WHERE A.PROJECTID = :projectID  GROUP BY A.MATCH_STATUS");
+				
+		}
+		
+		
+		List<Object[]>  results =  (List<Object[]>)hibernatePersistenceManager.createSQLQuery(query.toString()).setLong("projectID",projectId).list();
+		
+		
+
+		for(Object[] row : results){
+			if(row[0].toString().equalsIgnoreCase("MATG")){
+				responseDto.setPerfectMatch(Long.parseLong(row[1].toString()));
+			}else if(row[0].toString().equalsIgnoreCase("MATP")){
+				responseDto.setPartialMatch(Long.parseLong(row[1].toString()));
+			}else if(row[0].toString().equalsIgnoreCase("MATE")){
+				responseDto.setNoMatch(Long.parseLong(row[1].toString()));
+			}else{
+				responseDto.setException(Long.parseLong(row[1].toString()));
+			}
+		}
+		
+		endTransaction();
+		return responseDto;
+	}
+
+
+	private Map<String,ProjectClassificationDto> getProjectClassification(long projectID){
+		final String methodName = "getProjectClassification";
+		log.info("Inside "+methodName+" method of "+CLASSNAME);
+		Map<String,ProjectClassificationDto> projectClassificationMap = new HashMap<>();
+		Map<String,ProjectClassificationDto> finalmap = new HashMap<>();
+		List<ProjectClassificationDto> lstDto = null;
+		ProjectClassificationDto projectClsDto = null;
+		try{
+			if(projectID != 0){
+				beginTransaction();
+				Criteria projectClassificationCriteria = hibernatePersistenceManager.createCriteria(ProjectClassificationDomain.class);
+				projectClassificationCriteria.add(Restrictions.eq("projectID", projectID));
+				List<ProjectClassificationDomain> prjclassificationLst = projectClassificationCriteria.list();
+				if(prjclassificationLst != null && !prjclassificationLst.isEmpty()){
+					for (ProjectClassificationDomain projectClassificationDomain : prjclassificationLst) {
+						ProjectClassificationDto dto = CommonUtils.convertObject(projectClassificationDomain, ProjectClassificationDto.class);
+						if(projectClassificationMap.containsKey(dto.getClassType())){
+							ProjectClassificationDto classificationDto = projectClassificationMap.get(dto.getClassType());
+							List<ProjectClassificationDto> dtos = classificationDto.getProjectClassificationLst();
+							dtos.add(dto);
+							classificationDto.setProjectClassificationLst(dtos);
+							projectClassificationMap.put(dto.getClassType(),classificationDto);
+						}else{
+							projectClsDto = new ProjectClassificationDto();
+							lstDto = new ArrayList<>();
+							lstDto.add(dto);
+							projectClsDto.setProjectClassificationLst(lstDto);
+							projectClassificationMap.put(dto.getClassType(),projectClsDto);
+						}
+					}
+					projectClsDto = new ProjectClassificationDto();
+					if(projectClassificationMap != null && !projectClassificationMap.isEmpty()){
+						if(projectClassificationMap.containsKey(CommonConstants.PARTYTYPE)){
+							finalmap.put(CommonConstants.PARTYTYPE, projectClassificationMap.get(CommonConstants.PARTYTYPE));
+							projectClassificationMap.remove(CommonConstants.PARTYTYPE);
+							projectClsDto.setDonutChartKeyMap((HashMap<String, ProjectClassificationDto>) projectClassificationMap);
+							finalmap.put(CommonConstants.DONUTCHARTKEY, projectClsDto);
+						}else{
+							projectClsDto.setDonutChartKeyMap((HashMap<String, ProjectClassificationDto>) projectClassificationMap);
+							finalmap.put(CommonConstants.DONUTCHARTKEY, projectClsDto);
+						}
+					}
+
+				}else{
+					log.info("prjclassificationLst Found Null");
+				}
+				endTransaction();
+			}else{
+				log.info("projectID Found 0");
+			}
+		}catch(Exception e){
+			log.error(EXCEPTION,e);
+			rollBack();
+		}
+		return finalmap;
+	}
+
+	@Override
+	public ProjectTemplateSearchGridDto getProjectGoldDataDetails(String userEmail){
+		final String methodName = "getProjectGoldDataDetails";
+		log.info("Inside "+methodName+" method of "+CLASSNAME);
+		ProjectTemplateSearchGridDto searchGridDto = new ProjectTemplateSearchGridDto();
+		List<ProjectTemplateGridData> gridDatas = new ArrayList<>();
+		long totalCountSum = 0;
+		long matchCountSum = 0;
+		long potentialMatchCountSum = 0;
+		long noMatchCountSum = 0;
+		long executedProjectSum = 0;
+		long totalProjectSum = 0;
+		long exceptionSum = 0;
+		long userProjectCount=0;
+		
+		
+		long activeCountSum = 0;
+		long newCountSum = 0;
+		
+		try{
+
+			beginTransaction();
+			Criteria statsGoldTemplateCriteria = hibernatePersistenceManager.createCriteria(StatsGoldTemplateDomain.class);
+			List<StatsGoldTemplateDomain> statsGoldTemplateLst = statsGoldTemplateCriteria.list();
+			IProjectDao projectDao = DaoManager.PROJECTDAO.getDao(userEmail,IProjectDao.class);
+			if(statsGoldTemplateLst != null && !statsGoldTemplateLst.isEmpty()){
+				for (StatsGoldTemplateDomain statsGoldTemplateDomain : statsGoldTemplateLst) {
+					ProjectTemplateGridData projectTemplateGridData = CommonUtils.convertObject(statsGoldTemplateDomain, ProjectTemplateGridData.class);
+					projectTemplateGridData.setTemplateID(statsGoldTemplateDomain.getProjectTemplateMasterDomain().getTemplateId());
+					projectTemplateGridData.setTemplateName(statsGoldTemplateDomain.getProjectTemplateMasterDomain().getDescription());
+					projectTemplateGridData.setUserProjectCount(projectDao.getProjectCountByTemplateID(userEmail, statsGoldTemplateDomain.getProjectTemplateMasterDomain().getTemplateId()));
+					if(null != projectTemplateGridData.getLatestExecutionDate()){
+						SimpleDateFormat dateFormat = new SimpleDateFormat("dd-MMM-yyyy hh:mm:ss aa");
+						String formattedDate = dateFormat.format(projectTemplateGridData.getLatestExecutionDate()).toString();
+						projectTemplateGridData.setLatestExecutionText(formattedDate);
+					}
+					totalCountSum += projectTemplateGridData.getTotalCount();
+					matchCountSum += projectTemplateGridData.getMatchCount();
+					potentialMatchCountSum += projectTemplateGridData.getPotentialMatchCount();
+					noMatchCountSum += projectTemplateGridData.getNoMatchCount();
+					executedProjectSum += projectTemplateGridData.getExecutedProjectsCount();
+					totalProjectSum += projectTemplateGridData.getTotalProjectsCount();
+					exceptionSum += projectTemplateGridData.getExceptionsCount();
+					userProjectCount+=projectTemplateGridData.getUserProjectCount();
+					
+					activeCountSum += projectTemplateGridData.getActiveCount();
+					newCountSum += projectTemplateGridData.getNewCount();
+					
+					gridDatas.add(projectTemplateGridData);
+				}
+				ProjectTemplateGridData data = new ProjectTemplateGridData();
+				data.setTemplateName("Total");
+				data.setTotalCount(totalCountSum);
+				data.setMatchCount(matchCountSum);
+				data.setPotentialMatchCount(potentialMatchCountSum);
+				data.setNoMatchCount(noMatchCountSum);
+				data.setExecutedProjectsCount(executedProjectSum);
+				data.setTotalProjectsCount(totalProjectSum);
+				data.setExceptionsCount(exceptionSum);
+				data.setUserProjectCount(userProjectCount);
+				
+				data.setActiveCount(activeCountSum);
+				data.setNewCount(newCountSum);
+				
+				gridDatas.add(data);
+			}else{
+				log.info("statsGoldTemplateLst Found Null");
+			}
+			searchGridDto.setProjectTemplateGridDataLst(gridDatas);
+			endTransaction();
+		}catch(Exception e){
+			log.error(EXCEPTION,e);
+
+		}
+		return searchGridDto;
+
+	}
+
+	@Override
+	public int getProjectCountByTemplateID(String userEmail,long templateID)  {
+
+		IUserDao iUserDao = DaoManager.USER.getDao(userEmail,IUserDao.class);
+		long userid = iUserDao.getUserID(userEmail);
+		List result = new ArrayList<>();
+		try{
+			beginTransaction();
+			if(templateID == CommonConstants.CLIENT_HRCY_TEMPLATE){
+				result=  hibernatePersistenceManager.createCriteria(UserProjectDomain.class)
+						.add(Restrictions.eq("userCreated", userid))
+						.add(Restrictions.in("templateID",CommonConstants.CLIENT_HRCY_SUBTEMPLATES))
+						.list();
+				
+			}else{
+				result=  hibernatePersistenceManager.createCriteria(UserProjectDomain.class)
+					.add(Restrictions.eq("userCreated", userid))
+					.add(Restrictions.eq("templateID",templateID))
+					.list();
+			}
+		}catch(Exception e){
+			log.error(EXCEPTION,e);
+		}finally {
+			endTransaction();
+		}
+
+		return result.size();
+	}
+	/**
+	 * This method is used to add blank objects.
+	 * @param projectDTO
+	 */
+	private void addBlankObjects(ProjectDTO projectDTO){
+		FileDto uploadedfile=new FileDto();
+		projectDTO.setUploadedFile(uploadedfile);
+		List<WorkflowRecordsMappingDto> ticketsDetails=new ArrayList<WorkflowRecordsMappingDto>();
+		projectDTO.setTicketDetails(ticketsDetails);
+		WorkFlowSearchGridDto workFlowSearchGridDto=new WorkFlowSearchGridDto();
+		List<WorkFlowMasterDto> workflowMasterDtos=new ArrayList<>();
+		workFlowSearchGridDto.setWorkFlowMasterDtosLst(workflowMasterDtos);
+		projectDTO.setWorkflowDetails(workFlowSearchGridDto);
+		List<ReportDTO> reports=new ArrayList<>();
+		projectDTO.setReports(reports);
+		/*setter ignored */
+		/*projectDTO.setDateExecuted();
+		projectDTO.setRecordCounts();*/
+		
+	}
+	
+	
+	
+	@Override
+	public ProjectDTO getProjectDetailsByProjectID(String userEmail,
+			Long projectId) throws ObjectNotSupportedException {
+		ProjectDTO projectDTO = new ProjectDTO();
+		IWorkFlowDao workflowDao = DaoManager.WORKFLOWDAO.getDao(userEmail, IWorkFlowDao.class);
+		try {
+			beginTransaction();
+			Criteria projectCriteria = hibernatePersistenceManager
+					.createCriteria(UserProjectDomain.class);
+			projectCriteria.add(Restrictions.eq("id", projectId));
+			List<UserProjectDomain> projectList = projectCriteria.list();
+			endTransaction();
+			if (projectList != null && !projectList.isEmpty()) {
+				for (UserProjectDomain userProjectDomain : projectList) {
+					projectDTO = CommonUtils.convertObject(userProjectDomain,
+							ProjectDTO.class);
+					
+					IFileDao fileDao = DaoManager.FILEDAO.getDao(userEmail,
+							IFileDao.class);
+					IFileMaintenance fileMaintenanceImpl = new FileMaintenanceImpl();
+					/* Code to add uploaded File */
+					FileDto uploadedfile = fileMaintenanceImpl.getFileDetails(
+							userEmail, projectDTO.getFileId());
+					projectDTO.setUploadedFile(uploadedfile);
+					/* Code to get tickets */
+					projectDTO.setTicketDetails(getProjectTicketStats(
+							projectId, userEmail));
+					
+					/* Code to get WOrkflow information */
+					
+					projectDTO.setDisplayCdiDeliveredFile(checkProjectTicketStatus(projectId,userEmail));
+					Map<String, Object> wfMap = getWorkFlowInfoByProjectID(projectId,userEmail);
+					projectDTO.setWorkflowDetails((WorkFlowSearchGridDto)wfMap.get("workflowSearchGridDto"));
+					projectDTO.setDisplaySelfDeliveredFile((Boolean)wfMap.get("displaySelfDeliveredFile"));
+
+					
+					
+					projectDTO.setRecordCounts(getProjectClassfnStats(projectId,true));
+					projectDTO.setAddToGoldRecordCounts(getProjectClassfnStats(projectId,false));
+					
+					List<ProjectPreExecutionFilesDomain> preExecutions = new ArrayList<>();;
+					IReportDao reportsDao = new ReportsDaoImpl(userEmail);
+					List<PreExecutionFileReports> preExecutionReports = new ArrayList<>();
+					switch((int)projectDTO.getTemplateID()){
+					case 3:
+						preExecutions = getPreExecutionFilesXref(projectId);
+						PreExecutionFileReports preExecutionReport = new PreExecutionFileReports();
+						List<ReportDTO> reports = new ArrayList<>();
+						List<GeneratedReportsDto>  generatedReports = reportsDao.getAllReportsByExecutionId(projectId, preExecutions.get(0).getExecutionId());
+						for(GeneratedReportsDto generatedReport : generatedReports){
+
+							FileDomain fileDomain = fileDao.getFileDomain(generatedReport.getFileId());
+							if (fileDomain != null) {
+								if (fileDomain.getSource().equals(FileSourceConstants.REPORT.getSource())) {
+									ReportDTO reportDTO = CommonUtils.convertObject(fileDomain,ReportDTO.class);
+									reportDTO.setStatusDesc("");
+									reportDTO.setBadRecordsFileFlag(generatedReport.getBadRecordsFileFlag());
+									reports.add(reportDTO);
+								}
+							}
+						}
+						preExecutionReport.setReports(reports);
+						for(ProjectPreExecutionFilesDomain preExecution : preExecutions){
+							List<FileDto> inputFile=new ArrayList<>();
+							if(preExecution.getCatelogId()==0){
+								FileDomain inputFileDomain = fileDao.getFileDomain(preExecution.getFileId());
+								if(inputFileDomain!=null){
+									String name=getProjectFeedName(projectId,inputFileDomain.getId());
+									if(preExecutionReport.getInputFile()!=null){
+										inputFile=preExecutionReport.getInputFile();	
+									}
+									FileDto file=CommonUtils.convertObject(inputFileDomain, FileDto.class);
+									file.setFeedName(name);
+									inputFile.add(file);
+									
+									preExecutionReport.setInputFile(inputFile);
+								}	
+							}else {
+								FileDomain inputCatelogDomain = fileDao.getFileDomain(preExecution.getCatelogId());
+								if(inputCatelogDomain!=null){
+									preExecutionReport.setInputCatelog(CommonUtils.convertObject(inputCatelogDomain, FileDto.class));
+								}
+									
+							}
+							if(preExecution.getDateCreated()!=null){
+								preExecutionReport.setExecutionDate(preExecution.getDateCreated());
+							}
+						
+						}
+						preExecutionReports.add(preExecutionReport);
+						
+
+					
+					break;
+					default:
+						preExecutions = getPreExecutionFiles(projectId);
+						for(ProjectPreExecutionFilesDomain preExecution : preExecutions){
+						 preExecutionReport = new PreExecutionFileReports();
+							
+							 reports = new ArrayList<>();
+							 generatedReports = reportsDao.getAllReportsByExecutionId(projectId, preExecution.getExecutionId());
+							for(GeneratedReportsDto generatedReport : generatedReports){
+
+								FileDomain fileDomain = fileDao.getFileDomain(generatedReport.getFileId());
+								if (fileDomain != null) {
+									if (fileDomain.getSource().equals(FileSourceConstants.REPORT.getSource())) {
+										ReportDTO reportDTO = CommonUtils.convertObject(fileDomain,ReportDTO.class);
+										reportDTO.setStatusDesc("");
+										reportDTO.setBadRecordsFileFlag(generatedReport.getBadRecordsFileFlag());
+										reports.add(reportDTO);
+									}
+								}
+							}
+							
+							preExecutionReport.setReports(reports);
+							
+							FileDomain inputFileDomain = fileDao.getFileDomain(preExecution.getFileId());
+							if(inputFileDomain!=null){
+								List<FileDto> inputFile=new ArrayList<>();
+								inputFile.add(CommonUtils.convertObject(inputFileDomain, FileDto.class));
+								preExecutionReport.setInputFile(inputFile);
+							}
+							
+							
+							FileDomain inputCatelogDomain = fileDao.getFileDomain(preExecution.getCatelogId());
+							if(inputCatelogDomain!=null){
+								preExecutionReport.setInputCatelog(CommonUtils.convertObject(inputCatelogDomain, FileDto.class));
+							}
+							
+							
+							if(preExecution.getDateCreated()!=null){
+								preExecutionReport.setExecutionDate(preExecution.getDateCreated());
+							}
+							preExecutionReports.add(preExecutionReport);
+						}
+						
+						break;
+					}
+
+					projectDTO.setPreExecutionReports(preExecutionReports);
+					
+					/*List<ProjectExecutionDto> executionDtos = getAllProjectExecutions(
+							projectId, "-1");
+					if (executionDtos != null && !executionDtos.isEmpty()) {
+						for (ProjectExecutionDto executionDto : executionDtos) {
+							if (projectDTO.getId().equals(
+									executionDto.getProjectId())) {
+								projectDTO
+										.setRecordCounts(getProjectClassfnStats(projectDTO
+												.getId()));
+								projectDTO
+										.setReports(new ArrayList<ReportDTO>());
+								projectDTO.setDateExecuted(executionDto
+										.getLastExecution());
+								for (GeneratedReportsDto generatedReportFile : executionDto
+										.getGeneratedReports()) {
+									FileDomain fileDomain = fileDao
+											.getFileDomain(generatedReportFile
+													.getFileId());
+									if (fileDomain != null) {
+										if (fileDomain.getSource().equals(
+												FileSourceConstants.REPORT
+														.getSource())) {
+											ReportDTO reportDTO = CommonUtils
+													.convertObject(fileDomain,
+															ReportDTO.class);
+											reportDTO.setStatusDesc("");
+											reportDTO.setBadRecordsFileFlag(generatedReportFile.getBadRecordsFileFlag());
+											projectDTO.getReports().add(
+													reportDTO);
+										}
+									}
+								}
+								break;
+							}
+						}
+					} else {
+						log.info("executionDtos Found Null");
+					}*/
+				}
+			}
+
+		} catch (ProcessFailedException e) {
+			log.error(EXCEPTION, e);
+			rollBack();
+		} catch (Exception e) {
+			log.error(EXCEPTION, e);
+			rollBack();
+		}
+
+		return projectDTO;
+	}
+
+	/*@Override
+	public ProjectDTO getProjectDetailsByProjectID(String userEmail,
+			Long projectId) throws ObjectNotSupportedException {
+		ProjectDTO projectDTO = new ProjectDTO();
+		IWorkFlowDao workflowDao = DaoManager.WORKFLOWDAO.getDao(userEmail, IWorkFlowDao.class);
+		try {
+			beginTransaction();
+			Criteria projectCriteria = hibernatePersistenceManager
+					.createCriteria(UserProjectDomain.class);
+			projectCriteria.add(Restrictions.eq("id", projectId));
+			List<UserProjectDomain> projectList = projectCriteria.list();
+			endTransaction();
+			if (projectList != null && !projectList.isEmpty()) {
+				for (UserProjectDomain userProjectDomain : projectList) {
+					projectDTO = CommonUtils.convertObject(userProjectDomain,
+							ProjectDTO.class);
+					List<ProjectExecutionDto> executionDtos = getAllProjectExecutions(
+							projectId, "-1");
+					IFileDao fileDao = DaoManager.FILEDAO.getDao(userEmail,
+							IFileDao.class);
+					IFileMaintenance fileMaintenanceImpl = new FileMaintenanceImpl();
+					 Code to add uploaded File 
+					FileDto uploadedfile = fileMaintenanceImpl.getFileDetails(
+							userEmail, projectDTO.getFileId());
+					projectDTO.setUploadedFile(uploadedfile);
+					 Code to get tickets 
+					projectDTO.setTicketDetails(getProjectTicketStats(
+							projectId, userEmail));
+					
+					 Code to get WOrkflow information 
+					
+					projectDTO.setDisplayCdiDeliveredFile(checkProjectTicketStatus(projectId,userEmail));
+					Map<String, Object> wfMap = getWorkFlowInfoByProjectID(projectId,userEmail);
+					projectDTO.setWorkflowDetails((WorkFlowSearchGridDto)wfMap.get("workflowSearchGridDto"));
+					projectDTO.setDisplaySelfDeliveredFile((Boolean)wfMap.get("displaySelfDeliveredFile"));
+
+					if (executionDtos != null && !executionDtos.isEmpty()) {
+						for (ProjectExecutionDto executionDto : executionDtos) {
+							if (projectDTO.getId().equals(
+									executionDto.getProjectId())) {
+								projectDTO
+										.setRecordCounts(getProjectClassfnStats(projectDTO
+												.getId()));
+								projectDTO
+										.setReports(new ArrayList<ReportDTO>());
+								projectDTO.setDateExecuted(executionDto
+										.getLastExecution());
+								for (GeneratedReportsDto generatedReportFile : executionDto
+										.getGeneratedReports()) {
+									FileDomain fileDomain = fileDao
+											.getFileDomain(generatedReportFile
+													.getFileId());
+									if (fileDomain != null) {
+										if (fileDomain.getSource().equals(
+												FileSourceConstants.REPORT
+														.getSource())) {
+											ReportDTO reportDTO = CommonUtils
+													.convertObject(fileDomain,
+															ReportDTO.class);
+											reportDTO.setStatusDesc("");
+											reportDTO.setBadRecordsFileFlag(generatedReportFile.getBadRecordsFileFlag());
+											projectDTO.getReports().add(
+													reportDTO);
+										}
+									}
+								}
+								break;
+							}
+						}
+					} else {
+						log.info("executionDtos Found Null");
+					}
+				}
+			}
+
+		} catch (ProcessFailedException e) {
+			log.error(EXCEPTION, e);
+			rollBack();
+		} catch (Exception e) {
+			log.error(EXCEPTION, e);
+			rollBack();
+		}
+
+		return projectDTO;
+	}*/
+	
+	
+	// to get tickets status for a project
+	/**
+	 * to get tickets status for a project
+	 * @param projectId - project id
+	 * @param userEmail - loggedin user
+	 * @return
+	 * @throws ObjectNotSupportedException
+	 * @throws ProcessFailedException
+	 */
+		private List<WorkflowRecordsMappingDto> getProjectTicketStats(
+				Long projectId, String userEmail)
+				throws ObjectNotSupportedException, ProcessFailedException {
+			final String methodName = "getProjectTicketStats";
+			log.info("Inside " + methodName + " method of " + CLASSNAME);
+			ITicketMaintenanceDao iTktDao = DaoManager.TICKETMAINTENANCEDAO.getDao(
+					userEmail, ITicketMaintenanceDao.class);
+			List<WorkflowRecordsMappingDto> responseDto = new ArrayList<WorkflowRecordsMappingDto>();
+			beginTransaction();
+			Criteria prj = createCriteria(WorkFlowDomain.class);
+
+			ProjectionList projList = Projections.projectionList();
+			projList.add(Projections.property("projectId"));
+//			projList.add(Projections.property("dateCreated"));
+			projList.add(Projections.property("ticketId"));
+
+			prj.setProjection(Projections.distinct(projList));
+
+			prj.add(Restrictions.eq("projectId", projectId));
+			prj.add(Restrictions.isNotNull("ticketId"));
+
+			//prj.addOrder(Order.desc("dateCreated"));
+
+			List<Object[]> result = prj.list();
+			if (result != null && result.size() > 0) {
+				for (Object[] obj : result) {
+					WorkflowRecordsMappingDto workflowRecordMappingDto = new WorkflowRecordsMappingDto();
+					workflowRecordMappingDto.setProjectId((long) obj[0]);
+//					workflowRecordMappingDto.setDateCreated((Date) obj[1]);
+//					workflowRecordMappingDto.setTicketID((Long) obj[2]);
+					workflowRecordMappingDto.setTicketID((Long) obj[1]);
+					responseDto.add(workflowRecordMappingDto);
+				}
+
+				// to append ticket status
+				for (int i = 0; i < responseDto.size(); i++) {
+					TicketDto tktDto = iTktDao.getTicket(responseDto.get(i)
+							.getTicketID());
+					responseDto.get(i).setTicketID(tktDto.getTicketId());
+					responseDto.get(i).setTicketStatus(tktDto.getStatus());
+					responseDto.get(i).setStatusId(tktDto.getStatusId());
+					responseDto.get(i).setTktSubject("");
+					responseDto.get(i).setDateModified((tktDto.getDateModified()));
+					responseDto.get(i).setDateCreated(tktDto.getDateCreated());
+					
+
+				}
+				 Collections.sort(responseDto);  // to sort data based on modified date in  desc order
+			}
+
+			endTransaction();
+			return responseDto;
+
+		}
+		
+		
+		 
+		
+/**
+ * to get Workflow details for a project
+ * @param projectId
+ * @param userEmail
+ * @return
+ * @throws ObjectNotSupportedException
+ * @throws ProcessFailedException
+ * @throws ParseException 
+ */
+		private Map<String, Object> getWorkFlowInfoByProjectID(Long projectId, String userEmail)throws ObjectNotSupportedException, ProcessFailedException, ParseException {
+			IUserDao iUserDao = DaoManager.USER.getDao(userEmail, IUserDao.class);
+			IWorkFlowDao workflowDao = DaoManager.WORKFLOWDAO.getDao(userEmail, IWorkFlowDao.class);
+			Map<String, Object> wfMap = new HashMap<>();
+			WorkFlowSearchGridDto workflowSearchGridDto = workflowDao.getWorkFlowInfoByProjectID( userEmail, projectId,false);
+			List<WorkFlowMasterDto> workFlowMaster = new ArrayList<WorkFlowMasterDto>();
+			workFlowMaster = workflowSearchGridDto.getWorkFlowMasterDtosLst();
+			boolean displaySelfDeliveredFile = false;
+			if(workFlowMaster != null){
+			for(WorkFlowMasterDto dto: workFlowMaster){
+				
+				String arrUsersId[] = workflowDao.getWorkFlowMasterDataById(dto.getWorkFlowId()).getAttachedUsers();
+				
+				List<String> attachedUsersName = new ArrayList<String>();
+				String finalNameList="";
+				if(arrUsersId != null && arrUsersId.length>0){
+				for(int index=0;index<arrUsersId.length;index++){
+					
+					UserDomain userDomain = iUserDao.userDomainById(Long.valueOf(arrUsersId[index]));
+					String attachedUserName = userDomain.getFirstName() + " " + userDomain.getLastName();
+					attachedUsersName.add(attachedUserName);
+				}
+				
+				
+				for(String name :attachedUsersName){
+					finalNameList = finalNameList + name + ",";
+				}
+				}
+				if(finalNameList.trim().length()>0){
+					dto.setCommaSepAttachedUsers(finalNameList.substring(0, finalNameList.length()-1));
+				}else{
+					dto.setCommaSepAttachedUsers(finalNameList);
+				}
+				
+				DecimalFormat df=new DecimalFormat("#.##");
+				double percentageCompleted = 0.0;
+				if(dto.getDeliveredCount() == 0 && dto.getTotalCount()== 0 ){
+					
+				}else{
+					percentageCompleted = ((double)dto.getDeliveredCount()/(double)dto.getTotalCount())*100.0f;
+				}
+				if(dto.getDeliveredCount() >0 && !displaySelfDeliveredFile){
+					displaySelfDeliveredFile = true;
+				}
+				dto.setPercentageCompleted(Double.valueOf(df.format(percentageCompleted)));
+				
+			}
+			}
+			wfMap.put("workflowSearchGridDto", workflowSearchGridDto);
+			wfMap.put("displaySelfDeliveredFile", displaySelfDeliveredFile);
+			return wfMap;
+			
+		}
+		
+		private boolean checkProjectTicketStatus(Long projectId, String userEmail) throws ProcessFailedException {
+			IWorkFlowDao iWorkFlowDao = DaoManager.WORKFLOWDAO.getDao(userEmail, IWorkFlowDao.class);
+			
+			/*List<WorkFlowMasterDto> workflowList = iWorkFlowDao.getWorkflowListByProjectId(projectId, false);
+			if(null != workflowList && !workflowList.isEmpty()){
+				for (WorkFlowMasterDto masterdto : workflowList) {
+					WorkFlowSearchGridDto gridDto =  iWorkFlowDao.getWorkFlowStatusAndUpdatedDateByWorkFlowId(userEmail, masterdto.getWorkFlowId());
+					if(gridDto.getWorkFlowStatus().equalsIgnoreCase(CommonConstants.WF_NEW_FREE)){
+						continue;
+					}
+					List<Long> ticketsList = new ArrayList<>();
+					masterdto.setIspremium(true);
+					ticketsList.add(masterdto.getTicketOrBatchID());
+					List<Long> deliveredRecords = iWorkFlowDao.getWorkFlowDeliveredRecordIdsByWfId(userEmail, masterdto, ticketsList,projectId);
+					if(null != deliveredRecords && deliveredRecords.size()>0){
+						return true;
+					}
+				}
+				
+			}*/
+			List<Long> deliveredRecords = iWorkFlowDao.getWorkFlowDeliveredRecordIdsByProjectId(projectId, false);
+			if(null != deliveredRecords && deliveredRecords.size()>0){
+				return true;
+			}
+			return false;
+		}
+		
+		
+		@Override
+		public void setPreExecutionFiles(Long projectId,Long executionId,Long fileId,Long catelogId) throws ProcessFailedException{
+			
+			ProjectPreExecutionFilesDomain preExecutionDomain = new ProjectPreExecutionFilesDomain(); 
+			preExecutionDomain.setProjectId(projectId);
+			preExecutionDomain.setExecutionId(executionId);
+			preExecutionDomain.setFileId(fileId);
+			preExecutionDomain.setCatelogId(catelogId);
+			preExecutionDomain.setDateCreated(new Timestamp(new Date().getTime()));
+			
+			updateDomain(preExecutionDomain);
+			
+		}
+		
+		@Override
+		public Long getUnassignedMATPCountByProjectID(String emailID,Long projectID,Long templateId){
+			final String methodName = "getUnassignedMATPCountByProjectID";
+			log.info("Inside "+methodName+" method of "+CLASSNAME);
+			StringBuilder sqlQuery = null;
+			Long unassignedMATPCount = 0l;
+			String addToGoldCondition = "";
+			try{
+				if(projectID != 0){
+					IReportDao reportsDao = DaoManager.REPORTSDAO.getDao(emailID, IReportDao.class);
+					if(reportsDao != null){
+						//RecordCountsDto recordsCount = reportsDao.getProjectStats(projectID);
+						
+						//changed above for LP-768	
+						RecordCountsDto recordsCount = reportsDao.getProjectStatsForDashboard(projectID,true);
+						
+						if(CommonConstants.ENRICH == templateId || CommonConstants.BUILD == templateId || CommonConstants.CLIENT_HIERARCHY == templateId){
+							addToGoldCondition = " AND ONDEMAND_1.FUNC_CHECK_SOURCE(RECORD_ID) = 'GOLD_EXECUTION' ";
+						}
+						
+						sqlQuery = new StringBuilder(" select * from  ")
+								   .append(" (select count(*) as totalCount from WORKFLOW_RECORDS where PROJECT_ID = :projectID ").append(addToGoldCondition).append(" ), ")
+								   .append(" (select count(*) as deliveredCount from WORKFLOW_RECORDS_AUD where PROJECT_ID = :projectID ").append(addToGoldCondition).append(" and WF_STATUS_ID = (select STATUS_ID from status where status = 'REC_APPROVED') and NEXT_ROLE_ID = (select ROLE_ID from ROLES where TYPE = 'EXSUPER')) ");
+						
+						log.info("SqlQuery with Records --> " +sqlQuery.toString());
+						
+						List<Object[]>  results =  (List<Object[]>)hibernatePersistenceManager.createSQLQuery(sqlQuery.toString()).setLong("projectID",projectID).list();
+						if(recordsCount != null){
+							for (Object[] row : results) {
+								
+								
+								//unassignedMATPCount = ( recordsCount.getPartialMatch() - ( Long.parseLong(row[0].toString()) + Long.parseLong(row[1].toString()) ) );
+								//LP-768:-WE are fetching data from counterparty_report so now we don't have subtract the delivered record from total MATP to get current MATG count 
+								
+								unassignedMATPCount = ( recordsCount.getPartialMatch() - ( Long.parseLong(row[0].toString())) );
+							}
+						}
+					}else{
+						log.info("reportsDao Found 0");
+					}
+				}else{
+					log.info("projectID Found 0");
+				}
+			}catch(Exception e){
+				log.error(EXCEPTION,e);
+			}
+			return unassignedMATPCount;
+		}
+		
+		
+		public String getScheduledFlag(Long projectId) throws ProcessFailedException {
+			beginTransaction();
+			ProjectExecutionDomain executionDetails = hibernatePersistenceManager.getPersistentObject(ProjectExecutionDomain.class, projectId);
+			if (executionDetails != null) {
+				hibernatePersistenceManager.refresh(executionDetails);
+			}
+			endTransaction();
+			if(executionDetails!=null){
+			return executionDetails.getOneTime();
+			}
+			return "true";
+		}
+		
+		@Override
+		public List<ProjectExecutionDto> getAllQueuedJobs() throws ProcessFailedException{
+			List<ProjectExecutionDto> response = new ArrayList<>();
+			beginTransaction();
+
+			try{
+				Integer status[] = {StatusConstants.PROCESSING.getID(),StatusConstants.IDCOMPLETE.getID(),
+						StatusConstants.NORMALIZATIONCOMPLETED.getID(),StatusConstants.MATCHINGCOMPLETE.getID(),
+						StatusConstants.REPORTINGCOMPLETED.getID(),StatusConstants.ON_HOLD.getID(),StatusConstants.INPROGRESS.getID()};
+				
+				
+				Criteria schedulerCriteria = createCriteria(ProjectExecutionDomain.class);
+				
+				
+				
+				schedulerCriteria.add(Restrictions.in("statusId", status));
+				schedulerCriteria.addOrder(Order.asc("dateCreated"));
+				
+				List<ProjectExecutionDomain> queuedJobs =  schedulerCriteria.list();
+				for(ProjectExecutionDomain queuedJob : queuedJobs){
+					ProjectExecutionDto queuedJobDto = CommonUtils.convertObject(queuedJob, ProjectExecutionDto.class);
+					response.add(queuedJobDto);
+				}
+			}catch(ObjectNotSupportedException e){
+				throw new ProcessFailedException(e.getMessage());
+			}
+
+			endTransaction();
+			return response;
+		}
+		
+	@Override
+	public ProjectTemplateMasterDto getServiceMasterMap(String userEmail) {
+		final String methodName = "getServiceMasterMap";
+		log.info("Inside " + methodName + " method of " + CLASSNAME);
+		ProjectTemplateMasterDto projectTemplatedto = new ProjectTemplateMasterDto();
+		Map<String, Long> projectServiceMasterMap = new LinkedHashMap<String, Long>();
+		try {
+				requestPlatinumConnection();
+				beginTransaction();
+				Criteria templateServiceMasterCriteria = createCriteria(TemplateServiceMasterDomain.class);
+				templateServiceMasterCriteria.add(Restrictions.eq("status",'Y'));
+				List<TemplateServiceMasterDomain> result = templateServiceMasterCriteria.list();
+				if (result != null && !result.isEmpty()) {
+					for (TemplateServiceMasterDomain templateServiceMasterDomain : result) {
+							projectServiceMasterMap.put(templateServiceMasterDomain.getDescription(),templateServiceMasterDomain.getServiceId());
+					}
+					projectTemplatedto.setTemplateServiceMasterMapDropDown((LinkedHashMap<String, Long>) projectServiceMasterMap);
+				} else {
+					log.info("List<TemplateServiceMappingDomain>  Found Null");
+				}
+				endTransaction();
+				releasePlatinumConnection();
+		} catch (Exception e) {
+			log.error(EXCEPTION, e);
+		}
+		return projectTemplatedto;
+
+	}
+	
+	@Override
+	public boolean deleteProjectById(Long projectId) throws ProcessFailedException{
+		
+		try {
+			beginTransaction();
+			Criteria projectCriteria = hibernatePersistenceManager.createCriteria(ProjectExecutionHistoryDomain.class);
+			projectCriteria.add(Restrictions.eq("projectId", projectId));
+			List<ProjectExecutionHistoryDomain> result = projectCriteria.list();
+			if (result == null || result.size() == 0) {
+				ProcedureCall procCall = hibernatePersistenceManager.getProcedureCall("PROC_NON_EXECUTE_PROJECT_DEL");
+				procCall.registerParameter(1, Long.class, ParameterMode.IN).bindValue(projectId);
+				procCall.getOutputs();
+			}else{
+				return false;
+			}
+			endTransaction();
+		} catch (Exception e) {
+			hibernatePersistenceManager.rollback();
+			e.printStackTrace();
+			throw new ProcessFailedException(e.getMessage());
+		} 
+		
+		return true;
+	}
+	
+	private void addFeedInfo(UserDTO userDTO, List<FeedMasterDto> feedMasterDtoList,UserProjectDomain userProjectDomain) throws ProcessFailedException, ObjectNotSupportedException {
+		final String methodName = "addFeedInfo";
+		log.info("Inside " + methodName + " method of " + CLASSNAME);
+		ProjectFeedDomain projectFeedDomain = null;
+		Criteria criteria = null;
+		StatusDomain statusDomain = null;
+		FeedMasterDomain feedMasterDomain = null;
+		EtlFileMetaDataDomain etlFileMetaDataDomain = null;
+		//UserProjectDomain userProjectDomain = null;
+	//	try {
+
+			if (feedMasterDtoList != null) {
+
+				// beginTransaction();
+
+				
+				/*if(projectId >0){
+					criteria = createCriteria(UserProjectDomain.class);
+					criteria.add(Restrictions.eq("id", projectId));
+					userProjectDomain = (UserProjectDomain) criteria.uniqueResult();
+				}*/
+				statusDomain = hibernatePersistenceManager.getFromSession(StatusDomain.class,StatusConstants.LOCKED.getID());
+
+				for (FeedMasterDto feedMasterDto : feedMasterDtoList) {
+
+				//	if (!feedMasterDto.getFeedOperation().equalsIgnoreCase("DELETE")) {
+
+						if (feedMasterDto.getFeedid() > 0) {
+
+							criteria = createCriteria(FeedMasterDomain.class);
+							criteria.add(Restrictions.eq("feedid",feedMasterDto.getFeedid()));
+							feedMasterDomain = (FeedMasterDomain) criteria.uniqueResult();
+
+							if (feedMasterDomain != null) {
+
+								/*if (!feedMasterDomain.getFeedName().equalsIgnoreCase(feedMasterDto.getFeedName())) {
+									if (isFeedNameExits(feedMasterDto.getFeedName())) {
+										throw new DuplicateFeedNameException(feedMasterDomain.getFeedName()+ " Feed Name already exist. Please try another name");
+									}
+								}*/
+
+								feedMasterDomain.setFeedName(feedMasterDto.getFeedName());
+								feedMasterDomain.setFeedType(feedMasterDto.getFeedType());
+								feedMasterDomain.setSourceType(feedMasterDto.getSourceType());
+								feedMasterDomain.setUserIdModified(String.valueOf(userDTO.getId()));
+								feedMasterDomain.setDateModified(new Timestamp(new Date().getTime()));
+								feedMasterDomain.setFeedDataType(CommonConstants.FEEDTYPE_CUSTOMER);
+								feedMasterDomain.setDisable('N');
+								
+								hibernatePersistenceManager.saveOrUpdate(feedMasterDomain);
+
+								etlFileMetaDataDomain = feedMasterDomain.getEtlFileMetaDataDomain();
+
+								if (etlFileMetaDataDomain != null) {
+
+									etlFileMetaDataDomain.setGoldDataFlag(feedMasterDto.getEtlFileMetaDataDto().getGoldDataFlag());
+									etlFileMetaDataDomain.setCustomerDataFlag(feedMasterDto.getEtlFileMetaDataDto().getCustomerDataFlag());
+									etlFileMetaDataDomain.setFileExtension(feedMasterDto.getEtlFileMetaDataDto().getFileExtension());
+									etlFileMetaDataDomain.setFileDelimiter(feedMasterDto.getEtlFileMetaDataDto().getFileDelimiter());
+									etlFileMetaDataDomain.setBSkipRows(feedMasterDto.getEtlFileMetaDataDto().getBSkipRows());
+									etlFileMetaDataDomain.setESkipRows(feedMasterDto.getEtlFileMetaDataDto().getESkipRows());
+									etlFileMetaDataDomain.setFileContainsHeaders(feedMasterDto.getEtlFileMetaDataDto().getFileContainsHeaders());
+									etlFileMetaDataDomain.setUserIdModified(String.valueOf(userDTO.getId()));
+									etlFileMetaDataDomain.setDateModified(new Timestamp(new Date().getTime()));
+
+									hibernatePersistenceManager.saveOrUpdate(etlFileMetaDataDomain);
+								}
+								criteria = createCriteria(ProjectFeedDomain.class);
+						try {
+							criteria.add(Restrictions.and(Restrictions.eq("userProject.id", userProjectDomain.getId()),
+									Restrictions.eq("feedMasterDomain.feedid", feedMasterDto.getFeedid())));
+						} catch (NullPointerException e) {
+							//Removing from Find Bug report
+						}
+								
+								projectFeedDomain = (ProjectFeedDomain) criteria.uniqueResult();
+								
+								if(projectFeedDomain != null){
+									if (userProjectDomain != null) {
+										projectFeedDomain.setUserProject(userProjectDomain);
+									}
+									projectFeedDomain.setFeedMasterDomain(feedMasterDomain);
+									projectFeedDomain.setDateModified(new Timestamp(new Date().getTime()));
+									projectFeedDomain.setUserIdModified(String.valueOf(userDTO.getId()));
+									
+									if (statusDomain != null) {
+										projectFeedDomain.setStatusDomain(statusDomain);
+									}
+									hibernatePersistenceManager.saveOrUpdate(projectFeedDomain);
+								}else{
+									projectFeedDomain = new ProjectFeedDomain();
+
+									if (userProjectDomain != null) {
+										projectFeedDomain.setUserProject(userProjectDomain);
+									}
+									projectFeedDomain.setFeedMasterDomain(feedMasterDomain);
+									projectFeedDomain.setDateCreated(new Timestamp(new Date().getTime()));
+									projectFeedDomain.setUserIdCreated(String.valueOf(userDTO.getId()));
+									
+									if (statusDomain != null) {
+										projectFeedDomain.setStatusDomain(statusDomain);
+									}
+									hibernatePersistenceManager.saveOrUpdate(projectFeedDomain);
+								}
+
+							}
+
+						} else {
+
+							feedMasterDomain = CommonUtils.convertObject(feedMasterDto, FeedMasterDomain.class);
+
+							/*if (isFeedNameExits(feedMasterDomain.getFeedName())) {
+								throw new DuplicateFeedNameException(feedMasterDomain.getFeedName()+ " Feed Name already exist. Please try another name");
+							}*/
+
+							feedMasterDomain.setDateCreated(new Timestamp(new Date().getTime()));
+							feedMasterDomain.setClientId(userDTO.getCompanyId());
+							feedMasterDomain.setUserIdCreated(String.valueOf(userDTO.getId()));
+							feedMasterDomain.setDisable('N');
+							feedMasterDomain = (FeedMasterDomain) hibernatePersistenceManager.saveOrUpdate(feedMasterDomain);
+
+							etlFileMetaDataDomain = CommonUtils.convertObject(feedMasterDto.getEtlFileMetaDataDto(),EtlFileMetaDataDomain.class);
+							etlFileMetaDataDomain.setFeedMasterDomain(feedMasterDomain);
+							etlFileMetaDataDomain.setUserIdCreated(String.valueOf(userDTO.getId()));
+							etlFileMetaDataDomain.setDateCreated(new Timestamp(new Date().getTime()));
+							etlFileMetaDataDomain = (EtlFileMetaDataDomain) hibernatePersistenceManager.saveOrUpdate(etlFileMetaDataDomain);
+
+							projectFeedDomain = new ProjectFeedDomain();
+							if (userProjectDomain != null) {
+								projectFeedDomain.setUserProject(userProjectDomain);
+							}
+							if(feedMasterDomain != null){								
+								projectFeedDomain.setFeedMasterDomain(feedMasterDomain);
+							}
+							if (statusDomain != null) {
+								projectFeedDomain.setStatusDomain(statusDomain);
+							}
+							projectFeedDomain.setDateCreated(new Timestamp(new Date().getTime()));
+							projectFeedDomain.setUserIdCreated(String.valueOf(userDTO.getId()));
+							hibernatePersistenceManager.saveOrUpdate(projectFeedDomain);
+						}
+
+				/*	} else {
+
+						criteria = createCriteria(ProjectFeedDomain.class);
+						criteria.add(Restrictions.eq("userProject.id",projectId));
+						List<ProjectFeedDomain> projectFeedDomains = criteria.list();
+						if (projectFeedDomains != null) {
+							for (ProjectFeedDomain projectFeedDomain2 : projectFeedDomains) {
+								hibernatePersistenceManager.delete(projectFeedDomain2);
+							}
+						}
+
+					}
+*/
+				}
+
+				// endTransaction();
+
+			} else {
+				log.info("feedMasterDtoList Found Null");
+			}
+		/*} catch (Exception e) {
+			result = false;
+			log.error(EXCEPTION, e);
+			rollBack();
+			throw new ProcessFailedException("addFeed Process Failed.");
+		}*/
+
+	}
+	
+	@Override
+	public ProjectDTO getProjectConfigForXref(String loggedUser, String projectId) throws ObjectNotSupportedException, ProjectConfigNotFoundException {
+		ProjectDTO projectDTO = new ProjectDTO();
+		HashMap<String,ArrayList<ProjectConfigXrefDto>> projectConfigMap = new HashMap<>();
+		HashMap<String,ArrayList<ProjectConfigXrefDto>> savedprojectConfigMap = null;
+		try{
+			if(null != projectId && !projectId.isEmpty()){
+				ICrossRefDao crossRefDao = DaoManager.CROSSREFDAO.getDao(loggedUser,ICrossRefDao.class);
+				
+				beginTransaction();
+				UserProjectDomain userProjectDomain = (UserProjectDomain) hibernatePersistenceManager.getPersistentObject(UserProjectDomain.class, Long.parseLong(projectId));
+				endTransaction();
+				projectDTO = CommonUtils.convertObject(userProjectDomain, ProjectDTO.class);
+				projectDTO.setId(Long.parseLong(projectId));
+				projectDTO.setFeedMasterDtos(crossRefDao.getFeedListByProjectId(loggedUser, Long.parseLong(projectId)).getFeedMasterDtos());
+				
+				ArrayList<ProjectConfigXrefDto> configXrefDtosList = crossRefDao.getMappedColumnListByProjectId(Long.parseLong(projectId));
+				savedprojectConfigMap = (HashMap<String, ArrayList<ProjectConfigXrefDto>>) getSavedProjectConfigForXref(Long.parseLong(projectId));
+
+				ArrayList<ProjectConfigXrefDto> matchStatusSavedList = savedprojectConfigMap.get(CommonConstants.MATCH_STAT);
+				ArrayList<ProjectConfigXrefDto> filAandEmailSavedList = savedprojectConfigMap.get(CommonConstants.FILE_FORMAT_AND_EMAIL);
+				ArrayList<ProjectConfigXrefDto> mappedColumnSavedList = savedprojectConfigMap.get(CommonConstants.MAPPED_COL);
+			
+				if(null != savedprojectConfigMap && !savedprojectConfigMap.isEmpty()){
+					if(null != configXrefDtosList && !configXrefDtosList.isEmpty()){
+						setMappedColumnList(projectConfigMap,configXrefDtosList,mappedColumnSavedList);
+					}
+					configureMatchStatusFileFormatAndEmailMeForSaved(Long.parseLong(projectId), projectConfigMap, matchStatusSavedList, filAandEmailSavedList);
+					
+				}else{
+					configureMatchStatusFileFormatAndEmailMeForUnSaved(Long.parseLong(projectId), projectConfigMap);
+					if(null != configXrefDtosList && !configXrefDtosList.isEmpty()){
+						projectConfigMap.put(CommonConstants.MAPPED_COL, configXrefDtosList);
+					}
+				}
+			
+				projectDTO.setProjectConfigXrefMap(projectConfigMap);
+			}else{
+				log.info("projectId Found null");
+				throw new ProjectConfigNotFoundException("projectId can not be Null");
+			}
+		}catch(Exception e){
+			log.error(EXCEPTION, e);
+		}
+		return projectDTO;
+	}
+	
+	private void setMappedColumnList(HashMap<String, ArrayList<ProjectConfigXrefDto>> projectConfigMap,ArrayList<ProjectConfigXrefDto> configXrefDtosList,ArrayList<ProjectConfigXrefDto> mappedColumnSavedList) {
+		boolean bmappedColumnSavedList = false;
+		ArrayList<ProjectConfigXrefDto> mappedColumnList = new ArrayList<>();
+		if(null != mappedColumnSavedList && !mappedColumnSavedList.isEmpty()){
+			sortCollectionByFeedidAndAttributeName(mappedColumnSavedList);
+			bmappedColumnSavedList = true;
+		}
+			for (ProjectConfigXrefDto configXrefDto : configXrefDtosList) {
+				if(bmappedColumnSavedList){
+					if(mappedColumnSavedList.contains(configXrefDto)){
+						for (ProjectConfigXrefDto configXrefSaved : mappedColumnSavedList) {
+							if(configXrefSaved.equals(configXrefDto)){
+								configXrefDto.setId(configXrefSaved.getId());
+								configXrefDto.setValue(configXrefSaved.getValue());
+								mappedColumnList.add(configXrefDto);
+								break;
+							}
+				    	}
+					}else{
+						mappedColumnList.add(configXrefDto);
+					}		
+				}else{
+					mappedColumnList.add(configXrefDto);
+				}
+			}
+			//Collection Sorting by Feedid then FeedType
+			if(!mappedColumnList.isEmpty()){
+				sortCollectionByFeedidAndAttributeName(mappedColumnList);
+				projectConfigMap.put(CommonConstants.MAPPED_COL, mappedColumnList);
+			}
+		
+	}
+	private void sortCollectionByFeedidAndAttributeName(List<ProjectConfigXrefDto> mappedColumnList) {
+		Collections.sort(mappedColumnList, new Comparator<ProjectConfigXrefDto>() {
+			@Override
+			public int compare(ProjectConfigXrefDto dto1, ProjectConfigXrefDto dto2) {
+				Long feedId1 = dto1.getFeedId();
+				Long feedId2 = dto2.getFeedId();
+	            int feedComp = feedId1.compareTo(feedId2);
+	            if (feedComp != 0) {
+	               return feedComp;
+	            } else {
+	               String feedType1 = dto1.getAttributeName();
+	               String feedType2 = dto2.getAttributeName();
+	               return feedType1.compareTo(feedType2);
+	            }
+			}
+		});
+	}
+	private void configureMatchStatusFileFormatAndEmailMeForUnSaved(long projectId,HashMap<String, ArrayList<ProjectConfigXrefDto>> projectConfigMap) {
+		ArrayList<ProjectConfigXrefDto> matchStatusList = new ArrayList<>();
+		ArrayList<ProjectConfigXrefDto> fileFormatandEmailMeList = new ArrayList<>();
+		ProjectConfigXrefDto xrefDto = null;
+		for (ConfigPropertiesForXref property : ProjectConfigEnum.ConfigPropertiesForXref.values()) {
+			xrefDto = new ProjectConfigXrefDto(); 
+			xrefDto.setAttributeName(property.getAttributeName());
+			xrefDto.setDisplayName(property.getDisplayName());
+			xrefDto.setValue(property.getValue());
+			xrefDto.setProjectId(projectId);
+			if (property.getAttributeType().equalsIgnoreCase(CommonConstants.MATCH_STAT)) {
+				xrefDto.setType(property.getAttributeType());
+				matchStatusList.add(xrefDto);
+			} else if (property.getAttributeType().equalsIgnoreCase(CommonConstants.FILE_FORMAT) || property.getAttributeType().equalsIgnoreCase(CommonConstants.EMAIL_ME)) {
+				xrefDto.setType(property.getAttributeType());
+				fileFormatandEmailMeList.add(xrefDto);
+			}
+			projectConfigMap.put(CommonConstants.MATCH_STAT, matchStatusList);
+			projectConfigMap.put(CommonConstants.FILE_FORMAT_AND_EMAIL, fileFormatandEmailMeList);
+		}
+		
+	}
+	private void configureMatchStatusFileFormatAndEmailMeForSaved(long projectId,HashMap<String, ArrayList<ProjectConfigXrefDto>> projectConfigMap,ArrayList<ProjectConfigXrefDto> matchStatusSavedList,ArrayList<ProjectConfigXrefDto> filAandEmailSavedList) {
+		ArrayList<ProjectConfigXrefDto> matchStatusList = new ArrayList<>();
+		ArrayList<ProjectConfigXrefDto> fileFormatandEmailMeList = new ArrayList<>();
+		ProjectConfigXrefDto xrefDto = null;
+		for (ConfigPropertiesForXref property : ProjectConfigEnum.ConfigPropertiesForXref.values()) {
+			xrefDto = new ProjectConfigXrefDto(); 
+			xrefDto.setAttributeName(property.getAttributeName());
+			xrefDto.setDisplayName(property.getDisplayName());
+			xrefDto.setValue(property.getValue());
+			xrefDto.setProjectId(projectId);
+			if (property.getAttributeType().equalsIgnoreCase(CommonConstants.MATCH_STAT)) {
+				xrefDto.setType(property.getAttributeType());
+				for (ProjectConfigXrefDto projectConfigXrefDto : matchStatusSavedList) {
+					if(null != projectConfigXrefDto && xrefDto.getAttributeName().equalsIgnoreCase(projectConfigXrefDto.getAttributeName())){
+						xrefDto.setId(projectConfigXrefDto.getId());
+						xrefDto.setValue(projectConfigXrefDto.getValue());
+						break;
+					}
+				}
+				matchStatusList.add(xrefDto);
+			} else if (property.getAttributeType().equalsIgnoreCase(CommonConstants.FILE_FORMAT) || property.getAttributeType().equalsIgnoreCase(CommonConstants.EMAIL_ME)) {
+				xrefDto.setType(property.getAttributeType());
+				for (ProjectConfigXrefDto projectConfigXrefDto : filAandEmailSavedList) {
+					if(null != projectConfigXrefDto && xrefDto.getAttributeName().equalsIgnoreCase(projectConfigXrefDto.getAttributeName())){
+						xrefDto.setId(projectConfigXrefDto.getId());
+						xrefDto.setValue(projectConfigXrefDto.getValue());
+						break;
+					}
+				}
+				fileFormatandEmailMeList.add(xrefDto);
+			}
+		}
+		
+		projectConfigMap.put(CommonConstants.MATCH_STAT, matchStatusList);
+		projectConfigMap.put(CommonConstants.FILE_FORMAT_AND_EMAIL, fileFormatandEmailMeList);
+	}
+	
+	@Override
+	public Map<String, ArrayList<ProjectConfigXrefDto>> getSavedProjectConfigForXref(long projectId) throws ObjectNotSupportedException {
+		ArrayList<ProjectConfigXrefDto> matchStatusList = new ArrayList<>();
+		ArrayList<ProjectConfigXrefDto> fileFormatandEmailMeList = new ArrayList<>();
+		ArrayList<ProjectConfigXrefDto> mappedColumnList = new ArrayList<>();
+		HashMap<String,ArrayList<ProjectConfigXrefDto>> projectConfigMap = new HashMap<>();
+		beginTransaction();
+		Criteria configsCriteria = hibernatePersistenceManager.createCriteria(ProjectConfigXrefDomain.class);
+		configsCriteria.add(Restrictions.eq("projectId", projectId));
+		List<ProjectConfigXrefDomain> configsList = configsCriteria.list();
+		if (configsList != null && configsList.size() > 0) {
+			for (ProjectConfigXrefDomain projectConfigXrefDomain : configsList) {
+				if (projectConfigXrefDomain.getType().equalsIgnoreCase(CommonConstants.MATCH_STAT)) {
+					matchStatusList.add(CommonUtils.convertObject(projectConfigXrefDomain, ProjectConfigXrefDto.class));
+				}else if(projectConfigXrefDomain.getType().equalsIgnoreCase(CommonConstants.FILE_FORMAT) || projectConfigXrefDomain.getType().equalsIgnoreCase(CommonConstants.EMAIL_ME)){
+					fileFormatandEmailMeList.add(CommonUtils.convertObject(projectConfigXrefDomain, ProjectConfigXrefDto.class));
+				}else if(projectConfigXrefDomain.getType().equalsIgnoreCase(CommonConstants.MAPPED_COL)){
+					mappedColumnList.add(CommonUtils.convertObject(projectConfigXrefDomain, ProjectConfigXrefDto.class));
+				}
+			}
+			projectConfigMap.put(CommonConstants.MATCH_STAT, matchStatusList);
+			projectConfigMap.put(CommonConstants.FILE_FORMAT_AND_EMAIL, fileFormatandEmailMeList);
+			projectConfigMap.put(CommonConstants.MAPPED_COL, mappedColumnList);
+		}
+		endTransaction();
+		return projectConfigMap;
+	}
+	
+	@Override
+	public Boolean saveProjectConfigForXref(String userEmail,ProjectDTO projectDetails) throws ObjectNotSupportedException, SaveProjectConfigException {
+		// TODO Auto-generated method stub
+		Boolean result = false;
+		StatusDomain statusDomain = null;
+		ProjectFeedDomain projectFeedDomain = null;
+		try {
+			IUserDao iUserDao = DaoManager.USER.getDao(userEmail,IUserDao.class);
+			UserDTO userDTO = iUserDao.getUser(userEmail, false);
+			beginTransaction();
+			//UserProjectDomain userProjectDomain = (UserProjectDomain) hibernatePersistenceManager.getPersistentObject(UserProjectDomain.class, projectDetails.getId());
+			
+			// Duplicate config fix....due to angular broadcast.
+			//List<ProjectConfigXrefDto> projectConfigXrefList = projectDetails.getProjectConfigXrefList();
+			List<ProjectConfigXrefDto> projectConfigXrefList = new ArrayList<ProjectConfigXrefDto>(new LinkedHashSet<ProjectConfigXrefDto>(projectDetails.getProjectConfigXrefList()));
+			
+			if(null != projectConfigXrefList && !projectConfigXrefList.isEmpty()){
+				//ICrossRefDao crossRefDao = DaoManager.CROSSREFDAO.getDao(userEmail,ICrossRefDao.class);
+				
+				for (ProjectConfigXrefDto projectConfigXrefDto : projectConfigXrefList) {
+					
+					/*Criteria criteria = createCriteria(ProjectFeedDomain.class);
+					criteria.add(Restrictions.and(Restrictions.eq("userProject.id", projectDetails.getId()),Restrictions.eq("feedMasterDomain.feedid",projectConfigXrefDto.getFeedId())));
+					ProjectFeedDomain projectFeedDomain = (ProjectFeedDomain) criteria.uniqueResult();*/
+					
+					//if(null != projectFeedDomain){
+							
+					//	if(projectFeedDomain.getStatusDomain().getId()>=StatusConstants.XREF_FEED_SETUP_COMPLETE.getID()){
+							
+							if(projectConfigXrefDto.getType().equalsIgnoreCase(CommonConstants.MAPPED_COL)){
+								projectFeedDomain = checkFeedSetUpCompletedOrNot(projectConfigXrefDto, projectDetails);
+								if(projectFeedDomain == null){
+									log.info("Feed Status is not in FEED_SETUP_COMPLETE State");
+									result = false;
+									//rollBack();
+									throw new SaveProjectConfigException("Feed Status is not in MATCHING_SAVED State");
+								}
+							}
+							
+							ProjectConfigXrefDomain projectConfigXrefDomain = (ProjectConfigXrefDomain) hibernatePersistenceManager.getPersistentObject(ProjectConfigXrefDomain.class, projectConfigXrefDto.getId());
+							if (null != projectConfigXrefDomain) {
+								projectConfigXrefDomain.setValue(projectConfigXrefDto.getValue());
+								hibernatePersistenceManager.saveOrUpdate(projectConfigXrefDomain);
+							} else {
+								ProjectConfigXrefDomain configXrefDomain = CommonUtils.convertObject(projectConfigXrefDto, ProjectConfigXrefDomain.class);
+								hibernatePersistenceManager.save(configXrefDomain);
+							}
+							
+							if(projectConfigXrefDto.getType().equalsIgnoreCase(CommonConstants.MAPPED_COL)){
+								statusDomain = hibernatePersistenceManager.getFromSession(StatusDomain.class,StatusConstants.XREF_ATTRIB_CONFIG_SAVED.getID());
+								if(null != statusDomain){
+									 projectFeedDomain.setStatusDomain(statusDomain);
+									 projectFeedDomain.setDateModified(new Timestamp(new Date().getTime()));
+									 projectFeedDomain.setUserIdModified(String.valueOf(userDTO.getId()));
+									 hibernatePersistenceManager.saveOrUpdate(projectFeedDomain);
+								 }
+							}
+							
+							
+							
+							result = true;
+							
+						/*}else{
+							log.info("Feed Status is not in FEED_SETUP_COMPLETE State");
+							result = false;
+							rollBack();
+							throw new SaveProjectConfigException("Feed Status is not in FEED_SETUP_COMPLETE State");
+						}*/
+						
+					/*}else{
+						log.info("projectFeedDomain Found null");
+						result = false;
+						rollBack();
+						throw new SaveProjectConfigException("FeedStatus Can not be Found");
+					}*/
+				}
+				
+			}else{
+				log.info("projectConfigXrefList Found null");
+			}
+			endTransaction();
+		} catch (Exception e) {
+			result = false;
+			rollBack();
+			e.printStackTrace();
+			//throw new SaveProjectConfigException("Exception occurred while saving saveProjectConfigForXref");
+		}
+		return result;
+	}
+	
+	public ProjectFeedDomain checkFeedSetUpCompletedOrNot(ProjectConfigXrefDto configXrefDto,ProjectDTO projectDTO){
+		ProjectFeedDomain projectFeedDomain = null;
+		Criteria criteria = createCriteria(ProjectFeedDomain.class);
+		criteria.add(Restrictions.and(Restrictions.eq("userProject.id", projectDTO.getId()),Restrictions.eq("feedMasterDomain.feedid",configXrefDto.getFeedId())));
+		projectFeedDomain = (ProjectFeedDomain) criteria.uniqueResult();
+		if(null != projectFeedDomain){
+			if(projectFeedDomain.getStatusDomain().getId()>=StatusConstants.XREF_MATCHING_SAVED.getID()){
+				return projectFeedDomain;
+			}else{
+				log.info("Feed Status is not in MATCHING_SAVED State");
+				projectFeedDomain = null;
+				return projectFeedDomain;
+			}
+		}else{
+			log.info("projectFeedDomain Found null");
+		}
+		return projectFeedDomain;
+		
+	}
+	
+	@Override
+	public String isProjectConfigSavedforXref(String userEmail,Long projectId){
+		String result = "";
+		Criteria criteria = null;
+		List<ProjectConfigXrefDomain> xRefDomainsList = null;
+		try{
+			if(projectId>0){
+				
+				criteria = createCriteria(ProjectConfigXrefDomain.class);
+				criteria.add(Restrictions.and(Restrictions.eq("projectId", projectId),Restrictions.eq("type",CommonConstants.MATCH_STAT)));
+				xRefDomainsList = criteria.list();
+				if(null == xRefDomainsList || xRefDomainsList.isEmpty()){
+					return result = CommonConstants.MATCH_CONFIG_NOT_SAVED;
+				}
+				
+				List<String> ConfigtypeList = new ArrayList<>();
+				ConfigtypeList.add(CommonConstants.FILE_FORMAT);
+				ConfigtypeList.add(CommonConstants.EMAIL_ME);
+				ConfigtypeList.add(CommonConstants.MAPPED_COL);
+				
+				criteria = createCriteria(ProjectConfigXrefDomain.class);
+				criteria.add(Restrictions.and(Restrictions.eq("projectId", projectId),Restrictions.in("type",ConfigtypeList)));
+				xRefDomainsList = criteria.list();
+				if(null == xRefDomainsList || xRefDomainsList.isEmpty()){
+					return result = CommonConstants.ATTRIB_CONFIG_NOT_SAVED;
+				}
+			}else{
+				log.info("projectId foun zero");
+			}
+		}catch(Exception e){
+			log.error(EXCEPTION, e);
+		}
+		return result;
+	}
+	
+	@Override
+	public ProjectDTO getPojectStatusbyProjectIds(String userEmail,String projectIds){
+		final String methodName = "getPojectStatusbyProjectIds";
+		log.info("Inside " + methodName + " method of " + CLASSNAME);
+		ProjectDTO projectDTO = new ProjectDTO();
+		Criteria criteria = null;
+		Map<String,String> projetStatusMap = new HashMap<>();
+		List<Long> list = new ArrayList<Long>();
+		try{
+			if(null != projectIds && !projectIds.isEmpty()){
+				for (String s : projectIds.split(",")){
+					list.add(Long.parseLong(s));
+				}
+				criteria = hibernatePersistenceManager.createCriteria(ProjectExecutionDomain.class);
+				criteria.add(Restrictions.in("projectId",list.toArray()));
+				List<ProjectExecutionDomain> domains = criteria.list();
+				if(null != domains && !domains.isEmpty()){
+					for (ProjectExecutionDomain projectExecutionDomain : domains) {
+						if(StatusConstants.COMPLETED.getID()==projectExecutionDomain.getStatusId()){
+							projetStatusMap.put(String.valueOf(projectExecutionDomain.getProjectId()), StatusConstants.COMPLETED.getStatus());
+						}else if(StatusConstants.FAILED.getID()==projectExecutionDomain.getStatusId()){
+							projetStatusMap.put(String.valueOf(projectExecutionDomain.getProjectId()), StatusConstants.FAILED.getStatus());
+						}else if(StatusConstants.SCHEDULED.getID()==projectExecutionDomain.getStatusId()){
+							projetStatusMap.put(String.valueOf(projectExecutionDomain.getProjectId()), StatusConstants.SCHEDULED.getStatus());
+						}else{
+							projetStatusMap.put(String.valueOf(projectExecutionDomain.getProjectId()),"INPROGRESS");
+						}
+					}
+					projectDTO.setProjectStatusMap((HashMap<String, String>) projetStatusMap);
+				}else{
+					log.info("domains found empty");
+				}
+			}
+		}catch(Exception e){
+			log.error(EXCEPTION, e);
+		}
+		return projectDTO;
+		
+	}
+	
+	@Override
+	public List<ProjectSkippedFeed> getSkippedFeeds(String userEmail,Long projectId){
+		final String methodName = "getSkippedFeeds";
+		log.info("Inside "+methodName+" method of "+CLASSNAME);
+		List<ProjectSkippedFeed> skippedFeeds = new ArrayList<>();
+		StringBuilder sqlQuery = new StringBuilder();
+		try{
+			beginTransaction();
+			sqlQuery.append("Select FEED_ID as feedId, FEED_COUNTER as feedCounter from USER_PROJECT_EXECUTION_HISTORY where PROJECTID =:projectId")
+					.append(" and id >=(select max(id) from USER_PROJECT_EXECUTION_HISTORY where PROJECTID =:projectId and STATUS=10 )")
+					.append(" and status=53 ");
+			
+			log.info("SqlQuery --> " +sqlQuery.toString());
+			skippedFeeds = hibernatePersistenceManager.createSQLQuery(sqlQuery.toString())
+					.addScalar("feedId", StandardBasicTypes.INTEGER)
+					.addScalar("feedCounter", StandardBasicTypes.INTEGER)
+					.setLong("projectId", projectId).setResultTransformer(Transformers.aliasToBean(ProjectSkippedFeed.class)).list();
+			endTransaction();
+		}catch(Exception e){
+			log.error("Exception",e);
+			endTransaction();
+		}
+		log.info("Exiting "+methodName+" method of "+CLASSNAME);
+		return skippedFeeds;
+	}
+	
+	@Override
+	public boolean hierarchyStageTable(long projectId,  List<HierarchyEntityDTO> serialNo)throws ProcessFailedException, ObjectNotSupportedException {
+		boolean insertionStatus=false;
+		StringBuilder serialNos = new StringBuilder();
+		try{
+			beginTransaction();
+			delete();
+			
+				for(int i = 0;i< serialNo.size();i++){
+					serialNos.append("'"+serialNo.get(i).getSerialNo()+"'");
+					if(i!=serialNo.size()-1){
+						serialNos.append(", ");
+					}
+				}
+				insertionStatus = insert(projectId,serialNos.toString());
+			endTransaction();
+		}catch(Exception e){
+			e.printStackTrace();
+			log.error(e.toString());
+			rollBack();
+		}
+		return insertionStatus;
+	}
+	
+	private void delete()throws ProcessFailedException{
+		try{
+			String statementQuery ="Truncate table HIERARCHY_ADD";
+			Query query = hibernatePersistenceManager.createSQLQuery(statementQuery);
+			query.executeUpdate();
+		}catch(Exception e){
+			log.error(e.toString());
+			throw new ProcessFailedException(e.getMessage());
+		}
+	}
+	private boolean insert(long projectId,String serialNos)throws SQLException{
+		boolean Status = false;
+     try{
+    	 String statementQuery ="INSERT INTO HIERARCHY_ADD select ID,SYSDATE from HIERARCHY_ENTITYID where SERIAL_NO in ("+serialNos+") and project_id ="+projectId;
+			Query query = hibernatePersistenceManager.createSQLQuery(statementQuery);
+			int result = query.executeUpdate();
+			if(result!=0){
+				Status=true;
+			}else if(result == 0){
+				Status=false;
+			}
+		}catch(Exception e){
+			log.error(e.toString());
+			log.error(String.valueOf(Status));
+		}
+		return Status;
+	}
+	
+	public void deleteStage() throws SQLException {
+		try{
+			beginTransaction();
+			delete();
+			endTransaction();
+		}catch(Exception e){
+			log.error(e.toString());
+		}
+
+	}
+	public boolean insertStage(long projectId,String serialNos)throws SQLException {
+		boolean status= false;
+		try{
+			beginTransaction();
+			status=insert(projectId,serialNos);
+			endTransaction();
+		}catch(Exception e){
+			log.error(e.toString());
+			rollBack();
+		}
+		return status;
+	}
+	
+	@Override
+	public void addToGoldexecute(Long projectId) throws ProcessFailedException {
+		try {
+			beginTransaction();
+			ProcedureCall procCall = hibernatePersistenceManager.getProcedureCall("PROC_ADD_TO_GOLD");
+			procCall.registerParameter(1, Long.class, ParameterMode.IN).bindValue(projectId);
+			procCall.getOutputs();
+			endTransaction();
+		} catch (Exception e) {
+			log.error(EXCEPTION,e.getMessage());
+			rollBack();
+			throw new ProcessFailedException("Add To Gold Execution failed "+e.getMessage());
+		}
+	}
+	@SuppressWarnings("unchecked")
+	@Override
+	public Object[] checkHierarchyConfig() {
+		final String methodName = "getActiveTempplate";
+		log.info("Inside "+methodName+" method of "+CLASSNAME);
+		List<Object> list=new ArrayList<>();
+		try{
+			beginTransaction();
+			
+			list= hibernatePersistenceManager.createCriteria(BusinessGlossaryConfigDomain.class)
+					.add(Restrictions.isNotNull("attributeValue"))
+					.add(Restrictions.ne("glossaryRefId", 6))
+					.list();
+			endTransaction();
+		}catch(Exception e){
+			log.error(EXCEPTION,e);
+//			rollBack();
+		}
+		return  list.toArray();
+	}
+	
+	
+	
+	
+	@Override
+	public void truncateLastUpload(String userEmail, Long projectID,
+			Long fileId, List<FileDataDTO> inputData)
+			throws ObjectNotSupportedException, ProcessFailedException {
+		try {
+			hibernatePersistenceManager.executeSQL("ALTER TABLE CLIENT_DATA TRUNCATE SUBPARTITION \""+projectID+"\"");
+		} catch (SQLException e) {
+			throw new ProcessFailedException("Unable to wipe old data:" + e);
+		}
+		
+		
+	}
+	
+	
+	@Override
+	public void truncateLastUpload(Long projectID, Long fileId, List<FileDataDTO> inputData) throws ObjectNotSupportedException, ProcessFailedException {
+		try {
+			hibernatePersistenceManager.executeSQL("ALTER TABLE CLIENT_DATA TRUNCATE SUBPARTITION \""+projectID+"\"");
+		} catch (SQLException e) {
+			throw new ProcessFailedException("Unable to wipe old data:" + e);
+		}
+		
+	}
+}
