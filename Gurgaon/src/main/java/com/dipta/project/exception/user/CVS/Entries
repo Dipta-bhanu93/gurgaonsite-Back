@@ -1,0 +1,12 @@
+/ActivationPendingException.java/1.1/Wed Feb 17 09:46:20 2016//
+/ConfirmNewPasswordException.java/1.1/Wed Feb 17 09:46:20 2016//
+/ExceedLimitException.java/1.1/Thu Mar 15 06:48:13 2018//
+/InvalidRequestException.java/1.1/Thu Mar 15 06:48:13 2018//
+/InvalidTokenException.java/1.1/Thu Mar 15 06:48:13 2018//
+/InvalidUserException.java/1.1/Wed Feb 17 09:46:20 2016//
+/LoginIDFormatException.java/1.1/Wed Feb 17 09:46:20 2016//
+/LoginIDRegisteredException.java/1.1/Wed Feb 17 09:46:20 2016//
+/OldPasswordException.java/1.1/Wed Feb 17 09:46:20 2016//
+/PasswordFormatException.java/1.1/Wed Feb 17 09:46:20 2016//
+/RegistrationFailedException.java/1.1/Wed Feb 17 09:46:20 2016//
+/SessionDoesNotExistException.java/1.1/Wed Feb 17 09:46:20 2016//
